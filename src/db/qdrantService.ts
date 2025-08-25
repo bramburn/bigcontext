@@ -28,11 +28,15 @@ export class QdrantService {
     private client: QdrantClient;
     private connectionString: string;
 
-    constructor(connectionString: string = 'http://localhost:6333') {
+    /**
+     * Constructor now accepts connectionString as a required parameter
+     * This enables dependency injection and removes direct VS Code configuration access
+     */
+    constructor(connectionString: string) {
         this.connectionString = connectionString;
-        this.client = new QdrantClient({ 
-            host: this.extractHost(connectionString), 
-            port: this.extractPort(connectionString) 
+        this.client = new QdrantClient({
+            host: this.extractHost(connectionString),
+            port: this.extractPort(connectionString)
         });
     }
 

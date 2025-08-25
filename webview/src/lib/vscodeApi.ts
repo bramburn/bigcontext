@@ -90,6 +90,13 @@ export interface ServiceStatus {
     collectionInfo?: any;
 }
 
+export interface SetupStatus {
+    isConfigured: boolean;
+    hasConfigFile: boolean;
+    databaseConfigured?: boolean;
+    embeddingConfigured?: boolean;
+}
+
 // Event listener type
 type MessageListener = (event: MessageEvent) => void;
 
@@ -252,6 +259,15 @@ export class VSCodeApiClient {
     async getServiceStatus(): Promise<ServiceStatus> {
         return this.sendRequestWithResponse<ServiceStatus>({
             command: 'getServiceStatus'
+        });
+    }
+
+    /**
+     * Check setup status
+     */
+    async checkSetupStatus(): Promise<SetupStatus> {
+        return this.sendRequestWithResponse<SetupStatus>({
+            command: 'checkSetupStatus'
         });
     }
 

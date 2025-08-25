@@ -107,76 +107,39 @@ export class IndexingService {
     /** Service for interacting with the Qdrant vector database */
     private qdrantService: QdrantService;
     /** Embedding provider for generating vector representations of code */
-    private embeddingProvider: IEmbeddingProvider | null = null;
+    private embeddingProvider: IEmbeddingProvider;
     /** Service for interacting with Language Server Protocol */
     private lspService: LSPService;
 
     /**
-     * Creates a new IndexingService instance
+     * Creates a new IndexingService instance using dependency injection
      * @param workspaceRoot - The absolute path to the workspace root directory
-     *
-     * Initializes all the necessary components for the indexing pipeline:
-     * - FileWalker for file discovery
-     * - AstParser for code analysis
-     * - Chunker for code segmentation
-     * - QdrantService for vector database operations
+     * @param fileWalker - Injected FileWalker instance
+     * @param astParser - Injected AstParser instance
+     * @param chunker - Injected Chunker instance
+     * @param qdrantService - Injected QdrantService instance
+     * @param embeddingProvider - Injected embedding provider instance
+     * @param lspService - Injected LSPService instance
      */
-    constructor(workspaceRoot: string) {
+    constructor(
+        workspaceRoot: string,
+        fileWalker: FileWalker,
+        astParser: AstParser,
+        chunker: Chunker,
+        qdrantService: QdrantService,
+        embeddingProvider: IEmbeddingProvider,
+        lspService: LSPService
+    ) {
         this.workspaceRoot = workspaceRoot;
-        this.fileWalker = new FileWalker(workspaceRoot);
-        this.astParser = new AstParser();
-        this.chunker = new Chunker();
-
-        // Initialize Qdrant service with default connection
-        // The connection string can be configured in VS Code settings
-        const qdrantUrl = vscode.workspace.getConfiguration('code-context-engine').get<string>('databaseConnectionString') || 'http://localhost:6333';
-        this.qdrantService = new QdrantService(qdrantUrl);
-
-        // Initialize LSP service
-        this.lspService = new LSPService(workspaceRoot);
+        this.fileWalker = fileWalker;
+        this.astParser = astParser;
+        this.chunker = chunker;
+        this.qdrantService = qdrantService;
+        this.embeddingProvider = embeddingProvider;
+        this.lspService = lspService;
     }
 
-    /**
-     * Initializes the embedding provider based on VS Code configuration.
-     *
-     * This method reads the embedding provider configuration from VS Code settings
-     * and creates an appropriate embedding provider instance. It supports both
-     * Ollama and OpenAI as embedding providers.
-     *
-     * @throws Error if the specified embedding provider is not available
-     * @returns Promise that resolves when the embedding provider is initialized
-     */
-    private async initializeEmbeddingProvider(): Promise<void> {
-        const config = vscode.workspace.getConfiguration('code-context-engine');
-        const provider = config.get<string>('embeddingProvider') || 'ollama';
-        const openaiApiKey = config.get<string>('openaiApiKey') || '';
-        const ollamaModel = config.get<string>('ollamaModel') || 'nomic-embed-text';
-        const openaiModel = config.get<string>('openaiModel') || 'text-embedding-ada-002';
-        const batchSize = config.get<number>('indexingBatchSize') || 100;
 
-        const embeddingConfig: EmbeddingConfig = {
-            provider: provider as 'ollama' | 'openai',
-            model: provider === 'ollama' ? ollamaModel : openaiModel,
-            apiKey: openaiApiKey,
-            baseUrl: provider === 'ollama' ? 'http://localhost:11434' : undefined,
-            maxBatchSize: batchSize,
-            timeout: 30000
-        };
-
-        try {
-            this.embeddingProvider = await EmbeddingProviderFactory.createProvider(embeddingConfig);
-
-            // Check if provider is available
-            // This is important because some providers might not be running
-            const isAvailable = await this.embeddingProvider.isAvailable();
-            if (!isAvailable) {
-                throw new Error(`Embedding provider '${provider}' is not available`);
-            }
-        } catch (error) {
-            console.error('Failed to initialize embedding provider:', error);
-            throw error;
-        }
-    }
 
     /**
      * Starts the indexing process for the entire workspace.
@@ -227,7 +190,7 @@ export class IndexingService {
                 errors: []
             });
 
-            await this.initializeEmbeddingProvider();
+
 
             // Phase 2: Discover files
             // Find all relevant files in the workspace that match our patterns
@@ -615,9 +578,9 @@ export class IndexingService {
      * @returns Promise resolving to search results
      */
     public async searchCode(query: string, limit: number = 10): Promise<any[]> {
-        // Ensure embedding provider is initialized
+        // Ensure embedding provider is available
         if (!this.embeddingProvider) {
-            await this.initializeEmbeddingProvider();
+            throw new Error('Embedding provider not available');
         }
 
         if (!this.embeddingProvider) {

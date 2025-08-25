@@ -11,6 +11,14 @@ import {
 } from '@fluentui/web-components';
 import { vscodeApi, type SearchResult, type RelatedFile, type ServiceStatus } from './lib/vscodeApi';
 
+// Setup state interface
+interface SetupState {
+    databaseReady: boolean;
+    providerSelected: boolean;
+    selectedProvider: string;
+    databaseType: string;
+}
+
 // Register Fluent UI components
 provideFluentDesignSystem()
     .register(
@@ -35,12 +43,19 @@ class CodeContextWebview {
     private serviceStatus: HTMLElement | null;
     private relatedFilesSection: HTMLElement | null;
     private currentQuery: string = '';
+    private isSetupMode: boolean = false;
+    private setupState: SetupState = {
+        databaseReady: false,
+        providerSelected: false,
+        selectedProvider: '',
+        databaseType: 'qdrant'
+    };
 
     constructor() {
         this.initializeElements();
         this.setupEventListeners();
         this.setupMessageListener();
-        this.checkServiceStatus();
+        this.checkWorkspaceSetup();
     }
 
     private initializeElements(): void {
@@ -71,6 +86,11 @@ class CodeContextWebview {
             }
         });
 
+        // Add search suggestions
+        this.searchInput?.addEventListener('input', () => {
+            this.showSearchSuggestions();
+        });
+
         this.settingsButton?.addEventListener('click', () => {
             this.openSettings();
         });
@@ -91,6 +111,47 @@ class CodeContextWebview {
         vscodeApi.onMessage('searchResults', (event) => {
             this.displaySearchResults(event.data.results, event.data.error);
         });
+
+        // Setup-specific message listeners
+        vscodeApi.onMessage('databaseStarted', (event) => {
+            this.updateSetupStatus('Database is starting...', 'info');
+        });
+
+        vscodeApi.onMessage('databaseStatus', (event) => {
+            this.handleDatabaseStatusUpdate(event.data);
+        });
+
+        vscodeApi.onMessage('setupIndexingStarted', (event) => {
+            this.updateSetupStatus('Configuration saved and indexing started!', 'success');
+        });
+
+        vscodeApi.onMessage('setupIndexingProgress', (event) => {
+            this.updateSetupStatus(`Indexing: ${event.data.progress.message}`, 'info');
+        });
+
+        vscodeApi.onMessage('setupIndexingComplete', (event) => {
+            this.updateSetupStatus('Setup and indexing completed successfully!', 'success');
+            // Switch to main UI after successful setup
+            setTimeout(() => {
+                this.isSetupMode = false;
+                this.showMainUI();
+                this.checkServiceStatus();
+            }, 2000);
+        });
+
+        vscodeApi.onMessage('setupIndexingError', (event) => {
+            this.updateSetupStatus(event.data.error, 'error');
+        });
+    }
+
+    private handleSetupStatusResponse(message: any): void {
+        // This method handles the response from checkSetupStatus
+        // It's called by the vscodeApi when a response is received
+        if (message.error) {
+            console.error('Setup status check failed:', message.error);
+            this.showMainUI();
+            this.checkServiceStatus();
+        }
     }
 
     private startIndexing(): void {
@@ -136,6 +197,9 @@ class CodeContextWebview {
         if (!searchTerm) return;
 
         this.currentQuery = searchTerm;
+
+        // Add to search history
+        this.addToSearchHistory(searchTerm);
 
         // Show loading state
         if (this.searchResults) {
@@ -191,6 +255,89 @@ class CodeContextWebview {
         vscodeApi.openSettings();
     }
 
+    private addToSearchHistory(query: string): void {
+        const history = this.getSearchHistory();
+
+        // Remove if already exists to avoid duplicates
+        const index = history.indexOf(query);
+        if (index > -1) {
+            history.splice(index, 1);
+        }
+
+        // Add to beginning
+        history.unshift(query);
+
+        // Keep only last 10 searches
+        if (history.length > 10) {
+            history.splice(10);
+        }
+
+        localStorage.setItem('searchHistory', JSON.stringify(history));
+    }
+
+    private getSearchHistory(): string[] {
+        try {
+            const history = localStorage.getItem('searchHistory');
+            return history ? JSON.parse(history) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    private showSearchSuggestions(): void {
+        if (!this.searchInput) return;
+
+        const query = (this.searchInput as any).value.trim().toLowerCase();
+        if (query.length < 2) {
+            this.hideSuggestions();
+            return;
+        }
+
+        const history = this.getSearchHistory();
+        const suggestions = history.filter(item =>
+            item.toLowerCase().includes(query) && item.toLowerCase() !== query
+        ).slice(0, 5);
+
+        if (suggestions.length > 0) {
+            this.displaySuggestions(suggestions);
+        } else {
+            this.hideSuggestions();
+        }
+    }
+
+    private displaySuggestions(suggestions: string[]): void {
+        // Remove existing suggestions
+        this.hideSuggestions();
+
+        const suggestionsContainer = document.createElement('div');
+        suggestionsContainer.id = 'search-suggestions';
+        suggestionsContainer.className = 'search-suggestions';
+
+        suggestions.forEach(suggestion => {
+            const suggestionItem = document.createElement('div');
+            suggestionItem.className = 'suggestion-item';
+            suggestionItem.textContent = suggestion;
+            suggestionItem.addEventListener('click', () => {
+                if (this.searchInput) {
+                    (this.searchInput as any).value = suggestion;
+                    this.performSearch();
+                    this.hideSuggestions();
+                }
+            });
+            suggestionsContainer.appendChild(suggestionItem);
+        });
+
+        // Insert after search input
+        this.searchInput?.parentNode?.insertBefore(suggestionsContainer, this.searchInput.nextSibling);
+    }
+
+    private hideSuggestions(): void {
+        const existing = document.getElementById('search-suggestions');
+        if (existing) {
+            existing.remove();
+        }
+    }
+
     private displayRelatedFiles(relatedFiles: RelatedFile[]): void {
         if (!this.relatedFilesSection) return;
 
@@ -216,6 +363,26 @@ class CodeContextWebview {
             <h3>Related Files</h3>
             ${relatedHtml}
         `;
+    }
+
+    private async checkWorkspaceSetup(): Promise<void> {
+        try {
+            // Check if workspace is configured
+            const setupStatus = await vscodeApi.checkSetupStatus();
+            this.isSetupMode = !setupStatus.isConfigured;
+
+            if (this.isSetupMode) {
+                this.showSetupUI();
+            } else {
+                this.showMainUI();
+                this.checkServiceStatus();
+            }
+        } catch (error) {
+            console.error('Failed to check workspace setup:', error);
+            // Default to main UI if check fails
+            this.showMainUI();
+            this.checkServiceStatus();
+        }
     }
 
     private async checkServiceStatus(): Promise<void> {
@@ -301,6 +468,232 @@ class CodeContextWebview {
                 modal.remove();
             }
         });
+    }
+
+    private showSetupUI(): void {
+        // Hide main UI elements
+        const mainSections = document.querySelectorAll('.section');
+        mainSections.forEach(section => {
+            (section as HTMLElement).style.display = 'none';
+        });
+
+        // Show or create setup UI
+        this.createSetupUI();
+    }
+
+    private showMainUI(): void {
+        // Show main UI elements
+        const mainSections = document.querySelectorAll('.section');
+        mainSections.forEach(section => {
+            (section as HTMLElement).style.display = 'block';
+        });
+
+        // Hide setup UI if it exists
+        const setupContainer = document.getElementById('setup-container');
+        if (setupContainer) {
+            setupContainer.style.display = 'none';
+        }
+    }
+
+    private createSetupUI(): void {
+        // Check if setup UI already exists
+        let setupContainer = document.getElementById('setup-container');
+        if (!setupContainer) {
+            setupContainer = document.createElement('div');
+            setupContainer.id = 'setup-container';
+            setupContainer.className = 'setup-container';
+
+            setupContainer.innerHTML = `
+                <div class="setup-header">
+                    <h1>Welcome to Code Context Engine!</h1>
+                    <p>Let's set up your workspace for AI-powered code search and context discovery.</p>
+                </div>
+
+                <div class="setup-section">
+                    <h2>Database Configuration</h2>
+                    <div class="setup-item">
+                        <label for="database-select">Vector Database:</label>
+                        <fluent-text-field id="database-select" value="Qdrant" readonly></fluent-text-field>
+                        <p class="setup-description">Qdrant is a high-performance vector database for storing code embeddings</p>
+                    </div>
+
+                    <div class="setup-item">
+                        <label for="database-connection">Connection String:</label>
+                        <fluent-text-field id="database-connection" value="http://localhost:6333" placeholder="http://localhost:6333"></fluent-text-field>
+                    </div>
+
+                    <div class="setup-controls">
+                        <fluent-button id="start-database-btn" appearance="stealth">Start Local Qdrant</fluent-button>
+                        <fluent-button id="check-database-btn" appearance="stealth">Check Status</fluent-button>
+                        <span id="database-status" class="status-indicator">
+                            <span class="status-dot status-unknown"></span>
+                            <span>Status unknown</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h2>Embedding Provider</h2>
+                    <div class="setup-item">
+                        <label for="provider-select">Provider:</label>
+                        <select id="provider-select" class="setup-select">
+                            <option value="">Select a provider...</option>
+                            <option value="ollama">Ollama (Local)</option>
+                            <option value="openai">OpenAI (Cloud)</option>
+                        </select>
+                        <p class="setup-description">Choose between local Ollama or cloud-based OpenAI for generating embeddings</p>
+                    </div>
+
+                    <div id="ollama-config" class="provider-config" style="display: none;">
+                        <label for="ollama-model">Ollama Model:</label>
+                        <select id="ollama-model" class="setup-select">
+                            <option value="nomic-embed-text">nomic-embed-text (768 dimensions)</option>
+                            <option value="all-minilm">all-minilm (384 dimensions)</option>
+                            <option value="mxbai-embed-large">mxbai-embed-large (1024 dimensions)</option>
+                        </select>
+                    </div>
+
+                    <div id="openai-config" class="provider-config" style="display: none;">
+                        <label for="openai-key">OpenAI API Key:</label>
+                        <fluent-text-field id="openai-key" type="password" placeholder="sk-..."></fluent-text-field>
+                    </div>
+                </div>
+
+                <div class="setup-actions">
+                    <fluent-button id="index-now-btn" appearance="accent" disabled>Index Now</fluent-button>
+                    <p id="setup-status" class="setup-status"></p>
+                </div>
+            `;
+
+            // Insert setup UI at the beginning of the container
+            const container = document.querySelector('.container');
+            if (container) {
+                container.insertBefore(setupContainer, container.firstChild);
+            }
+        } else {
+            setupContainer.style.display = 'block';
+        }
+
+        // Setup event listeners for setup UI
+        this.setupSetupEventListeners();
+    }
+
+    private setupSetupEventListeners(): void {
+        // Database controls
+        const startDbBtn = document.getElementById('start-database-btn');
+        const checkDbBtn = document.getElementById('check-database-btn');
+        const providerSelect = document.getElementById('provider-select') as HTMLSelectElement;
+        const indexNowBtn = document.getElementById('index-now-btn');
+
+        startDbBtn?.addEventListener('click', () => this.startDatabase());
+        checkDbBtn?.addEventListener('click', () => this.checkDatabaseStatus());
+        providerSelect?.addEventListener('change', () => this.onProviderChange());
+        indexNowBtn?.addEventListener('click', () => this.startSetupIndexing());
+    }
+
+    private startDatabase(): void {
+        vscodeApi.postMessage({
+            command: 'startDatabase',
+            databaseType: this.setupState.databaseType
+        });
+
+        this.updateSetupStatus('Starting database...', 'info');
+    }
+
+    private checkDatabaseStatus(): void {
+        vscodeApi.postMessage({
+            command: 'checkDatabaseStatus',
+            databaseType: this.setupState.databaseType
+        });
+
+        this.updateSetupStatus('Checking database status...', 'info');
+    }
+
+    private onProviderChange(): void {
+        const providerSelect = document.getElementById('provider-select') as HTMLSelectElement;
+        const selectedProvider = providerSelect.value;
+
+        // Hide all provider configs
+        document.querySelectorAll('.provider-config').forEach(config => {
+            (config as HTMLElement).style.display = 'none';
+        });
+
+        // Show selected provider config
+        if (selectedProvider === 'ollama') {
+            const ollamaConfig = document.getElementById('ollama-config');
+            if (ollamaConfig) ollamaConfig.style.display = 'block';
+        } else if (selectedProvider === 'openai') {
+            const openaiConfig = document.getElementById('openai-config');
+            if (openaiConfig) openaiConfig.style.display = 'block';
+        }
+
+        // Update setup state
+        this.setupState.selectedProvider = selectedProvider;
+        this.setupState.providerSelected = selectedProvider !== '';
+        this.updateIndexNowButton();
+    }
+
+    private updateIndexNowButton(): void {
+        const indexNowBtn = document.getElementById('index-now-btn') as any;
+        if (indexNowBtn) {
+            indexNowBtn.disabled = !(this.setupState.databaseReady && this.setupState.providerSelected);
+        }
+    }
+
+    private updateSetupStatus(message: string, type: 'info' | 'success' | 'error'): void {
+        const statusElement = document.getElementById('setup-status');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = `setup-status ${type}`;
+        }
+    }
+
+    private startSetupIndexing(): void {
+        const config = {
+            databaseType: this.setupState.databaseType,
+            databaseConnection: (document.getElementById('database-connection') as any)?.value || 'http://localhost:6333',
+            embeddingProvider: this.setupState.selectedProvider,
+            embeddingModel: this.getSelectedEmbeddingModel()
+        };
+
+        vscodeApi.postMessage({
+            command: 'startSetupIndexing',
+            config: config
+        });
+
+        this.updateSetupStatus('Starting indexing process...', 'info');
+    }
+
+    private getSelectedEmbeddingModel(): string {
+        if (this.setupState.selectedProvider === 'ollama') {
+            const modelSelect = document.getElementById('ollama-model') as HTMLSelectElement;
+            return modelSelect?.value || 'nomic-embed-text';
+        } else if (this.setupState.selectedProvider === 'openai') {
+            return 'text-embedding-ada-002';
+        }
+        return '';
+    }
+
+    private handleDatabaseStatusUpdate(data: any): void {
+        const statusElement = document.getElementById('database-status');
+        if (statusElement) {
+            const statusDot = statusElement.querySelector('.status-dot');
+            const statusText = statusElement.querySelector('span:last-child');
+
+            if (statusDot && statusText) {
+                if (data.status === 'running') {
+                    statusDot.className = 'status-dot status-running';
+                    statusText.textContent = 'Running';
+                    this.setupState.databaseReady = true;
+                } else {
+                    statusDot.className = 'status-dot status-stopped';
+                    statusText.textContent = 'Stopped';
+                    this.setupState.databaseReady = false;
+                }
+
+                this.updateIndexNowButton();
+            }
+        }
     }
 }
 

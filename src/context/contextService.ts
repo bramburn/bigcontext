@@ -1,9 +1,32 @@
+/**
+ * Context Service Module
+ * 
+ * This module provides a service for managing and querying code context within a VS Code workspace.
+ * It leverages vector embeddings and similarity search to find related code chunks and files,
+ * enabling semantic code navigation and contextual understanding of codebases.
+ * 
+ * The service integrates with:
+ * - QdrantService for vector database operations
+ * - EmbeddingProvider for generating semantic embeddings
+ * - IndexingService for processing and indexing code files
+ */
+
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { IndexingService } from '../indexing/indexingService';
 import { QdrantService, SearchResult } from '../db/qdrantService';
 import { IEmbeddingProvider, EmbeddingProviderFactory, EmbeddingConfig } from '../embeddings/embeddingProvider';
 
+/**
+ * Represents the result of a file content retrieval operation
+ * 
+ * @property filePath - Path to the file that was retrieved
+ * @property content - The text content of the file
+ * @property language - Programming language of the file (derived from extension)
+ * @property size - File size in bytes
+ * @property lastModified - Last modification timestamp
+ * @property relatedChunks - Optional array of semantically related code chunks from the same file
+ */
 export interface FileContentResult {
     filePath: string;
     content: string;
@@ -13,6 +36,15 @@ export interface FileContentResult {
     relatedChunks?: SearchResult[];
 }
 
+/**
+ * Represents a file that is semantically related to a query or another file
+ * 
+ * @property filePath - Path to the related file
+ * @property similarity - Similarity score (0-1) indicating relevance
+ * @property reason - Human-readable explanation of why this file is related
+ * @property chunkCount - Number of code chunks that matched the query
+ * @property language - Programming language of the file
+ */
 export interface RelatedFile {
     filePath: string;
     similarity: number;
@@ -21,6 +53,16 @@ export interface RelatedFile {
     language?: string;
 }
 
+/**
+ * Parameters for performing a context query
+ * 
+ * @property query - The search query text
+ * @property filePath - Optional current file path for context
+ * @property includeRelated - Whether to include related files in results
+ * @property maxResults - Maximum number of results to return
+ * @property minSimilarity - Minimum similarity threshold (0-1)
+ * @property fileTypes - Optional array of file types to filter by
+ */
 export interface ContextQuery {
     query: string;
     filePath?: string;
@@ -30,6 +72,15 @@ export interface ContextQuery {
     fileTypes?: string[];
 }
 
+/**
+ * Results of a context query operation
+ * 
+ * @property query - The original search query
+ * @property results - Array of matching code chunks
+ * @property relatedFiles - Array of related files
+ * @property totalResults - Total number of results found
+ * @property processingTime - Time taken to process the query in milliseconds
+ */
 export interface ContextResult {
     query: string;
     results: SearchResult[];
@@ -38,55 +89,49 @@ export interface ContextResult {
     processingTime: number;
 }
 
+/**
+ * Core service for managing and querying code context
+ * 
+ * This service provides methods for:
+ * - Retrieving file content with related chunks
+ * - Finding files related to a query or current file
+ * - Performing semantic searches across the codebase
+ * - Checking service status and readiness
+ */
 export class ContextService {
     private workspaceRoot: string;
     private indexingService: IndexingService;
     private qdrantService: QdrantService;
-    private embeddingProvider: IEmbeddingProvider | null = null;
+    private embeddingProvider: IEmbeddingProvider;
 
-    constructor(workspaceRoot: string) {
+    /**
+     * Constructor now uses dependency injection for better testability and decoupling
+     * 
+     * @param workspaceRoot - The workspace root path
+     * @param qdrantService - Injected QdrantService instance
+     * @param embeddingProvider - Injected embedding provider instance
+     * @param indexingService - Injected IndexingService instance
+     */
+    constructor(
+        workspaceRoot: string,
+        qdrantService: QdrantService,
+        embeddingProvider: IEmbeddingProvider,
+        indexingService: IndexingService
+    ) {
         this.workspaceRoot = workspaceRoot;
-        this.indexingService = new IndexingService(workspaceRoot);
-        
-        // Initialize Qdrant service
-        const qdrantUrl = vscode.workspace.getConfiguration('code-context-engine').get<string>('databaseConnectionString') || 'http://localhost:6333';
-        this.qdrantService = new QdrantService(qdrantUrl);
+        this.qdrantService = qdrantService;
+        this.embeddingProvider = embeddingProvider;
+        this.indexingService = indexingService;
     }
 
-    private async initializeEmbeddingProvider(): Promise<void> {
-        if (this.embeddingProvider) {
-            return; // Already initialized
-        }
-
-        const config = vscode.workspace.getConfiguration('code-context-engine');
-        const provider = config.get<string>('embeddingProvider') || 'ollama';
-        const openaiApiKey = config.get<string>('openaiApiKey') || '';
-        const ollamaModel = config.get<string>('ollamaModel') || 'nomic-embed-text';
-        const openaiModel = config.get<string>('openaiModel') || 'text-embedding-ada-002';
-        const batchSize = config.get<number>('indexingBatchSize') || 100;
-
-        const embeddingConfig: EmbeddingConfig = {
-            provider: provider as 'ollama' | 'openai',
-            model: provider === 'ollama' ? ollamaModel : openaiModel,
-            apiKey: openaiApiKey,
-            baseUrl: provider === 'ollama' ? 'http://localhost:11434' : undefined,
-            maxBatchSize: batchSize,
-            timeout: 30000
-        };
-
-        try {
-            this.embeddingProvider = await EmbeddingProviderFactory.createProvider(embeddingConfig);
-            
-            const isAvailable = await this.embeddingProvider.isAvailable();
-            if (!isAvailable) {
-                throw new Error(`Embedding provider '${provider}' is not available`);
-            }
-        } catch (error) {
-            console.error('Failed to initialize embedding provider:', error);
-            throw error;
-        }
-    }
-
+    /**
+     * Generates a unique collection name for the current workspace
+     * 
+     * The collection name is derived from the workspace folder name,
+     * sanitized to ensure compatibility with Qdrant naming requirements.
+     * 
+     * @returns A sanitized collection name string
+     */
     private generateCollectionName(): string {
         const workspaceName = this.workspaceRoot.split('/').pop() || 'workspace';
         const sanitizedName = workspaceName.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
@@ -94,7 +139,12 @@ export class ContextService {
     }
 
     /**
-     * Get file content with optional related chunks
+     * Retrieves file content with optional related chunks
+     * 
+     * @param filePath - Path to the file to retrieve
+     * @param includeRelatedChunks - Whether to include semantically related chunks from the same file
+     * @returns Promise resolving to file content and metadata
+     * @throws Error if file cannot be read or processed
      */
     async getFileContent(filePath: string, includeRelatedChunks: boolean = false): Promise<FileContentResult> {
         try {
@@ -122,7 +172,6 @@ export class ContextService {
 
             // Optionally include related chunks
             if (includeRelatedChunks) {
-                await this.initializeEmbeddingProvider();
                 if (this.embeddingProvider) {
                     // Search for chunks from this file
                     const collectionName = this.generateCollectionName();
@@ -151,7 +200,17 @@ export class ContextService {
     }
 
     /**
-     * Find files related to a query or file
+     * Finds files related to a query or current file
+     * 
+     * This method performs semantic search to find files that are conceptually
+     * related to the provided query. It groups results by file and calculates
+     * file-level similarity scores.
+     * 
+     * @param query - The search query text
+     * @param currentFilePath - Optional current file path to exclude from results
+     * @param maxResults - Maximum number of related files to return
+     * @param minSimilarity - Minimum similarity threshold (0-1)
+     * @returns Promise resolving to array of related files
      */
     async findRelatedFiles(
         query: string,
@@ -159,12 +218,11 @@ export class ContextService {
         maxResults?: number,
         minSimilarity?: number
     ): Promise<RelatedFile[]> {
-        // Get configuration values
+        // Get configuration values with fallbacks
         const config = vscode.workspace.getConfiguration('code-context-engine');
         maxResults = maxResults ?? config.get<number>('maxSearchResults') ?? 10;
         minSimilarity = minSimilarity ?? config.get<number>('minSimilarityThreshold') ?? 0.5;
         try {
-            await this.initializeEmbeddingProvider();
             if (!this.embeddingProvider) {
                 throw new Error('Embedding provider not available');
             }
@@ -177,7 +235,7 @@ export class ContextService {
 
             const collectionName = this.generateCollectionName();
             
-            // Search for similar chunks
+            // Search for similar chunks - get 3x results to ensure good file coverage
             const searchResults = await this.qdrantService.search(
                 collectionName,
                 queryEmbeddings[0],
@@ -192,11 +250,15 @@ export class ContextService {
                 language?: string;
             }>();
 
+            // Process search results and group by file path
             for (const result of searchResults) {
+                // Skip results below similarity threshold
                 if (result.score < minSimilarity) continue;
+                // Skip current file if provided
                 if (currentFilePath && result.payload.filePath === currentFilePath) continue;
 
                 const filePath = result.payload.filePath;
+                // Initialize group if this is the first chunk for this file
                 if (!fileGroups.has(filePath)) {
                     fileGroups.set(filePath, {
                         chunks: [],
@@ -206,6 +268,7 @@ export class ContextService {
                     });
                 }
 
+                // Add chunk to file group and update max score
                 const group = fileGroups.get(filePath)!;
                 group.chunks.push(result);
                 group.maxScore = Math.max(group.maxScore, result.score);
@@ -214,22 +277,23 @@ export class ContextService {
             // Calculate average scores and create RelatedFile objects
             const relatedFiles: RelatedFile[] = [];
             for (const [filePath, group] of fileGroups) {
+                // Calculate average similarity score across all chunks
                 group.avgScore = group.chunks.reduce((sum, chunk) => sum + chunk.score, 0) / group.chunks.length;
                 
-                // Determine reason for relation
+                // Generate human-readable reason for the relation
                 const topChunk = group.chunks[0];
                 const reason = this.generateRelationReason(topChunk, group.chunks.length);
 
                 relatedFiles.push({
                     filePath: filePath,
-                    similarity: group.maxScore,
+                    similarity: group.maxScore, // Use max score as the file similarity
                     reason: reason,
                     chunkCount: group.chunks.length,
                     language: group.language
                 });
             }
 
-            // Sort by similarity and return top results
+            // Sort by similarity (descending) and return top results
             return relatedFiles
                 .sort((a, b) => b.similarity - a.similarity)
                 .slice(0, maxResults);
@@ -241,13 +305,21 @@ export class ContextService {
     }
 
     /**
-     * Perform advanced context query
+     * Performs an advanced context query
+     * 
+     * This is the main entry point for semantic code search. It supports:
+     * - Filtering by file type
+     * - Including related files
+     * - Minimum similarity thresholds
+     * - Performance tracking
+     * 
+     * @param contextQuery - Query parameters
+     * @returns Promise resolving to query results
      */
     async queryContext(contextQuery: ContextQuery): Promise<ContextResult> {
         const startTime = Date.now();
         
         try {
-            await this.initializeEmbeddingProvider();
             if (!this.embeddingProvider) {
                 throw new Error('Embedding provider not available');
             }
@@ -266,7 +338,7 @@ export class ContextService {
 
             const collectionName = this.generateCollectionName();
 
-            // Get configuration values
+            // Get configuration values with fallbacks
             const config = vscode.workspace.getConfiguration('code-context-engine');
             const maxResults = contextQuery.maxResults ?? config.get<number>('maxSearchResults') ?? 20;
             const defaultMinSimilarity = config.get<number>('minSimilarityThreshold') ?? 0.5;
@@ -274,6 +346,7 @@ export class ContextService {
             // Build filter for file types if specified
             let filter: any = undefined;
             if (contextQuery.fileTypes && contextQuery.fileTypes.length > 0) {
+                // Create a filter that matches any of the specified languages
                 filter = {
                     should: contextQuery.fileTypes.map(lang => ({
                         key: 'language',
@@ -300,11 +373,12 @@ export class ContextService {
                 relatedFiles = await this.findRelatedFiles(
                     contextQuery.query,
                     contextQuery.filePath,
-                    10,
+                    10, // Default to 10 related files
                     minSimilarity
                 );
             }
 
+            // Return complete result object with timing information
             return {
                 query: contextQuery.query,
                 results: filteredResults,
@@ -315,6 +389,7 @@ export class ContextService {
 
         } catch (error) {
             console.error('Context query failed:', error);
+            // Return empty results with timing information on error
             return {
                 query: contextQuery.query,
                 results: [],
@@ -325,6 +400,12 @@ export class ContextService {
         }
     }
 
+    /**
+     * Maps file extensions to programming language identifiers
+     * 
+     * @param filePath - Path to the file
+     * @returns Language identifier or undefined if not recognized
+     */
     private getLanguageFromPath(filePath: string): string | undefined {
         const ext = path.extname(filePath).toLowerCase();
         const languageMap: Record<string, string> = {
@@ -338,6 +419,13 @@ export class ContextService {
         return languageMap[ext];
     }
 
+    /**
+     * Generates a human-readable reason for why a file is related
+     * 
+     * @param topChunk - The highest-scoring chunk from the file
+     * @param chunkCount - Total number of matching chunks in the file
+     * @returns A descriptive string explaining the relation
+     */
     private generateRelationReason(topChunk: SearchResult, chunkCount: number): string {
         const type = topChunk.payload.type;
         const name = topChunk.payload.name;
@@ -350,14 +438,19 @@ export class ContextService {
     }
 
     /**
-     * Check if the context service is ready
+     * Checks if the context service is ready for use
+     * 
+     * Verifies that both the vector database and embedding provider are available.
+     * 
+     * @returns Promise resolving to boolean indicating readiness
      */
     async isReady(): Promise<boolean> {
         try {
+            // Check if Qdrant is available
             const qdrantReady = await this.qdrantService.healthCheck();
             if (!qdrantReady) return false;
 
-            await this.initializeEmbeddingProvider();
+            // Check if embedding provider is available
             return this.embeddingProvider !== null;
         } catch {
             return false;
@@ -365,7 +458,14 @@ export class ContextService {
     }
 
     /**
-     * Get service status information
+     * Gets detailed status information about the service
+     * 
+     * Provides information about:
+     * - Vector database connection
+     * - Embedding provider availability
+     * - Collection existence and metadata
+     * 
+     * @returns Promise resolving to status object
      */
     async getStatus(): Promise<{
         qdrantConnected: boolean;
@@ -373,20 +473,23 @@ export class ContextService {
         collectionExists: boolean;
         collectionInfo?: any;
     }> {
+        // Check Qdrant connection
         const qdrantConnected = await this.qdrantService.healthCheck();
         
+        // Get embedding provider name if available
         let embeddingProvider: string | null = null;
         try {
-            await this.initializeEmbeddingProvider();
             embeddingProvider = this.embeddingProvider?.getProviderName() || null;
         } catch {
             // Provider not available
         }
 
+        // Check if collection exists and get its info
         const collectionName = this.generateCollectionName();
         const collectionInfo = await this.qdrantService.getCollectionInfo(collectionName);
         const collectionExists = collectionInfo !== null;
 
+        // Return comprehensive status object
         return {
             qdrantConnected,
             embeddingProvider,

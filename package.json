@@ -16,7 +16,8 @@
   ],
   "activationEvents": [
     "onCommand:code-context-engine.openMainPanel",
-    "onCommand:code-context-engine.startIndexing"
+    "onCommand:code-context-engine.startIndexing",
+    "onCommand:code-context-engine.setupProject"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -29,6 +30,11 @@
       {
         "command": "code-context-engine.startIndexing",
         "title": "Index Repository",
+        "category": "Code Context"
+      },
+      {
+        "command": "code-context-engine.setupProject",
+        "title": "Setup Project",
         "category": "Code Context"
       }
     ],
@@ -171,11 +177,14 @@
     "dev": "npm run watch"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "16.x",
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^8.28.0",
+    "mocha": "^11.7.1",
     "rimraf": "^5.0.10",
     "typescript": "^4.9.4",
     "vsce": "^2.15.0"
