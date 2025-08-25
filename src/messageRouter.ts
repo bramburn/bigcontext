@@ -62,6 +62,12 @@ export class MessageRouter {
                 case 'ping':
                     await this.handlePing(message, webview);
                     break;
+                case 'checkSetupStatus':
+                    await this.handleCheckSetupStatus(webview);
+                    break;
+                case 'startDatabase':
+                    await this.handleStartDatabase(message, webview);
+                    break;
                 case 'getFileContent':
                     await this.handleGetFileContent(message, webview);
                     break;
@@ -124,6 +130,137 @@ export class MessageRouter {
             requestId: message.requestId,
             timestamp: new Date().toISOString()
         });
+    }
+
+    /**
+     * Handles the 'checkSetupStatus' message
+     * Checks if the workspace is configured for first-time setup
+     */
+    private async handleCheckSetupStatus(webview: vscode.Webview): Promise<void> {
+        try {
+            // Check if workspace has configuration
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                await webview.postMessage({
+                    command: 'setupStatusResponse',
+                    data: { isConfigured: false, reason: 'No workspace folder' }
+                });
+                return;
+            }
+
+            // Check if services are configured and running
+            const status = await this.contextService.getStatus();
+            const isConfigured = status.qdrantConnected && status.embeddingProvider !== null;
+
+            await webview.postMessage({
+                command: 'setupStatusResponse',
+                data: {
+                    isConfigured,
+                    status: status
+                }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error checking setup status:', error);
+            await webview.postMessage({
+                command: 'setupStatusResponse',
+                data: { isConfigured: false, error: error instanceof Error ? error.message : String(error) }
+            });
+        }
+    }
+
+    /**
+     * Handles the 'startDatabase' message
+     * Starts the local database (e.g., Qdrant via Docker)
+     */
+    private async handleStartDatabase(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { database } = message;
+            console.log('MessageRouter: Starting database:', database);
+
+            if (database === 'qdrant') {
+                // Create a new terminal and run docker-compose
+                const terminal = vscode.window.createTerminal('Qdrant Database');
+                terminal.sendText('docker run -p 6333:6333 qdrant/qdrant');
+                terminal.show();
+
+                // Send immediate response
+                await webview.postMessage({
+                    command: 'databaseStarted',
+                    data: { database, status: 'starting' }
+                });
+
+                // Start health check polling
+                this.pollDatabaseHealth(webview, database);
+
+            } else {
+                throw new Error(`Unsupported database type: ${database}`);
+            }
+
+        } catch (error) {
+            console.error('MessageRouter: Error starting database:', error);
+            await webview.postMessage({
+                command: 'databaseStatus',
+                data: {
+                    status: 'error',
+                    error: error instanceof Error ? error.message : String(error)
+                }
+            });
+        }
+    }
+
+    /**
+     * Poll database health and update webview
+     */
+    private async pollDatabaseHealth(webview: vscode.Webview, database: string): Promise<void> {
+        const maxAttempts = 30; // 30 seconds
+        let attempts = 0;
+
+        const checkHealth = async (): Promise<void> => {
+            try {
+                attempts++;
+
+                if (database === 'qdrant') {
+                    // Check Qdrant health endpoint
+                    const response = await fetch('http://localhost:6333/health');
+                    if (response.ok) {
+                        await webview.postMessage({
+                            command: 'databaseStatus',
+                            data: { status: 'running' }
+                        });
+                        return;
+                    }
+                }
+
+                if (attempts < maxAttempts) {
+                    setTimeout(checkHealth, 1000); // Check again in 1 second
+                } else {
+                    await webview.postMessage({
+                        command: 'databaseStatus',
+                        data: {
+                            status: 'error',
+                            error: 'Database failed to start within 30 seconds'
+                        }
+                    });
+                }
+
+            } catch (error) {
+                if (attempts < maxAttempts) {
+                    setTimeout(checkHealth, 1000); // Check again in 1 second
+                } else {
+                    await webview.postMessage({
+                        command: 'databaseStatus',
+                        data: {
+                            status: 'error',
+                            error: 'Database health check failed'
+                        }
+                    });
+                }
+            }
+        };
+
+        // Start health checking
+        setTimeout(checkHealth, 2000); // Wait 2 seconds before first check
     }
 
     /**

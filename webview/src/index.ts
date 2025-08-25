@@ -10,6 +10,7 @@ import {
     fluentAccordionItem
 } from '@fluentui/web-components';
 import { vscodeApi, type SearchResult, type RelatedFile, type ServiceStatus } from './lib/vscodeApi';
+import { SetupView } from './lib/views/SetupView';
 
 // Setup state interface
 interface SetupState {
@@ -46,6 +47,7 @@ class CodeContextWebview {
     private pingResult: HTMLElement | null;
     private currentQuery: string = '';
     private isSetupMode: boolean = false;
+    private setupView: SetupView | null = null;
     private setupState: SetupState = {
         databaseReady: false,
         providerSelected: false,
@@ -120,35 +122,11 @@ class CodeContextWebview {
             this.displaySearchResults(event.data.results, event.data.error);
         });
 
-        // Setup-specific message listeners
-        vscodeApi.onMessage('databaseStarted', (event) => {
-            this.updateSetupStatus('Database is starting...', 'info');
-        });
-
-        vscodeApi.onMessage('databaseStatus', (event) => {
-            this.handleDatabaseStatusUpdate(event.data);
-        });
-
-        vscodeApi.onMessage('setupIndexingStarted', (event) => {
-            this.updateSetupStatus('Configuration saved and indexing started!', 'success');
-        });
-
-        vscodeApi.onMessage('setupIndexingProgress', (event) => {
-            this.updateSetupStatus(`Indexing: ${event.data.progress.message}`, 'info');
-        });
-
-        vscodeApi.onMessage('setupIndexingComplete', (event) => {
-            this.updateSetupStatus('Setup and indexing completed successfully!', 'success');
-            // Switch to main UI after successful setup
-            setTimeout(() => {
-                this.isSetupMode = false;
-                this.showMainUI();
-                this.checkServiceStatus();
-            }, 2000);
-        });
-
-        vscodeApi.onMessage('setupIndexingError', (event) => {
-            this.updateSetupStatus(event.data.error, 'error');
+        // Setup completion listener - switch to main UI when setup is done
+        vscodeApi.onMessage('setupComplete', () => {
+            this.isSetupMode = false;
+            this.showMainUI();
+            this.checkServiceStatus();
         });
     }
 
@@ -551,198 +529,26 @@ class CodeContextWebview {
             setupContainer.id = 'setup-container';
             setupContainer.className = 'setup-container';
 
-            setupContainer.innerHTML = `
-                <div class="setup-header">
-                    <h1>Welcome to Code Context Engine!</h1>
-                    <p>Let's set up your workspace for AI-powered code search and context discovery.</p>
-                </div>
-
-                <div class="setup-section">
-                    <h2>Database Configuration</h2>
-                    <div class="setup-item">
-                        <label for="database-select">Vector Database:</label>
-                        <fluent-text-field id="database-select" value="Qdrant" readonly></fluent-text-field>
-                        <p class="setup-description">Qdrant is a high-performance vector database for storing code embeddings</p>
-                    </div>
-
-                    <div class="setup-item">
-                        <label for="database-connection">Connection String:</label>
-                        <fluent-text-field id="database-connection" value="http://localhost:6333" placeholder="http://localhost:6333"></fluent-text-field>
-                    </div>
-
-                    <div class="setup-controls">
-                        <fluent-button id="start-database-btn" appearance="stealth">Start Local Qdrant</fluent-button>
-                        <fluent-button id="check-database-btn" appearance="stealth">Check Status</fluent-button>
-                        <span id="database-status" class="status-indicator">
-                            <span class="status-dot status-unknown"></span>
-                            <span>Status unknown</span>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="setup-section">
-                    <h2>Embedding Provider</h2>
-                    <div class="setup-item">
-                        <label for="provider-select">Provider:</label>
-                        <select id="provider-select" class="setup-select">
-                            <option value="">Select a provider...</option>
-                            <option value="ollama">Ollama (Local)</option>
-                            <option value="openai">OpenAI (Cloud)</option>
-                        </select>
-                        <p class="setup-description">Choose between local Ollama or cloud-based OpenAI for generating embeddings</p>
-                    </div>
-
-                    <div id="ollama-config" class="provider-config" style="display: none;">
-                        <label for="ollama-model">Ollama Model:</label>
-                        <select id="ollama-model" class="setup-select">
-                            <option value="nomic-embed-text">nomic-embed-text (768 dimensions)</option>
-                            <option value="all-minilm">all-minilm (384 dimensions)</option>
-                            <option value="mxbai-embed-large">mxbai-embed-large (1024 dimensions)</option>
-                        </select>
-                    </div>
-
-                    <div id="openai-config" class="provider-config" style="display: none;">
-                        <label for="openai-key">OpenAI API Key:</label>
-                        <fluent-text-field id="openai-key" type="password" placeholder="sk-..."></fluent-text-field>
-                    </div>
-                </div>
-
-                <div class="setup-actions">
-                    <fluent-button id="index-now-btn" appearance="accent" disabled>Index Now</fluent-button>
-                    <p id="setup-status" class="setup-status"></p>
-                </div>
-            `;
-
             // Insert setup UI at the beginning of the container
             const container = document.querySelector('.container');
             if (container) {
                 container.insertBefore(setupContainer, container.firstChild);
             }
+
+            // Create and initialize the SetupView
+            this.setupView = new SetupView(setupContainer);
         } else {
             setupContainer.style.display = 'block';
-        }
-
-        // Setup event listeners for setup UI
-        this.setupSetupEventListeners();
-    }
-
-    private setupSetupEventListeners(): void {
-        // Database controls
-        const startDbBtn = document.getElementById('start-database-btn');
-        const checkDbBtn = document.getElementById('check-database-btn');
-        const providerSelect = document.getElementById('provider-select') as HTMLSelectElement;
-        const indexNowBtn = document.getElementById('index-now-btn');
-
-        startDbBtn?.addEventListener('click', () => this.startDatabase());
-        checkDbBtn?.addEventListener('click', () => this.checkDatabaseStatus());
-        providerSelect?.addEventListener('change', () => this.onProviderChange());
-        indexNowBtn?.addEventListener('click', () => this.startSetupIndexing());
-    }
-
-    private startDatabase(): void {
-        vscodeApi.postMessage({
-            command: 'startDatabase',
-            databaseType: this.setupState.databaseType
-        });
-
-        this.updateSetupStatus('Starting database...', 'info');
-    }
-
-    private checkDatabaseStatus(): void {
-        vscodeApi.postMessage({
-            command: 'checkDatabaseStatus',
-            databaseType: this.setupState.databaseType
-        });
-
-        this.updateSetupStatus('Checking database status...', 'info');
-    }
-
-    private onProviderChange(): void {
-        const providerSelect = document.getElementById('provider-select') as HTMLSelectElement;
-        const selectedProvider = providerSelect.value;
-
-        // Hide all provider configs
-        document.querySelectorAll('.provider-config').forEach(config => {
-            (config as HTMLElement).style.display = 'none';
-        });
-
-        // Show selected provider config
-        if (selectedProvider === 'ollama') {
-            const ollamaConfig = document.getElementById('ollama-config');
-            if (ollamaConfig) ollamaConfig.style.display = 'block';
-        } else if (selectedProvider === 'openai') {
-            const openaiConfig = document.getElementById('openai-config');
-            if (openaiConfig) openaiConfig.style.display = 'block';
-        }
-
-        // Update setup state
-        this.setupState.selectedProvider = selectedProvider;
-        this.setupState.providerSelected = selectedProvider !== '';
-        this.updateIndexNowButton();
-    }
-
-    private updateIndexNowButton(): void {
-        const indexNowBtn = document.getElementById('index-now-btn') as any;
-        if (indexNowBtn) {
-            indexNowBtn.disabled = !(this.setupState.databaseReady && this.setupState.providerSelected);
-        }
-    }
-
-    private updateSetupStatus(message: string, type: 'info' | 'success' | 'error'): void {
-        const statusElement = document.getElementById('setup-status');
-        if (statusElement) {
-            statusElement.textContent = message;
-            statusElement.className = `setup-status ${type}`;
-        }
-    }
-
-    private startSetupIndexing(): void {
-        const config = {
-            databaseType: this.setupState.databaseType,
-            databaseConnection: (document.getElementById('database-connection') as any)?.value || 'http://localhost:6333',
-            embeddingProvider: this.setupState.selectedProvider,
-            embeddingModel: this.getSelectedEmbeddingModel()
-        };
-
-        vscodeApi.postMessage({
-            command: 'startSetupIndexing',
-            config: config
-        });
-
-        this.updateSetupStatus('Starting indexing process...', 'info');
-    }
-
-    private getSelectedEmbeddingModel(): string {
-        if (this.setupState.selectedProvider === 'ollama') {
-            const modelSelect = document.getElementById('ollama-model') as HTMLSelectElement;
-            return modelSelect?.value || 'nomic-embed-text';
-        } else if (this.setupState.selectedProvider === 'openai') {
-            return 'text-embedding-ada-002';
-        }
-        return '';
-    }
-
-    private handleDatabaseStatusUpdate(data: any): void {
-        const statusElement = document.getElementById('database-status');
-        if (statusElement) {
-            const statusDot = statusElement.querySelector('.status-dot');
-            const statusText = statusElement.querySelector('span:last-child');
-
-            if (statusDot && statusText) {
-                if (data.status === 'running') {
-                    statusDot.className = 'status-dot status-running';
-                    statusText.textContent = 'Running';
-                    this.setupState.databaseReady = true;
-                } else {
-                    statusDot.className = 'status-dot status-stopped';
-                    statusText.textContent = 'Stopped';
-                    this.setupState.databaseReady = false;
-                }
-
-                this.updateIndexNowButton();
+            // Reinitialize SetupView if needed
+            if (!this.setupView) {
+                this.setupView = new SetupView(setupContainer);
             }
         }
     }
+
+
+
+
 }
 
 // Initialize the webview when DOM is loaded
