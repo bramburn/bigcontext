@@ -7,9 +7,14 @@
 
 import * as vscode from 'vscode'; // Import VS Code extension API
 import * as path from 'path'; // Import Node.js path module for file path operations
+import { IndexingService, IndexingProgress, IndexingResult } from './indexing/indexingService'; // Import our indexing service
+import { ContextService, ContextQuery, FileContentResult, RelatedFile } from './context/contextService'; // Import context service
 
 // Global variable to track the current webview panel instance
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
+
+// Global variable to track the context service instance
+let contextService: ContextService | undefined = undefined;
 
 /**
  * Extension activation point
@@ -46,9 +51,15 @@ export function activate(context: vscode.ExtensionContext) {
             // Set the HTML content for the webview using the helper function
             currentPanel.webview.html = getWebviewContent(currentPanel.webview, context.extensionPath);
 
+            // Initialize context service for this workspace
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                contextService = new ContextService(workspaceFolders[0].uri.fsPath);
+            }
+
             // Handle messages sent from the webview to the extension
             currentPanel.webview.onDidReceiveMessage(
-                message => {
+                async message => {
                     switch (message.command) {
                         case 'startIndexing':
                             // When user clicks "Index Repository" button in the webview
@@ -57,7 +68,31 @@ export function activate(context: vscode.ExtensionContext) {
                         case 'search':
                             // When user performs a search in the webview
                             if (currentPanel) {
-                                handleSearch(message.query, currentPanel.webview);
+                                await handleSearch(message.query, currentPanel.webview);
+                            }
+                            return;
+                        case 'getFileContent':
+                            // Get file content with optional related chunks
+                            if (currentPanel && contextService) {
+                                await handleGetFileContent(message, currentPanel.webview);
+                            }
+                            return;
+                        case 'findRelatedFiles':
+                            // Find files related to a query
+                            if (currentPanel && contextService) {
+                                await handleFindRelatedFiles(message, currentPanel.webview);
+                            }
+                            return;
+                        case 'queryContext':
+                            // Advanced context query
+                            if (currentPanel && contextService) {
+                                await handleQueryContext(message, currentPanel.webview);
+                            }
+                            return;
+                        case 'getServiceStatus':
+                            // Get service status
+                            if (currentPanel && contextService) {
+                                await handleGetServiceStatus(currentPanel.webview);
                             }
                             return;
                         case 'openSettings':
@@ -87,23 +122,65 @@ export function activate(context: vscode.ExtensionContext) {
         // Check if there's an open workspace folder to index
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
-            
+            const workspaceRoot = workspaceFolders[0].uri.fsPath;
+            const indexingService = new IndexingService(workspaceRoot);
+
             // Show progress notification while indexing is in progress
             vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification, // Show in notification area
                 title: "Indexing Repository",
                 cancellable: true // Allow user to cancel the operation
             }, async (progress, token) => {
-                // Report initial progress
-                progress.report({ message: "Starting indexing process..." });
-                
-                // TODO: Implement actual indexing logic in future sprints
-                // Currently just a placeholder with a delay to simulate work
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Show completion message if the operation wasn't cancelled
-                if (!token.isCancellationRequested) {
-                    vscode.window.showInformationMessage('Indexing complete! (Placeholder implementation)');
+                try {
+                    // Start the indexing process with progress updates
+                    const result: IndexingResult = await indexingService.startIndexing((indexingProgress: IndexingProgress) => {
+                        if (token.isCancellationRequested) {
+                            return; // Stop processing if cancelled
+                        }
+
+                        // Update the progress notification
+                        const percentage = indexingProgress.totalFiles > 0
+                            ? Math.round((indexingProgress.processedFiles / indexingProgress.totalFiles) * 100)
+                            : 0;
+
+                        progress.report({
+                            message: `${indexingProgress.currentPhase}: ${indexingProgress.currentFile ? path.basename(indexingProgress.currentFile) : ''} (${indexingProgress.processedFiles}/${indexingProgress.totalFiles})`,
+                            increment: percentage
+                        });
+
+                        // Send progress updates to the webview if it's open
+                        if (currentPanel) {
+                            currentPanel.webview.postMessage({
+                                command: 'indexingProgress',
+                                progress: indexingProgress
+                            });
+                        }
+                    });
+
+                    // Show completion message if the operation wasn't cancelled
+                    if (!token.isCancellationRequested) {
+                        const message = result.success
+                            ? `Indexing complete! Processed ${result.processedFiles} files, created ${result.chunks.length} chunks in ${Math.round(result.duration / 1000)}s`
+                            : `Indexing failed with ${result.errors.length} errors`;
+
+                        if (result.success) {
+                            vscode.window.showInformationMessage(message);
+                        } else {
+                            vscode.window.showErrorMessage(message);
+                        }
+
+                        // Send completion message to webview
+                        if (currentPanel) {
+                            currentPanel.webview.postMessage({
+                                command: 'indexingComplete',
+                                result: result
+                            });
+                        }
+                    }
+                } catch (error) {
+                    const errorMessage = `Indexing failed: ${error instanceof Error ? error.message : String(error)}`;
+                    vscode.window.showErrorMessage(errorMessage);
+                    console.error(errorMessage);
                 }
             });
         } else {
@@ -126,27 +203,163 @@ export function activate(context: vscode.ExtensionContext) {
  * @param query - The search query string entered by the user
  * @param webview - The webview instance to send results back to
  */
-function handleSearch(query: string, webview: vscode.Webview) {
-    // TODO: Implement actual search logic in future sprints
-    // For now, return mock results based on the query
-    const mockResults = [
-        {
-            file: 'src/extension.ts',
-            snippet: `function activate(context: vscode.ExtensionContext) { // Found: ${query}`,
-            line: 8
-        },
-        {
-            file: 'package.json',
-            snippet: `"name": "code-context-engine" // Search term: ${query}`,
-            line: 2
+async function handleSearch(query: string, webview: vscode.Webview) {
+    try {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            webview.postMessage({
+                command: 'searchResults',
+                results: [],
+                error: 'No workspace folder open'
+            });
+            return;
         }
-    ];
 
-    // Send the search results back to the webview
-    webview.postMessage({
-        command: 'searchResults', // Command identifier for the webview to recognize
-        results: mockResults      // The actual search results
-    });
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
+        const indexingService = new IndexingService(workspaceRoot);
+
+        // Check if Qdrant is available
+        const isQdrantAvailable = await indexingService.isQdrantAvailable();
+        if (!isQdrantAvailable) {
+            webview.postMessage({
+                command: 'searchResults',
+                results: [],
+                error: 'Vector database not available. Please ensure Qdrant is running.'
+            });
+            return;
+        }
+
+        // Perform the search
+        const searchResults = await indexingService.searchCode(query, 10);
+
+        // Convert search results to the format expected by the webview
+        const formattedResults = searchResults.map(result => ({
+            file: result.payload.filePath,
+            snippet: result.payload.content.substring(0, 200) + (result.payload.content.length > 200 ? '...' : ''),
+            line: result.payload.startLine,
+            score: result.score,
+            type: result.payload.type,
+            name: result.payload.name,
+            language: result.payload.language
+        }));
+
+        webview.postMessage({
+            command: 'searchResults',
+            results: formattedResults
+        });
+    } catch (error) {
+        console.error('Search error:', error);
+        webview.postMessage({
+            command: 'searchResults',
+            results: [],
+            error: `Search failed: ${error instanceof Error ? error.message : String(error)}`
+        });
+    }
+}
+
+/**
+ * Handle file content requests from the webview
+ */
+async function handleGetFileContent(message: any, webview: vscode.Webview) {
+    try {
+        if (!contextService) {
+            throw new Error('Context service not initialized');
+        }
+
+        const { filePath, includeRelatedChunks = false } = message;
+        const result = await contextService.getFileContent(filePath, includeRelatedChunks);
+
+        webview.postMessage({
+            command: 'fileContentResult',
+            requestId: message.requestId,
+            result: result
+        });
+    } catch (error) {
+        console.error('Get file content error:', error);
+        webview.postMessage({
+            command: 'fileContentResult',
+            requestId: message.requestId,
+            error: `Failed to get file content: ${error instanceof Error ? error.message : String(error)}`
+        });
+    }
+}
+
+/**
+ * Handle related files requests from the webview
+ */
+async function handleFindRelatedFiles(message: any, webview: vscode.Webview) {
+    try {
+        if (!contextService) {
+            throw new Error('Context service not initialized');
+        }
+
+        const { query, currentFilePath, maxResults = 10, minSimilarity = 0.5 } = message;
+        const result = await contextService.findRelatedFiles(query, currentFilePath, maxResults, minSimilarity);
+
+        webview.postMessage({
+            command: 'relatedFilesResult',
+            requestId: message.requestId,
+            result: result
+        });
+    } catch (error) {
+        console.error('Find related files error:', error);
+        webview.postMessage({
+            command: 'relatedFilesResult',
+            requestId: message.requestId,
+            error: `Failed to find related files: ${error instanceof Error ? error.message : String(error)}`
+        });
+    }
+}
+
+/**
+ * Handle context query requests from the webview
+ */
+async function handleQueryContext(message: any, webview: vscode.Webview) {
+    try {
+        if (!contextService) {
+            throw new Error('Context service not initialized');
+        }
+
+        const contextQuery: ContextQuery = message.contextQuery;
+        const result = await contextService.queryContext(contextQuery);
+
+        webview.postMessage({
+            command: 'contextQueryResult',
+            requestId: message.requestId,
+            result: result
+        });
+    } catch (error) {
+        console.error('Context query error:', error);
+        webview.postMessage({
+            command: 'contextQueryResult',
+            requestId: message.requestId,
+            error: `Context query failed: ${error instanceof Error ? error.message : String(error)}`
+        });
+    }
+}
+
+/**
+ * Handle service status requests from the webview
+ */
+async function handleGetServiceStatus(webview: vscode.Webview) {
+    try {
+        if (!contextService) {
+            throw new Error('Context service not initialized');
+        }
+
+        const status = await contextService.getStatus();
+
+        webview.postMessage({
+            command: 'serviceStatusResult',
+            result: status
+        });
+    } catch (error) {
+        console.error('Get service status error:', error);
+        webview.postMessage({
+            command: 'serviceStatusResult',
+            error: `Failed to get service status: ${error instanceof Error ? error.message : String(error)}`
+        });
+    }
 }
 
 /**
@@ -209,6 +422,11 @@ function getWebviewContent(webview: vscode.Webview, extensionPath: string): stri
         <div class="section">
             <h2>Repository Indexing</h2>
             <p>Index your repository to enable AI-powered code search and context analysis.</p>
+
+            <div id="service-status" style="margin-bottom: 15px;">
+                <!-- Service status will be populated here -->
+            </div>
+
             <fluent-button id="index-button" appearance="accent">Index Repository</fluent-button>
 
             <div id="progress-section" class="progress-section">
@@ -226,6 +444,10 @@ function getWebviewContent(webview: vscode.Webview, extensionPath: string): stri
 
             <div id="search-results" style="margin-top: 20px;">
                 <!-- Search results will be displayed here -->
+            </div>
+
+            <div id="related-files" style="margin-top: 20px;">
+                <!-- Related files will be displayed here -->
             </div>
         </div>
 

@@ -35,8 +35,9 @@ AI-powered code context and search extension for VS Code.
 4. Run the command: "Open Code Context Panel"
 5. The webview should open with the Code Context Engine interface
 
-### Features Implemented (Sprint 1)
+### Features Implemented
 
+#### Sprint 1: VS Code Extension Boilerplate & UI Setup ✅
 - ✅ VS Code Extension boilerplate with TypeScript
 - ✅ Webview integration with Fluent UI components
 - ✅ Basic UI with Index Now button and progress indicators
@@ -44,6 +45,38 @@ AI-powered code context and search extension for VS Code.
 - ✅ Message passing between extension and webview
 - ✅ Mock search functionality
 - ✅ Settings integration
+
+#### Sprint 2: AST Parser & Code Chunking ✅
+- ✅ Tree-sitter integration for TypeScript, JavaScript, Python, and C#
+- ✅ FileWalker service for discovering and filtering code files
+- ✅ AstParser service for parsing code into Abstract Syntax Trees
+- ✅ Chunker service for breaking ASTs into meaningful code segments
+- ✅ IndexingService orchestrating the complete indexing pipeline
+- ✅ Real-time progress reporting during indexing
+- ✅ Support for .gitignore patterns and common ignore rules
+- ✅ Comprehensive error handling and recovery
+
+#### Sprint 3: Vectorization & DB Integration ✅
+- ✅ Qdrant vector database integration with Docker Compose setup
+- ✅ QdrantService for collection management and vector operations
+- ✅ IEmbeddingProvider interface for pluggable embedding providers
+- ✅ OllamaProvider for local embedding generation (nomic-embed-text)
+- ✅ OpenAIProvider for cloud-based embeddings (text-embedding-ada-002)
+- ✅ Complete vectorization pipeline integrated into IndexingService
+- ✅ Semantic search functionality with similarity scoring
+- ✅ Automatic collection creation and batch vector storage
+- ✅ Real-time search through indexed code with VS Code integration
+
+#### Sprint 4: Context Query API ✅
+- ✅ ContextService for advanced query logic and file operations
+- ✅ File content retrieval with related chunks discovery
+- ✅ Related files discovery with similarity-based ranking
+- ✅ Advanced context queries with filtering and metadata
+- ✅ Comprehensive webview message handling and API routing
+- ✅ TypeScript API client with request/response management
+- ✅ Enhanced UI with service status, related files, and file preview
+- ✅ Real-time service health monitoring and status display
+- ✅ Modal file content viewer with syntax highlighting
 
 ### Commands Available
 
@@ -73,15 +106,34 @@ This completes Sprint 1. The next sprints will implement:
 
 ```
 ├── src/
-│   └── extension.ts          # Main extension logic
+│   ├── extension.ts          # Main extension logic
+│   ├── indexing/
+│   │   ├── fileWalker.ts    # File discovery and filtering service
+│   │   └── indexingService.ts # Main indexing orchestrator
+│   ├── parsing/
+│   │   ├── astParser.ts     # AST parsing with tree-sitter
+│   │   └── chunker.ts       # Code chunking service
+│   ├── db/
+│   │   └── qdrantService.ts # Vector database operations
+│   ├── embeddings/
+│   │   ├── embeddingProvider.ts # Embedding provider interface
+│   │   ├── ollamaProvider.ts    # Local Ollama embeddings
+│   │   └── openaiProvider.ts    # OpenAI embeddings
+│   ├── context/
+│   │   └── contextService.ts    # Advanced context queries and file operations
+│   └── types/
+│       └── tree-sitter-languages.d.ts # Type declarations
 ├── webview/
 │   ├── src/
 │   │   ├── index.ts         # Webview TypeScript entry point
 │   │   ├── index.html       # Webview HTML template
-│   │   └── styles.css       # Webview styles with VS Code theme integration
+│   │   ├── styles.css       # Webview styles with VS Code theme integration
+│   │   └── lib/
+│   │       └── vscodeApi.ts # VS Code API client wrapper
 │   ├── dist/                # Built webview files
 │   └── package.json         # Webview dependencies
 ├── out/                     # Compiled extension files
+├── docker-compose.yml       # Qdrant database setup
 ├── package.json             # Extension manifest and dependencies
 └── tsconfig.json           # TypeScript configuration
 ```

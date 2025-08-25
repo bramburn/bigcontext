@@ -1,6 +1,6 @@
 import Parser from 'tree-sitter';
 import { SupportedLanguage } from './astParser';
-
+// TODO: (agent) we should be able to process all files except for executables
 export interface CodeChunk {
     filePath: string;
     content: string;
@@ -175,7 +175,7 @@ export class Chunker {
         language: SupportedLanguage
     ): CodeChunk | null {
         const captures = match.captures;
-        const mainCapture = captures.find(c => c.name === chunkType) || captures[0];
+        const mainCapture = captures.find((c: any) => c.name === chunkType) || captures[0];
         
         if (!mainCapture) return null;
 
@@ -183,11 +183,11 @@ export class Chunker {
         const content = code.slice(node.startIndex, node.endIndex);
         
         // Extract name if available
-        const nameCapture = captures.find(c => c.name === 'name');
+        const nameCapture = captures.find((c: any) => c.name === 'name');
         const name = nameCapture ? code.slice(nameCapture.node.startIndex, nameCapture.node.endIndex) : undefined;
 
         // Extract parameters/signature if available
-        const paramsCapture = captures.find(c => c.name === 'params');
+        const paramsCapture = captures.find((c: any) => c.name === 'params');
         const signature = paramsCapture ? code.slice(paramsCapture.node.startIndex, paramsCapture.node.endIndex) : undefined;
 
         // Extract docstring for Python
@@ -251,9 +251,24 @@ export class Chunker {
     }
 
     private getLanguageGrammar(language: SupportedLanguage): any {
-        // This would need to import the actual language grammars
-        // For now, return null to indicate we need the grammar
-        return null;
+        // Import the actual language grammars
+        try {
+            switch (language) {
+                case 'typescript':
+                    return require('tree-sitter-typescript').typescript;
+                case 'javascript':
+                    return require('tree-sitter-typescript').javascript;
+                case 'python':
+                    return require('tree-sitter-python');
+                case 'csharp':
+                    return require('tree-sitter-c-sharp');
+                default:
+                    return null;
+            }
+        } catch (error) {
+            console.error(`Failed to load grammar for ${language}:`, error);
+            return null;
+        }
     }
 
     public getChunksByType(chunks: CodeChunk[], type: ChunkType): CodeChunk[] {

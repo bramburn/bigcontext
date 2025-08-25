@@ -20,3 +20,7 @@ __pycache__
 .github
 
 .repomix-output.xml
+
+# Database storage directories
+qdrant_storage/
+ollama_data/

@@ -34,18 +34,121 @@
         "code-context-engine.embeddingProvider": {
           "type": "string",
           "default": "ollama",
-          "enum": ["ollama", "openai"],
-          "description": "Embedding provider to use for vectorization"
+          "enum": [
+            "ollama",
+            "openai"
+          ],
+          "description": "Embedding provider to use for vectorization",
+          "enumDescriptions": [
+            "Local Ollama embedding service (free, private)",
+            "OpenAI embedding service (requires API key)"
+          ]
         },
         "code-context-engine.databaseConnectionString": {
           "type": "string",
           "default": "http://localhost:6333",
-          "description": "Qdrant database connection string"
+          "description": "Qdrant vector database connection string",
+          "pattern": "^https?://.*:\\d+$",
+          "patternErrorMessage": "Must be a valid HTTP/HTTPS URL with port (e.g., http://localhost:6333)"
         },
         "code-context-engine.openaiApiKey": {
           "type": "string",
           "default": "",
-          "description": "OpenAI API key (stored securely)"
+          "description": "OpenAI API key for embedding generation (stored securely in VS Code settings)"
+        },
+        "code-context-engine.ollamaModel": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Ollama model to use for embeddings",
+          "enum": [
+            "nomic-embed-text",
+            "all-minilm",
+            "mxbai-embed-large"
+          ],
+          "enumDescriptions": [
+            "Nomic Embed Text (768 dimensions, recommended)",
+            "All-MiniLM (384 dimensions, faster)",
+            "MxBai Embed Large (1024 dimensions, more accurate)"
+          ]
+        },
+        "code-context-engine.openaiModel": {
+          "type": "string",
+          "default": "text-embedding-ada-002",
+          "description": "OpenAI model to use for embeddings",
+          "enum": [
+            "text-embedding-ada-002",
+            "text-embedding-3-small",
+            "text-embedding-3-large"
+          ],
+          "enumDescriptions": [
+            "Ada-002 (1536 dimensions, cost-effective)",
+            "Embedding-3-Small (1536 dimensions, improved performance)",
+            "Embedding-3-Large (3072 dimensions, highest quality)"
+          ]
+        },
+        "code-context-engine.maxSearchResults": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum number of search results to return"
+        },
+        "code-context-engine.minSimilarityThreshold": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Minimum similarity threshold for search results (0.0 to 1.0)"
+        },
+        "code-context-engine.autoIndexOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start indexing when workspace is opened"
+        },
+        "code-context-engine.indexingBatchSize": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "Number of code chunks to process in each batch during indexing"
+        },
+        "code-context-engine.enableDebugLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable detailed debug logging for troubleshooting"
+        },
+        "code-context-engine.excludePatterns": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.git/**",
+            "**/coverage/**"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "File patterns to exclude from indexing (in addition to .gitignore)"
+        },
+        "code-context-engine.supportedLanguages": {
+          "type": "array",
+          "default": [
+            "typescript",
+            "javascript",
+            "python",
+            "csharp"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "typescript",
+              "javascript",
+              "python",
+              "csharp"
+            ]
+          },
+          "description": "Programming languages to include in indexing"
         }
       }
     }
@@ -59,21 +162,21 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
     "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
     "eslint": "^8.28.0",
     "typescript": "^4.9.4"
   },
   "dependencies": {
-    "tree-sitter": "^0.20.4",
-    "tree-sitter-typescript": "^0.20.3",
-    "tree-sitter-python": "^0.20.4",
-    "tree-sitter-c-sharp": "^0.20.0",
+    "@qdrant/js-client-rest": "^1.7.0",
+    "axios": "^1.6.0",
     "glob": "^8.0.3",
     "ignore": "^5.2.4",
-    "@qdrant/js-client-rest": "^1.7.0",
-    "axios": "^1.6.0"
+    "tree-sitter": "^0.20.4",
+    "tree-sitter-c-sharp": "^0.20.0",
+    "tree-sitter-python": "^0.20.4",
+    "tree-sitter-typescript": "^0.20.3"
   }
 }
