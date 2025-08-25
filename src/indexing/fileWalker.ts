@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { glob } from 'glob';
+import * as glob from 'glob';
 import ignore from 'ignore';
 
 export class FileWalker {
@@ -87,11 +87,16 @@ export class FileWalker {
 
         for (const pattern of patterns) {
             try {
-                const files = await glob(pattern, {
-                    cwd: this.workspaceRoot,
-                    absolute: true,
-                    nodir: true,
-                    dot: false
+                const files = await new Promise<string[]>((resolve, reject) => {
+                    glob.glob(pattern, {
+                        cwd: this.workspaceRoot,
+                        absolute: true,
+                        nodir: true,
+                        dot: false
+                    }, (err, matches) => {
+                        if (err) reject(err);
+                        else resolve(matches);
+                    });
                 });
                 allFiles.push(...files);
             } catch (error) {
