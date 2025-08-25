@@ -1,0 +1,94 @@
+/* VS Code theme integration */
+:root {
+  --vscode-font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+  --vscode-foreground: var(--vscode-foreground, #cccccc);
+  --vscode-editor-background: var(--vscode-editor-background, #1e1e1e);
+  --vscode-panel-border: var(--vscode-panel-border, #3c3c3c);
+  --vscode-button-background: var(--vscode-button-background, #0e639c);
+  --vscode-button-foreground: var(--vscode-button-foreground, #ffffff);
+  --vscode-button-hoverBackground: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+/* Fluent UI component customization for VS Code theme */
+fluent-button {
+  --accent-fill-rest: var(--vscode-button-background);
+  --accent-fill-hover: var(--vscode-button-hoverBackground);
+  --accent-foreground-rest: var(--vscode-button-foreground);
+  --neutral-fill-rest: var(--vscode-editor-background);
+  --neutral-stroke-rest: var(--vscode-panel-border);
+}
+
+fluent-text-field {
+  --neutral-fill-rest: var(--vscode-editor-background);
+  --neutral-stroke-rest: var(--vscode-panel-border);
+  --neutral-foreground-rest: var(--vscode-foreground);
+}
+
+fluent-progress-ring {
+  --accent-fill-rest: var(--vscode-button-background);
+}
+
+/* Custom styles */
+.container {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+.section {
+  background-color: var(--vscode-editor-background);
+  border-color: var(--vscode-panel-border);
+}
+
+.section h2 {
+  margin-top: 0;
+  color: var(--vscode-foreground);
+}
+
+.section h3 {
+  color: var(--vscode-foreground);
+}
+
+.section p {
+  color: var(--vscode-foreground);
+  opacity: 0.8;
+}
+
+/* Progress section animations */
+.progress-section {
+  transition: opacity 0.3s ease-in-out;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+
+.progress-section.visible {
+  opacity: 1;
+  max-height: 200px;
+  margin-top: 20px;
+}
+
+/* Search results styling */
+#search-results {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+#search-results h4 {
+  margin: 0 0 5px 0;
+  color: var(--vscode-button-background);
+}
+
+#search-results p {
+  margin: 5px 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 5px;
+  border-radius: 3px;
+}
+
+#search-results small {
+  color: var(--vscode-foreground);
+  opacity: 0.6;
+}

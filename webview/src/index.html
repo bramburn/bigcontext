@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Context Engine</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+        }
+        .progress-section {
+            display: none;
+        }
+        .progress-section.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Code Context Engine</h1>
+            <p>AI-powered code context and search for your workspace</p>
+        </div>
+
+        <div class="section">
+            <h2>Repository Indexing</h2>
+            <p>Index your repository to enable AI-powered code search and context analysis.</p>
+            <fluent-button id="index-button" appearance="accent">Index Repository</fluent-button>
+            
+            <div id="progress-section" class="progress-section">
+                <h3>Indexing Progress</h3>
+                <fluent-progress-ring id="progress-ring"></fluent-progress-ring>
+                <p id="progress-text">Starting indexing process...</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Search & Context</h2>
+            <p>Search through your indexed code and get AI-powered context.</p>
+            <fluent-text-field id="search-input" placeholder="Search your code..." style="width: 100%; margin-bottom: 10px;"></fluent-text-field>
+            <fluent-button id="search-button">Search</fluent-button>
+            
+            <div id="search-results" style="margin-top: 20px;">
+                <!-- Search results will be displayed here -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Settings</h2>
+            <p>Configure your Code Context Engine preferences.</p>
+            <fluent-button id="settings-button" appearance="stealth">Open Settings</fluent-button>
+        </div>
+    </div>
+</body>
+</html>
