@@ -46,6 +46,25 @@ export class WebviewManager {
 
                 if (contextService && indexingService) {
                     this.messageRouter = new MessageRouter(contextService, indexingService);
+
+                    // Set advanced managers if available
+                    if (this.extensionManager.getSearchManager &&
+                        this.extensionManager.getConfigurationManager &&
+                        this.extensionManager.getPerformanceManager) {
+
+                        const searchManager = this.extensionManager.getSearchManager();
+                        const configurationManager = this.extensionManager.getConfigurationManager();
+                        const performanceManager = this.extensionManager.getPerformanceManager();
+
+                        if (searchManager && configurationManager && performanceManager) {
+                            this.messageRouter.setAdvancedManagers(
+                                searchManager,
+                                configurationManager,
+                                performanceManager
+                            );
+                        }
+                    }
+
                     console.log('WebviewManager: MessageRouter initialized');
                 }
             }
@@ -143,7 +162,7 @@ export class WebviewManager {
         try {
             // Path to the webview HTML file
             const htmlPath = path.join(this.context.extensionPath, 'webview', 'dist', 'index.html');
-            
+
             // Check if the HTML file exists
             if (!fs.existsSync(htmlPath)) {
                 console.warn('WebviewManager: HTML file not found, using fallback content');
@@ -153,17 +172,16 @@ export class WebviewManager {
             // Read the HTML content
             let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
-            // Get URIs for webview resources
-            const scriptUri = webview.asWebviewUri(
-                vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'dist', 'index.js'))
+            // Replace relative paths with webview-specific URIs using regex
+            // This handles webpack-generated assets like bundle.js, styles, etc.
+            htmlContent = htmlContent.replace(
+                /(<script[^>]+src="|<link[^>]+href="|src="|href=")(?!https?:\/\/)([^"]*\.(?:js|css|png|jpg|jpeg|gif|svg|ico))"/g,
+                (_match, prefix, relativePath) => {
+                    const resourcePath = path.join(this.context.extensionPath, 'webview', 'dist', relativePath);
+                    const uri = webview.asWebviewUri(vscode.Uri.file(resourcePath));
+                    return `${prefix}${uri}"`;
+                }
             );
-            const styleUri = webview.asWebviewUri(
-                vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'dist', 'styles.css'))
-            );
-
-            // Replace placeholders with actual URIs
-            htmlContent = htmlContent.replace(/{{scriptUri}}/g, scriptUri.toString());
-            htmlContent = htmlContent.replace(/{{styleUri}}/g, styleUri.toString());
 
             return htmlContent;
         } catch (error) {

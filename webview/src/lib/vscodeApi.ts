@@ -272,6 +272,15 @@ export class VSCodeApiClient {
     }
 
     /**
+     * Send ping to test communication
+     */
+    async ping(): Promise<any> {
+        return this.sendRequestWithResponse<any>({
+            command: 'ping'
+        });
+    }
+
+    /**
      * Start indexing
      */
     startIndexing(): void {

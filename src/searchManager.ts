@@ -94,20 +94,14 @@ export class SearchManager {
                 query,
                 maxResults: filters.maxResults || 20,
                 minSimilarity: filters.minSimilarity || 0.5,
-                includeMetadata: true,
-                filters: {
-                    fileTypes: filters.fileTypes,
-                    languages: filters.languages,
-                    excludeTests: !filters.includeTests,
-                    excludeComments: !filters.includeComments
-                }
+                fileTypes: filters.fileTypes
             };
 
             // Perform the search
             const contextResults = await this.contextService.queryContext(contextQuery);
 
             // Transform results to enhanced format
-            const enhancedResults = await this.transformResults(contextResults.chunks || []);
+            const enhancedResults = await this.transformResults(contextResults.relatedFiles || []);
 
             // Apply additional filtering
             const filteredResults = this.applyAdvancedFilters(enhancedResults, filters);
@@ -369,7 +363,7 @@ export class SearchManager {
         
         // Extract first meaningful line
         const lines = chunk.content?.split('\n') || [];
-        const meaningfulLine = lines.find(line => 
+        const meaningfulLine = lines.find((line: string) =>
             line.trim() && !line.trim().startsWith('//') && !line.trim().startsWith('*')
         );
         
@@ -384,7 +378,7 @@ export class SearchManager {
         const lines = content.split('\n');
         
         // Look for comments that might describe the code
-        const commentLine = lines.find(line => 
+        const commentLine = lines.find((line: string) =>
             line.trim().startsWith('//') || line.trim().startsWith('*')
         );
         

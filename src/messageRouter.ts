@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { ContextService, ContextQuery, FileContentResult, RelatedFile } from './context/contextService';
 import { IndexingService } from './indexing/indexingService';
+import { SearchManager, SearchFilters } from './searchManager';
+import { ConfigurationManager } from './configurationManager';
+import { PerformanceManager } from './performanceManager';
 
 /**
  * MessageRouter class responsible for routing and handling messages from webview panels.
@@ -15,6 +18,9 @@ import { IndexingService } from './indexing/indexingService';
 export class MessageRouter {
     private contextService: ContextService;
     private indexingService: IndexingService;
+    private searchManager?: SearchManager;
+    private configurationManager?: ConfigurationManager;
+    private performanceManager?: PerformanceManager;
 
     /**
      * Creates a new MessageRouter instance
@@ -27,6 +33,23 @@ export class MessageRouter {
     }
 
     /**
+     * Sets the advanced managers for enhanced functionality
+     * @param searchManager - The SearchManager instance
+     * @param configurationManager - The ConfigurationManager instance
+     * @param performanceManager - The PerformanceManager instance
+     */
+    setAdvancedManagers(
+        searchManager: SearchManager,
+        configurationManager: ConfigurationManager,
+        performanceManager: PerformanceManager
+    ): void {
+        this.searchManager = searchManager;
+        this.configurationManager = configurationManager;
+        this.performanceManager = performanceManager;
+        console.log('MessageRouter: Advanced managers set');
+    }
+
+    /**
      * Routes and handles a message from a webview
      * @param message - The message object from the webview
      * @param webview - The webview that sent the message
@@ -36,6 +59,9 @@ export class MessageRouter {
             console.log('MessageRouter: Handling message:', message.command);
 
             switch (message.command) {
+                case 'ping':
+                    await this.handlePing(message, webview);
+                    break;
                 case 'getFileContent':
                     await this.handleGetFileContent(message, webview);
                     break;
@@ -51,6 +77,30 @@ export class MessageRouter {
                 case 'startIndexing':
                     await this.handleStartIndexing(webview);
                     break;
+                case 'advancedSearch':
+                    await this.handleAdvancedSearch(message, webview);
+                    break;
+                case 'getSearchSuggestions':
+                    await this.handleGetSearchSuggestions(message, webview);
+                    break;
+                case 'getSearchHistory':
+                    await this.handleGetSearchHistory(webview);
+                    break;
+                case 'validateConfiguration':
+                    await this.handleValidateConfiguration(webview);
+                    break;
+                case 'getConfigurationPresets':
+                    await this.handleGetConfigurationPresets(webview);
+                    break;
+                case 'applyConfigurationPreset':
+                    await this.handleApplyConfigurationPreset(message, webview);
+                    break;
+                case 'getPerformanceMetrics':
+                    await this.handleGetPerformanceMetrics(webview);
+                    break;
+                case 'getFilePreview':
+                    await this.handleGetFilePreview(message, webview);
+                    break;
                 default:
                     console.warn('MessageRouter: Unknown command:', message.command);
                     await this.sendErrorResponse(webview, `Unknown command: ${message.command}`);
@@ -60,6 +110,20 @@ export class MessageRouter {
             console.error('MessageRouter: Error handling message:', error);
             await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error));
         }
+    }
+
+    /**
+     * Handles the 'ping' message
+     * Simple ping-pong test for communication verification
+     */
+    private async handlePing(message: any, webview: vscode.Webview): Promise<void> {
+        console.log('MessageRouter: Received ping from webview', message.requestId);
+
+        await webview.postMessage({
+            command: 'pong',
+            requestId: message.requestId,
+            timestamp: new Date().toISOString()
+        });
     }
 
     /**
@@ -189,6 +253,186 @@ export class MessageRouter {
 
         } catch (error) {
             await this.sendErrorResponse(webview, `Indexing failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Handles the 'advancedSearch' message
+     * Performs advanced search with filters
+     */
+    private async handleAdvancedSearch(message: any, webview: vscode.Webview): Promise<void> {
+        if (!this.searchManager) {
+            await this.sendErrorResponse(webview, 'Advanced search not available');
+            return;
+        }
+
+        const { query, filters } = message;
+
+        if (!query) {
+            await this.sendErrorResponse(webview, 'Search query is required');
+            return;
+        }
+
+        const results = await this.performanceManager?.measurePerformance('advancedSearch', async () => {
+            return this.searchManager!.search(query, filters as SearchFilters);
+        }) || await this.searchManager.search(query, filters as SearchFilters);
+
+        await webview.postMessage({
+            command: 'advancedSearchResponse',
+            requestId: message.requestId,
+            data: results
+        });
+    }
+
+    /**
+     * Handles the 'getSearchSuggestions' message
+     * Gets search suggestions based on partial query
+     */
+    private async handleGetSearchSuggestions(message: any, webview: vscode.Webview): Promise<void> {
+        if (!this.searchManager) {
+            await this.sendErrorResponse(webview, 'Search suggestions not available');
+            return;
+        }
+
+        const { partialQuery } = message;
+        const suggestions = this.searchManager.getSuggestions(partialQuery || '');
+
+        await webview.postMessage({
+            command: 'searchSuggestionsResponse',
+            requestId: message.requestId,
+            data: suggestions
+        });
+    }
+
+    /**
+     * Handles the 'getSearchHistory' message
+     * Gets recent search history
+     */
+    private async handleGetSearchHistory(webview: vscode.Webview): Promise<void> {
+        if (!this.searchManager) {
+            await this.sendErrorResponse(webview, 'Search history not available');
+            return;
+        }
+
+        const history = this.searchManager.getSearchHistory();
+
+        await webview.postMessage({
+            command: 'searchHistoryResponse',
+            data: history
+        });
+    }
+
+    /**
+     * Handles the 'validateConfiguration' message
+     * Validates current configuration
+     */
+    private async handleValidateConfiguration(webview: vscode.Webview): Promise<void> {
+        if (!this.configurationManager) {
+            await this.sendErrorResponse(webview, 'Configuration validation not available');
+            return;
+        }
+
+        const validation = await this.configurationManager.validateConfiguration();
+
+        await webview.postMessage({
+            command: 'configurationValidationResponse',
+            data: validation
+        });
+    }
+
+    /**
+     * Handles the 'getConfigurationPresets' message
+     * Gets available configuration presets
+     */
+    private async handleGetConfigurationPresets(webview: vscode.Webview): Promise<void> {
+        if (!this.configurationManager) {
+            await this.sendErrorResponse(webview, 'Configuration presets not available');
+            return;
+        }
+
+        const presets = this.configurationManager.getConfigurationPresets();
+
+        await webview.postMessage({
+            command: 'configurationPresetsResponse',
+            data: presets
+        });
+    }
+
+    /**
+     * Handles the 'applyConfigurationPreset' message
+     * Applies a configuration preset
+     */
+    private async handleApplyConfigurationPreset(message: any, webview: vscode.Webview): Promise<void> {
+        if (!this.configurationManager) {
+            await this.sendErrorResponse(webview, 'Configuration presets not available');
+            return;
+        }
+
+        const { presetName } = message;
+
+        if (!presetName) {
+            await this.sendErrorResponse(webview, 'Preset name is required');
+            return;
+        }
+
+        try {
+            await this.configurationManager.applyPreset(presetName);
+
+            await webview.postMessage({
+                command: 'configurationPresetAppliedResponse',
+                requestId: message.requestId,
+                data: { success: true, presetName }
+            });
+        } catch (error) {
+            await this.sendErrorResponse(webview, `Failed to apply preset: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Handles the 'getPerformanceMetrics' message
+     * Gets current performance metrics
+     */
+    private async handleGetPerformanceMetrics(webview: vscode.Webview): Promise<void> {
+        if (!this.performanceManager) {
+            await this.sendErrorResponse(webview, 'Performance metrics not available');
+            return;
+        }
+
+        const metrics = this.performanceManager.getMetrics();
+
+        await webview.postMessage({
+            command: 'performanceMetricsResponse',
+            data: metrics
+        });
+    }
+
+    /**
+     * Handles the 'getFilePreview' message
+     * Gets file preview for a specific location
+     */
+    private async handleGetFilePreview(message: any, webview: vscode.Webview): Promise<void> {
+        if (!this.searchManager) {
+            await this.sendErrorResponse(webview, 'File preview not available');
+            return;
+        }
+
+        const { filePath, lineNumber, contextLines } = message;
+
+        if (!filePath || !lineNumber) {
+            await this.sendErrorResponse(webview, 'File path and line number are required');
+            return;
+        }
+
+        try {
+            const preview = await this.searchManager.getFilePreview(filePath, lineNumber, contextLines);
+
+            await webview.postMessage({
+                command: 'filePreviewResponse',
+                requestId: message.requestId,
+                data: { preview, filePath, lineNumber }
+            });
+        } catch (error) {
+            await this.sendErrorResponse(webview, `Failed to get file preview: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

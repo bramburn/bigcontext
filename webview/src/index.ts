@@ -42,6 +42,8 @@ class CodeContextWebview {
     private settingsButton: HTMLElement | null;
     private serviceStatus: HTMLElement | null;
     private relatedFilesSection: HTMLElement | null;
+    private pingButton: HTMLElement | null;
+    private pingResult: HTMLElement | null;
     private currentQuery: string = '';
     private isSetupMode: boolean = false;
     private setupState: SetupState = {
@@ -69,6 +71,8 @@ class CodeContextWebview {
         this.settingsButton = document.getElementById('settings-button');
         this.serviceStatus = document.getElementById('service-status');
         this.relatedFilesSection = document.getElementById('related-files');
+        this.pingButton = document.getElementById('ping-button');
+        this.pingResult = document.getElementById('ping-result');
     }
 
     private setupEventListeners(): void {
@@ -93,6 +97,10 @@ class CodeContextWebview {
 
         this.settingsButton?.addEventListener('click', () => {
             this.openSettings();
+        });
+
+        this.pingButton?.addEventListener('click', () => {
+            this.sendPing();
         });
     }
 
@@ -253,6 +261,46 @@ class CodeContextWebview {
 
     private openSettings(): void {
         vscodeApi.openSettings();
+    }
+
+    private async sendPing(): Promise<void> {
+        if (!this.pingResult) return;
+
+        try {
+            // Show loading state
+            this.pingResult.style.display = 'block';
+            this.pingResult.style.backgroundColor = 'var(--vscode-textCodeBlock-background)';
+            this.pingResult.style.color = 'var(--vscode-foreground)';
+            this.pingResult.textContent = 'Sending ping...';
+
+            // Send ping and wait for response
+            const response = await vscodeApi.ping();
+
+            // Show success response
+            this.pingResult.style.backgroundColor = 'var(--vscode-testing-iconPassed)';
+            this.pingResult.style.color = 'white';
+            this.pingResult.textContent = `✓ Received pong! Response time: ${response.timestamp}`;
+
+            // Hide after 3 seconds
+            setTimeout(() => {
+                if (this.pingResult) {
+                    this.pingResult.style.display = 'none';
+                }
+            }, 3000);
+
+        } catch (error) {
+            // Show error response
+            this.pingResult.style.backgroundColor = 'var(--vscode-testing-iconFailed)';
+            this.pingResult.style.color = 'white';
+            this.pingResult.textContent = `✗ Ping failed: ${error}`;
+
+            // Hide after 5 seconds
+            setTimeout(() => {
+                if (this.pingResult) {
+                    this.pingResult.style.display = 'none';
+                }
+            }, 5000);
+        }
     }
 
     private addToSearchHistory(query: string): void {

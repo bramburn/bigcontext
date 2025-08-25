@@ -15,7 +15,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { IndexingService } from '../indexing/indexingService';
 import { QdrantService, SearchResult } from '../db/qdrantService';
-import { IEmbeddingProvider, EmbeddingProviderFactory, EmbeddingConfig } from '../embeddings/embeddingProvider';
+import { IEmbeddingProvider } from '../embeddings/embeddingProvider';
 
 /**
  * Represents the result of a file content retrieval operation
@@ -103,6 +103,28 @@ export class ContextService {
     private indexingService: IndexingService;
     private qdrantService: QdrantService;
     private embeddingProvider: IEmbeddingProvider;
+    
+    // Configuration constants
+    private readonly DEFAULT_CHUNK_LIMIT = 50;
+    private readonly DEFAULT_RELATED_FILES_LIMIT = 10;
+    
+    /**
+     * Creates an empty context result object
+     * Helper method to reduce code duplication
+     * 
+     * @param query - The original query string
+     * @param startTime - Optional start time for calculating processing time
+     * @returns An empty ContextResult object
+     */
+    private createEmptyResult(query: string, startTime?: number): ContextResult {
+        return {
+            query: query,
+            results: [],
+            relatedFiles: [],
+            totalResults: 0,
+            processingTime: startTime ? Date.now() - startTime : 0
+        };
+    }
 
     /**
      * Constructor now uses dependency injection for better testability and decoupling
@@ -132,8 +154,17 @@ export class ContextService {
      * 
      * @returns A sanitized collection name string
      */
+    /**
+     * Generates a unique collection name for the current workspace
+     * 
+     * The collection name is derived from the workspace folder name,
+     * sanitized to ensure compatibility with Qdrant naming requirements.
+     * Uses path module for cross-platform compatibility.
+     * 
+     * @returns A sanitized collection name string
+     */
     private generateCollectionName(): string {
-        const workspaceName = this.workspaceRoot.split('/').pop() || 'workspace';
+        const workspaceName = path.basename(this.workspaceRoot) || 'workspace';
         const sanitizedName = workspaceName.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
         return `code_context_${sanitizedName}`;
     }
@@ -159,6 +190,12 @@ export class ContextService {
             // Get file stats
             const stats = await vscode.workspace.fs.stat(uri);
             
+            // Check file size to prevent memory issues with very large files
+            const MAX_SAFE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+            if (stats.size > MAX_SAFE_FILE_SIZE) {
+                console.warn(`Large file detected (${(stats.size / 1024 / 1024).toFixed(2)}MB): ${filePath}`);
+            }
+            
             // Determine language from file extension
             const language = this.getLanguageFromPath(filePath);
 
@@ -172,13 +209,15 @@ export class ContextService {
 
             // Optionally include related chunks
             if (includeRelatedChunks) {
-                if (this.embeddingProvider) {
+                if (!this.embeddingProvider) {
+                    console.warn('Embedding provider not available, cannot include related chunks');
+                } else {
                     // Search for chunks from this file
                     const collectionName = this.generateCollectionName();
                     const searchResults = await this.qdrantService.search(
                         collectionName,
                         [], // Empty vector, we'll use filter instead
-                        50,
+                        this.DEFAULT_CHUNK_LIMIT,
                         {
                             must: [
                                 {
@@ -327,13 +366,7 @@ export class ContextService {
             // Generate embedding for the query
             const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([contextQuery.query]);
             if (queryEmbeddings.length === 0) {
-                return {
-                    query: contextQuery.query,
-                    results: [],
-                    relatedFiles: [],
-                    totalResults: 0,
-                    processingTime: Date.now() - startTime
-                };
+                return this.createEmptyResult(contextQuery.query, startTime);
             }
 
             const collectionName = this.generateCollectionName();
@@ -344,7 +377,7 @@ export class ContextService {
             const defaultMinSimilarity = config.get<number>('minSimilarityThreshold') ?? 0.5;
             
             // Build filter for file types if specified
-            let filter: any = undefined;
+            let filter: { should: Array<{ key: string, match: { value: string } }> } | undefined = undefined;
             if (contextQuery.fileTypes && contextQuery.fileTypes.length > 0) {
                 // Create a filter that matches any of the specified languages
                 filter = {
@@ -373,7 +406,7 @@ export class ContextService {
                 relatedFiles = await this.findRelatedFiles(
                     contextQuery.query,
                     contextQuery.filePath,
-                    10, // Default to 10 related files
+                    this.DEFAULT_RELATED_FILES_LIMIT, // Use configurable constant
                     minSimilarity
                 );
             }
@@ -390,13 +423,7 @@ export class ContextService {
         } catch (error) {
             console.error('Context query failed:', error);
             // Return empty results with timing information on error
-            return {
-                query: contextQuery.query,
-                results: [],
-                relatedFiles: [],
-                totalResults: 0,
-                processingTime: Date.now() - startTime
-            };
+            return this.createEmptyResult(contextQuery.query, startTime);
         }
     }
 
@@ -406,16 +433,55 @@ export class ContextService {
      * @param filePath - Path to the file
      * @returns Language identifier or undefined if not recognized
      */
+    /**
+     * Maps file extensions to programming language identifiers
+     * Supports common file types and can be extended as needed
+     * 
+     * @param filePath - Path to the file
+     * @returns Language identifier or undefined if not recognized
+     */
     private getLanguageFromPath(filePath: string): string | undefined {
         const ext = path.extname(filePath).toLowerCase();
         const languageMap: Record<string, string> = {
+            // JavaScript family
             '.ts': 'typescript',
             '.tsx': 'typescript',
             '.js': 'javascript',
             '.jsx': 'javascript',
+            '.mjs': 'javascript',
+            '.cjs': 'javascript',
+            
+            // Web technologies
+            '.html': 'html',
+            '.css': 'css',
+            '.scss': 'scss',
+            '.less': 'less',
+            '.vue': 'vue',
+            '.svelte': 'svelte',
+            
+            // Backend languages
             '.py': 'python',
-            '.cs': 'csharp'
+            '.rb': 'ruby',
+            '.php': 'php',
+            '.java': 'java',
+            '.cs': 'csharp',
+            '.go': 'go',
+            '.rs': 'rust',
+            
+            // Data formats
+            '.json': 'json',
+            '.yaml': 'yaml',
+            '.yml': 'yaml',
+            '.xml': 'xml',
+            '.md': 'markdown',
+            
+            // Shell scripts
+            '.sh': 'shell',
+            '.bash': 'shell',
+            '.zsh': 'shell',
+            '.ps1': 'powershell'
         };
+        
         return languageMap[ext];
     }
 
@@ -444,15 +510,32 @@ export class ContextService {
      * 
      * @returns Promise resolving to boolean indicating readiness
      */
+    /**
+     * Checks if the context service is ready for use
+     * 
+     * Verifies that both the vector database and embedding provider are available.
+     * Logs any errors encountered during the check.
+     * 
+     * @returns Promise resolving to boolean indicating readiness
+     */
     async isReady(): Promise<boolean> {
         try {
             // Check if Qdrant is available
             const qdrantReady = await this.qdrantService.healthCheck();
-            if (!qdrantReady) return false;
+            if (!qdrantReady) {
+                console.warn('Qdrant service health check failed');
+                return false;
+            }
 
             // Check if embedding provider is available
-            return this.embeddingProvider !== null;
-        } catch {
+            if (!this.embeddingProvider) {
+                console.warn('Embedding provider not available');
+                return false;
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error checking service readiness:', error);
             return false;
         }
     }

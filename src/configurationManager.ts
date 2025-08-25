@@ -101,27 +101,29 @@ export class ConfigurationManager {
 
             // Validate indexing configuration
             const indexingConfig = this.configService.getIndexingConfig();
-            if (indexingConfig.chunkSize <= 0) {
+            if (indexingConfig.chunkSize !== undefined && indexingConfig.chunkSize <= 0) {
                 result.errors.push('Chunk size must be greater than 0');
                 result.isValid = false;
             }
 
-            if (indexingConfig.chunkOverlap < 0) {
+            if (indexingConfig.chunkOverlap !== undefined && indexingConfig.chunkOverlap < 0) {
                 result.errors.push('Chunk overlap cannot be negative');
                 result.isValid = false;
             }
 
-            if (indexingConfig.chunkOverlap >= indexingConfig.chunkSize) {
+            if (indexingConfig.chunkOverlap !== undefined &&
+                indexingConfig.chunkSize !== undefined &&
+                indexingConfig.chunkOverlap >= indexingConfig.chunkSize) {
                 result.warnings.push('Chunk overlap should be smaller than chunk size');
             }
 
             // Check for performance warnings
-            if (indexingConfig.chunkSize > 2000) {
+            if (indexingConfig.chunkSize !== undefined && indexingConfig.chunkSize > 2000) {
                 result.warnings.push('Large chunk size may impact performance');
             }
 
             const openaiConfig = this.configService.getOpenAIConfig();
-            if (openaiConfig.maxBatchSize > 100) {
+            if (openaiConfig.maxBatchSize !== undefined && openaiConfig.maxBatchSize > 100) {
                 result.warnings.push('Large batch size may hit API rate limits');
             }
 
