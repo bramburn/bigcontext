@@ -78,6 +78,28 @@ AI-powered code context and search extension for VS Code.
 - ✅ Real-time service health monitoring and status display
 - ✅ Modal file content viewer with syntax highlighting
 
+#### Sprint 5: Settings UI & Configuration ✅
+- ✅ Comprehensive configuration schema with 12+ settings
+- ✅ Settings command registration and webview panel
+- ✅ Complete settings UI with provider selection and testing
+- ✅ Settings API handlers for get/save/reset operations
+- ✅ Connection testing for Qdrant and embedding providers
+- ✅ Configuration-driven service initialization
+- ✅ Real-time settings validation and error handling
+- ✅ Secure API key storage in VS Code settings
+- ✅ Advanced options for batch sizes, thresholds, and patterns
+
+#### Sprint 6: LSP Integration & DevOps ✅
+- ✅ LSP service integration with VS Code language servers
+- ✅ Enhanced code chunks with semantic metadata (symbols, definitions, references)
+- ✅ Automatic LSP data enrichment during indexing process
+- ✅ Comprehensive GitHub Actions CI/CD pipeline
+- ✅ Multi-Node.js version testing (18.x, 20.x)
+- ✅ Automated VSIX packaging and artifact generation
+- ✅ Security scanning and code quality checks
+- ✅ Docker services integration for testing with Qdrant
+- ✅ Release automation with GitHub releases
+
 ### Commands Available
 
 - `code-context-engine.openMainPanel` - Opens the main Code Context Engine panel

@@ -7,6 +7,10 @@
   "engines": {
     "vscode": "^1.74.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bramburn/bigcontext.git"
+  },
   "categories": [
     "Other"
   ],
@@ -96,8 +100,8 @@
         "code-context-engine.minSimilarityThreshold": {
           "type": "number",
           "default": 0.5,
-          "minimum": 0.0,
-          "maximum": 1.0,
+          "minimum": 0,
+          "maximum": 1,
           "description": "Minimum similarity threshold for search results (0.0 to 1.0)"
         },
         "code-context-engine.autoIndexOnStartup": {
@@ -154,12 +158,17 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && npm run build-webview",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "build-webview": "cd webview && npm run build",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies",
+    "clean": "rimraf out *.vsix",
+    "dev": "npm run watch"
   },
   "devDependencies": {
     "@types/node": "16.x",
@@ -167,7 +176,9 @@
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
     "eslint": "^8.28.0",
-    "typescript": "^4.9.4"
+    "rimraf": "^5.0.10",
+    "typescript": "^4.9.4",
+    "vsce": "^2.15.0"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.7.0",
@@ -177,6 +188,8 @@
     "tree-sitter": "^0.20.4",
     "tree-sitter-c-sharp": "^0.20.0",
     "tree-sitter-python": "^0.20.4",
-    "tree-sitter-typescript": "^0.20.3"
+    "tree-sitter-typescript": "^0.20.3",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1"
   }
 }

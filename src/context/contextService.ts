@@ -61,10 +61,17 @@ export class ContextService {
         const config = vscode.workspace.getConfiguration('code-context-engine');
         const provider = config.get<string>('embeddingProvider') || 'ollama';
         const openaiApiKey = config.get<string>('openaiApiKey') || '';
+        const ollamaModel = config.get<string>('ollamaModel') || 'nomic-embed-text';
+        const openaiModel = config.get<string>('openaiModel') || 'text-embedding-ada-002';
+        const batchSize = config.get<number>('indexingBatchSize') || 100;
 
         const embeddingConfig: EmbeddingConfig = {
             provider: provider as 'ollama' | 'openai',
-            apiKey: openaiApiKey
+            model: provider === 'ollama' ? ollamaModel : openaiModel,
+            apiKey: openaiApiKey,
+            baseUrl: provider === 'ollama' ? 'http://localhost:11434' : undefined,
+            maxBatchSize: batchSize,
+            timeout: 30000
         };
 
         try {
@@ -147,11 +154,15 @@ export class ContextService {
      * Find files related to a query or file
      */
     async findRelatedFiles(
-        query: string, 
-        currentFilePath?: string, 
-        maxResults: number = 10,
-        minSimilarity: number = 0.5
+        query: string,
+        currentFilePath?: string,
+        maxResults?: number,
+        minSimilarity?: number
     ): Promise<RelatedFile[]> {
+        // Get configuration values
+        const config = vscode.workspace.getConfiguration('code-context-engine');
+        maxResults = maxResults ?? config.get<number>('maxSearchResults') ?? 10;
+        minSimilarity = minSimilarity ?? config.get<number>('minSimilarityThreshold') ?? 0.5;
         try {
             await this.initializeEmbeddingProvider();
             if (!this.embeddingProvider) {
@@ -254,7 +265,11 @@ export class ContextService {
             }
 
             const collectionName = this.generateCollectionName();
-            const maxResults = contextQuery.maxResults || 20;
+
+            // Get configuration values
+            const config = vscode.workspace.getConfiguration('code-context-engine');
+            const maxResults = contextQuery.maxResults ?? config.get<number>('maxSearchResults') ?? 20;
+            const defaultMinSimilarity = config.get<number>('minSimilarityThreshold') ?? 0.5;
             
             // Build filter for file types if specified
             let filter: any = undefined;
@@ -276,9 +291,8 @@ export class ContextService {
             );
 
             // Filter by minimum similarity if specified
-            const filteredResults = contextQuery.minSimilarity 
-                ? searchResults.filter(r => r.score >= contextQuery.minSimilarity!)
-                : searchResults;
+            const minSimilarity = contextQuery.minSimilarity ?? defaultMinSimilarity;
+            const filteredResults = searchResults.filter(r => r.score >= minSimilarity);
 
             // Find related files if requested
             let relatedFiles: RelatedFile[] = [];
@@ -287,7 +301,7 @@ export class ContextService {
                     contextQuery.query,
                     contextQuery.filePath,
                     10,
-                    contextQuery.minSimilarity || 0.5
+                    minSimilarity
                 );
             }
 

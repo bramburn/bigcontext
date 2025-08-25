@@ -1,5 +1,6 @@
 import Parser from 'tree-sitter';
 import { SupportedLanguage } from './astParser';
+import { LSPMetadata } from '../lsp/lspService';
 // TODO: (agent) we should be able to process all files except for executables
 export interface CodeChunk {
     filePath: string;
@@ -12,6 +13,8 @@ export interface CodeChunk {
     docstring?: string;
     language: SupportedLanguage;
     metadata?: Record<string, any>;
+    /** LSP metadata including symbols, definitions, and references */
+    lspMetadata?: LSPMetadata;
 }
 
 export enum ChunkType {

@@ -12,6 +12,7 @@ import { AstParser, SupportedLanguage } from '../parsing/astParser';
 import { Chunker, CodeChunk, ChunkType } from '../parsing/chunker';
 import { QdrantService } from '../db/qdrantService';
 import { IEmbeddingProvider, EmbeddingProviderFactory, EmbeddingConfig } from '../embeddings/embeddingProvider';
+import { LSPService } from '../lsp/lspService';
 
 /**
  * Progress tracking interface for the indexing process.
@@ -107,6 +108,8 @@ export class IndexingService {
     private qdrantService: QdrantService;
     /** Embedding provider for generating vector representations of code */
     private embeddingProvider: IEmbeddingProvider | null = null;
+    /** Service for interacting with Language Server Protocol */
+    private lspService: LSPService;
 
     /**
      * Creates a new IndexingService instance
@@ -128,6 +131,9 @@ export class IndexingService {
         // The connection string can be configured in VS Code settings
         const qdrantUrl = vscode.workspace.getConfiguration('code-context-engine').get<string>('databaseConnectionString') || 'http://localhost:6333';
         this.qdrantService = new QdrantService(qdrantUrl);
+
+        // Initialize LSP service
+        this.lspService = new LSPService(workspaceRoot);
     }
 
     /**
@@ -144,10 +150,17 @@ export class IndexingService {
         const config = vscode.workspace.getConfiguration('code-context-engine');
         const provider = config.get<string>('embeddingProvider') || 'ollama';
         const openaiApiKey = config.get<string>('openaiApiKey') || '';
+        const ollamaModel = config.get<string>('ollamaModel') || 'nomic-embed-text';
+        const openaiModel = config.get<string>('openaiModel') || 'text-embedding-ada-002';
+        const batchSize = config.get<number>('indexingBatchSize') || 100;
 
         const embeddingConfig: EmbeddingConfig = {
             provider: provider as 'ollama' | 'openai',
-            apiKey: openaiApiKey
+            model: provider === 'ollama' ? ollamaModel : openaiModel,
+            apiKey: openaiApiKey,
+            baseUrl: provider === 'ollama' ? 'http://localhost:11434' : undefined,
+            maxBatchSize: batchSize,
+            timeout: 30000
         };
 
         try {
@@ -437,9 +450,13 @@ export class IndexingService {
             // Break down the code into manageable pieces for embedding
             const chunks = this.chunker.chunk(filePath, parseResult.tree, content, language);
 
+            // Enhance chunks with LSP metadata
+            // This adds semantic information like symbols, definitions, and references
+            const enhancedChunks = await this.enhanceChunksWithLSP(chunks, filePath, content, language);
+
             return {
                 success: true,
-                chunks,
+                chunks: enhancedChunks,
                 language,
                 lineCount,
                 byteCount,
@@ -454,6 +471,62 @@ export class IndexingService {
                 byteCount: 0,
                 errors: [`Error processing ${filePath}: ${error instanceof Error ? error.message : String(error)}`]
             };
+        }
+    }
+
+    /**
+     * Enhance code chunks with LSP metadata
+     *
+     * This method adds semantic information from the Language Server Protocol
+     * to each code chunk, including symbols, definitions, references, and hover info.
+     *
+     * @param chunks - The code chunks to enhance
+     * @param filePath - The path to the source file
+     * @param content - The full file content
+     * @param language - The programming language
+     * @returns Promise resolving to enhanced chunks with LSP metadata
+     */
+    private async enhanceChunksWithLSP(
+        chunks: CodeChunk[],
+        filePath: string,
+        content: string,
+        language: SupportedLanguage
+    ): Promise<CodeChunk[]> {
+        try {
+            // Check if LSP is available for this language
+            const isLSPAvailable = await this.lspService.isLSPAvailable(language);
+            if (!isLSPAvailable) {
+                console.log(`LSP not available for ${language}, skipping LSP enhancement`);
+                return chunks;
+            }
+
+            // Enhance each chunk with LSP metadata
+            const enhancedChunks: CodeChunk[] = [];
+            for (const chunk of chunks) {
+                try {
+                    const lspMetadata = await this.lspService.getMetadataForChunk(
+                        filePath,
+                        chunk.content,
+                        chunk.startLine,
+                        chunk.endLine,
+                        language
+                    );
+
+                    enhancedChunks.push({
+                        ...chunk,
+                        lspMetadata
+                    });
+                } catch (error) {
+                    console.warn(`Failed to get LSP metadata for chunk in ${filePath}:`, error);
+                    // Add chunk without LSP metadata
+                    enhancedChunks.push(chunk);
+                }
+            }
+
+            return enhancedChunks;
+        } catch (error) {
+            console.warn(`Failed to enhance chunks with LSP for ${filePath}:`, error);
+            return chunks; // Return original chunks if LSP enhancement fails
         }
     }
 
