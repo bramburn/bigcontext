@@ -12,12 +12,14 @@
     let SetupView: any = null;
     let IndexingView: any = null;
     let QueryView: any = null;
+    let DiagnosticsView: any = null;
 
     // Loading states
     let componentsLoaded = {
         setup: false,
         indexing: false,
-        query: false
+        query: false,
+        diagnostics: false
     };
 
     // Component container references for animations
@@ -38,7 +40,7 @@
     /**
      * Dynamically load a component
      */
-    async function loadComponent(componentName: 'setup' | 'indexing' | 'query') {
+    async function loadComponent(componentName: 'setup' | 'indexing' | 'query' | 'diagnostics') {
         if (componentsLoaded[componentName]) return;
 
         const loadMeasure = measureComponentLoad(componentName);
@@ -67,6 +69,13 @@
                         const module = await import('$lib/components/QueryView.svelte');
                         QueryView = module.default;
                         componentsLoaded.query = true;
+                    }
+                    break;
+                case 'diagnostics':
+                    if (!DiagnosticsView) {
+                        const module = await import('$lib/components/DiagnosticsView.svelte');
+                        DiagnosticsView = module.default;
+                        componentsLoaded.diagnostics = true;
                     }
                     break;
             }
@@ -173,6 +182,15 @@
                 <div class="loading-component">
                     <div class="loading-spinner"></div>
                     <p>Loading Query...</p>
+                </div>
+            {/if}
+        {:else if view === 'diagnostics'}
+            {#if DiagnosticsView}
+                <svelte:component this={DiagnosticsView} />
+            {:else}
+                <div class="loading-component">
+                    <div class="loading-spinner"></div>
+                    <p>Loading Diagnostics...</p>
                 </div>
             {/if}
         {:else}

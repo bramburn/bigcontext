@@ -13,6 +13,8 @@ import { WebviewManager } from './webviewManager';
 import { SearchManager } from './searchManager';
 import { ConfigurationManager } from './configurationManager';
 import { PerformanceManager } from './performanceManager';
+import { StateManager } from './stateManager';
+import { XmlFormatterService } from './formatting/XmlFormatterService';
 
 /**
  * ExtensionManager class responsible for managing the lifecycle of all core services
@@ -34,13 +36,15 @@ export class ExtensionManager {
     private embeddingProvider!: IEmbeddingProvider;
     private contextService!: ContextService;
     private indexingService!: IndexingService;
-    
+
     // Managers
     private commandManager!: CommandManager;
     private webviewManager!: WebviewManager;
     private searchManager!: SearchManager;
     private configurationManager!: ConfigurationManager;
     private performanceManager!: PerformanceManager;
+    private stateManager!: StateManager;
+    private xmlFormatterService!: XmlFormatterService;
 
     /**
      * Creates a new ExtensionManager instance
@@ -58,19 +62,23 @@ export class ExtensionManager {
         try {
             console.log('ExtensionManager: Starting service initialization...');
 
-            // Step 1: Initialize ConfigService first (no dependencies)
+            // Step 1: Initialize StateManager first (no dependencies)
+            this.stateManager = new StateManager();
+            console.log('ExtensionManager: StateManager initialized');
+
+            // Step 2: Initialize ConfigService (no dependencies)
             this.configService = new ConfigService();
             console.log('ExtensionManager: ConfigService initialized');
 
-            // Step 2: Initialize QdrantService with configuration
+            // Step 3: Initialize QdrantService with configuration
             this.qdrantService = new QdrantService(this.configService.getQdrantConnectionString());
             console.log('ExtensionManager: QdrantService initialized');
 
-            // Step 3: Initialize EmbeddingProvider using factory and configuration
+            // Step 4: Initialize EmbeddingProvider using factory and configuration
             this.embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(this.configService);
             console.log('ExtensionManager: EmbeddingProvider initialized');
 
-            // Step 4: Initialize workspace-dependent services
+            // Step 5: Initialize workspace-dependent services
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (workspaceFolders && workspaceFolders.length > 0) {
                 const workspaceRoot = workspaceFolders[0].uri.fsPath;
@@ -81,7 +89,7 @@ export class ExtensionManager {
                 const chunker = new Chunker();
                 const lspService = new LSPService(workspaceRoot);
 
-                // Initialize IndexingService with all dependencies
+                // Initialize IndexingService with all dependencies including StateManager
                 this.indexingService = new IndexingService(
                     workspaceRoot,
                     fileWalker,
@@ -89,7 +97,8 @@ export class ExtensionManager {
                     chunker,
                     this.qdrantService,
                     this.embeddingProvider,
-                    lspService
+                    lspService,
+                    this.stateManager
                 );
                 console.log('ExtensionManager: IndexingService initialized');
 
@@ -105,23 +114,27 @@ export class ExtensionManager {
                 console.warn('ExtensionManager: No workspace folder found, some services not initialized');
             }
 
-            // Step 5: Initialize PerformanceManager
+            // Step 6: Initialize PerformanceManager
             this.performanceManager = new PerformanceManager();
             console.log('ExtensionManager: PerformanceManager initialized');
 
-            // Step 6: Initialize ConfigurationManager
+            // Step 7: Initialize ConfigurationManager
             this.configurationManager = new ConfigurationManager(this.configService);
             console.log('ExtensionManager: ConfigurationManager initialized');
 
-            // Step 7: Initialize SearchManager
+            // Step 8: Initialize XmlFormatterService
+            this.xmlFormatterService = new XmlFormatterService();
+            console.log('ExtensionManager: XmlFormatterService initialized');
+
+            // Step 9: Initialize SearchManager
             this.searchManager = new SearchManager(this.contextService);
             console.log('ExtensionManager: SearchManager initialized');
 
-            // Step 8: Initialize WebviewManager
-            this.webviewManager = new WebviewManager(this.context, this);
+            // Step 10: Initialize WebviewManager with StateManager
+            this.webviewManager = new WebviewManager(this.context, this, this.stateManager);
             console.log('ExtensionManager: WebviewManager initialized');
 
-            // Step 9: Initialize CommandManager and register commands
+            // Step 11: Initialize CommandManager and register commands
             this.commandManager = new CommandManager(this.indexingService, this.webviewManager);
             const commandDisposables = this.commandManager.registerCommands();
             this.disposables.push(...commandDisposables);
@@ -157,6 +170,10 @@ export class ExtensionManager {
 
         if (this.performanceManager) {
             this.performanceManager.dispose();
+        }
+
+        if (this.stateManager) {
+            this.stateManager.dispose();
         }
 
         // Dispose of all registered disposables
@@ -250,6 +267,22 @@ export class ExtensionManager {
      */
     getPerformanceManager(): PerformanceManager {
         return this.performanceManager;
+    }
+
+    /**
+     * Gets the StateManager instance
+     * @returns The StateManager instance
+     */
+    getStateManager(): StateManager {
+        return this.stateManager;
+    }
+
+    /**
+     * Gets the XmlFormatterService instance
+     * @returns The XmlFormatterService instance
+     */
+    getXmlFormatterService(): XmlFormatterService {
+        return this.xmlFormatterService;
     }
 
     /**

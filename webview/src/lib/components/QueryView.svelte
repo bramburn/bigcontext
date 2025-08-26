@@ -28,8 +28,12 @@
 
     // Component state
     let searchQuery = '';
+    let maxResults = 20; // Default max results
+    let includeContent = false; // Default to not include file content
     let isSearching = false;
     let searchResults: SearchResult[] = [];
+    let xmlResults = ''; // For XML formatted results
+    let resultFormat: 'json' | 'xml' = 'json'; // Track result format
     let searchHistory: string[] = [];
     let errorMessage = '';
     let searchStats = {
@@ -62,15 +66,29 @@
         unsubscribeFunctions.push(
             onMessage('searchResults', (message) => {
                 isSearching = false;
-                searchResults = message.results || [];
+                resultFormat = message.format || 'json';
+
+                if (resultFormat === 'xml') {
+                    // Handle XML results
+                    xmlResults = message.results || '';
+                    searchResults = []; // Clear JSON results
+                } else {
+                    // Handle JSON results
+                    searchResults = message.results || [];
+                    xmlResults = ''; // Clear XML results
+                }
+
                 searchStats = {
                     totalResults: message.totalResults || 0,
                     searchTime: message.searchTime || 0,
                     query: message.query || ''
                 };
 
-                if (searchResults.length === 0 && searchQuery.trim()) {
-                    errorMessage = 'No results found for your query.';
+                if ((resultFormat === 'json' && searchResults.length === 0) ||
+                    (resultFormat === 'xml' && !xmlResults.trim())) {
+                    if (searchQuery.trim()) {
+                        errorMessage = 'No results found for your query.';
+                    }
                 }
             }),
             onMessage('searchHistory', (message) => {
@@ -101,13 +119,15 @@
             errorMessage = 'Please enter a search query.';
             return;
         }
-        
+
         isSearching = true;
         errorMessage = '';
         searchResults = [];
-        
+
         postMessage('search', {
-            query: searchQuery.trim()
+            query: searchQuery.trim(),
+            maxResults: maxResults,
+            includeContent: includeContent
         });
     }
 
@@ -191,6 +211,34 @@
             </fluent-button>
         </div>
 
+        <!-- Advanced Search Controls -->
+        <div class="advanced-controls">
+            <div class="control-group">
+                <label for="max-results">Max Results:</label>
+                <fluent-text-field
+                    id="max-results"
+                    type="number"
+                    value={maxResults.toString()}
+                    on:input={(e: Event) => maxResults = parseInt((e.target as HTMLInputElement).value) || 20}
+                    min="1"
+                    max="100"
+                    class="number-input"
+                    size="small"
+                ></fluent-text-field>
+            </div>
+
+            <div class="control-group">
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        bind:checked={includeContent}
+                        class="checkbox-input"
+                    />
+                    <span class="checkbox-text">Include file content</span>
+                </label>
+            </div>
+        </div>
+
         {#if searchStats.query && searchStats.totalResults > 0}
             <div class="search-stats">
                 Found {searchStats.totalResults} results for "{searchStats.query}" 
@@ -224,14 +272,14 @@
         </fluent-card>
     {/if}
 
-    <!-- Search Results -->
-    {#if searchResults.length > 0}
+    <!-- Search Results (JSON Format) -->
+    {#if resultFormat === 'json' && searchResults.length > 0}
         <div class="results-section">
             {#each searchResults as result}
                 <fluent-card class="result-item">
                     <div class="result-header">
                         <div class="result-file">
-                            <button 
+                            <button
                                 class="file-link"
                                 on:click={() => openFile(result.file, result.lineNumber)}
                             >
@@ -241,8 +289,8 @@
                                 {/if}
                             </button>
                         </div>
-                        
-                        <fluent-badge 
+
+                        <fluent-badge
                             style="background-color: {getScoreColor(result.score)}"
                         >
                             {Math.round(result.score * 100)}%
@@ -266,7 +314,7 @@
                                 <div class="related-files-list">
                                     {#each result.relatedFiles as relatedFile}
                                         <div class="related-file">
-                                            <button 
+                                            <button
                                                 class="file-link"
                                                 on:click={() => openFile(relatedFile.file)}
                                             >
@@ -287,6 +335,28 @@
         </div>
     {/if}
 
+    <!-- Search Results (XML Format) -->
+    {#if resultFormat === 'xml' && xmlResults}
+        <div class="results-section">
+            <fluent-card class="xml-results">
+                <div class="xml-header">
+                    <h3>📄 Search Results (XML Format)</h3>
+                    <div class="xml-actions">
+                        <fluent-button
+                            appearance="outline"
+                            on:click={() => navigator.clipboard.writeText(xmlResults)}
+                        >
+                            📋 Copy XML
+                        </fluent-button>
+                    </div>
+                </div>
+                <div class="xml-content">
+                    <pre><code>{xmlResults}</code></pre>
+                </div>
+            </fluent-card>
+        </div>
+    {/if}
+
     <!-- Loading State -->
     {#if isSearching}
         <fluent-card class="loading-state">
@@ -298,7 +368,7 @@
     {/if}
 
     <!-- Empty State -->
-    {#if !isSearching && searchResults.length === 0 && !searchQuery.trim() && searchHistory.length === 0}
+    {#if !isSearching && searchResults.length === 0 && !xmlResults && !searchQuery.trim() && searchHistory.length === 0}
         <fluent-card class="empty-state">
             <div class="empty-content">
                 <div class="empty-icon">🔍</div>
@@ -592,5 +662,115 @@
         cursor: pointer;
         padding: 0;
         margin-left: 10px;
+    }
+
+    /* Advanced Controls Styles */
+    .advanced-controls {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        margin-top: 15px;
+        padding: 15px;
+        background-color: var(--vscode-sideBar-background);
+        border-radius: 6px;
+        border: 1px solid var(--vscode-panel-border);
+    }
+
+    .control-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .control-group label {
+        font-size: 14px;
+        color: var(--vscode-foreground);
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .number-input {
+        width: 80px;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .checkbox-input {
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .checkbox-text {
+        font-size: 14px;
+        color: var(--vscode-foreground);
+        cursor: pointer;
+    }
+
+    @media (max-width: 600px) {
+        .advanced-controls {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+        }
+    }
+
+    /* XML Results Styles */
+    .xml-results {
+        margin-bottom: 20px;
+    }
+
+    .xml-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--vscode-panel-border);
+    }
+
+    .xml-header h3 {
+        margin: 0;
+        color: var(--vscode-textLink-foreground);
+        font-size: 16px;
+    }
+
+    .xml-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .xml-content {
+        background-color: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 4px;
+        padding: 15px;
+        overflow-x: auto;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .xml-content pre {
+        margin: 0;
+        font-family: var(--vscode-editor-font-family);
+        font-size: var(--vscode-editor-font-size);
+        line-height: 1.4;
+        color: var(--vscode-editor-foreground);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .xml-content code {
+        background: none;
+        padding: 0;
+        border: none;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
     }
 </style>

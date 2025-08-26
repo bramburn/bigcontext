@@ -7,6 +7,8 @@ import { PerformanceManager } from './performanceManager';
 import { SystemValidator } from './validation/systemValidator';
 import { TroubleshootingSystem } from './validation/troubleshootingGuide';
 import { ConfigurationManager } from './configuration/configurationManager';
+import { StateManager } from './stateManager';
+import { XmlFormatterService } from './formatting/XmlFormatterService';
 
 /**
  * MessageRouter class responsible for routing and handling messages from webview panels.
@@ -28,17 +30,21 @@ export class MessageRouter {
     private systemValidator: SystemValidator;
     private troubleshootingSystem: TroubleshootingSystem;
     private configurationManager: ConfigurationManager;
+    private stateManager: StateManager;
+    private xmlFormatterService?: XmlFormatterService;
 
     /**
      * Creates a new MessageRouter instance
      * @param contextService - The ContextService instance for context operations
      * @param indexingService - The IndexingService instance for indexing operations
      * @param context - The VS Code extension context for accessing secrets and other APIs
+     * @param stateManager - The StateManager instance for state management
      */
-    constructor(contextService: ContextService, indexingService: IndexingService, context: vscode.ExtensionContext) {
+    constructor(contextService: ContextService, indexingService: IndexingService, context: vscode.ExtensionContext, stateManager: StateManager) {
         this.contextService = contextService;
         this.indexingService = indexingService;
         this.context = context;
+        this.stateManager = stateManager;
         this.systemValidator = new SystemValidator(context);
         this.troubleshootingSystem = new TroubleshootingSystem();
         this.configurationManager = new ConfigurationManager(context);
@@ -49,15 +55,18 @@ export class MessageRouter {
      * @param searchManager - The SearchManager instance
      * @param legacyConfigurationManager - The legacy ConfigurationManager instance
      * @param performanceManager - The PerformanceManager instance
+     * @param xmlFormatterService - The XmlFormatterService instance
      */
     setAdvancedManagers(
         searchManager: SearchManager,
         legacyConfigurationManager: LegacyConfigurationManager,
-        performanceManager: PerformanceManager
+        performanceManager: PerformanceManager,
+        xmlFormatterService: XmlFormatterService
     ): void {
         this.searchManager = searchManager;
         this.legacyConfigurationManager = legacyConfigurationManager;
         this.performanceManager = performanceManager;
+        this.xmlFormatterService = xmlFormatterService;
         console.log('MessageRouter: Advanced managers set');
     }
 
@@ -134,6 +143,9 @@ export class MessageRouter {
                 case 'queryContext':
                     await this.handleQueryContext(message, webview);
                     break;
+                case 'search':
+                    await this.handleSearch(message, webview);
+                    break;
                 case 'getServiceStatus':
                     await this.handleGetServiceStatus(webview);
                     break;
@@ -165,6 +177,9 @@ export class MessageRouter {
                     await this.handleGetFilePreview(message, webview);
                     break;
                 case 'MapToSettings':
+                    await this.handleMapToSettings(webview);
+                    break;
+                case 'openSettings':
                     await this.handleMapToSettings(webview);
                     break;
                 default:
@@ -489,19 +504,87 @@ export class MessageRouter {
      */
     private async handleQueryContext(message: any, webview: vscode.Webview): Promise<void> {
         const { contextQuery } = message;
-        
+
         if (!contextQuery) {
             await this.sendErrorResponse(webview, 'Context query is required');
             return;
         }
 
         const result = await this.contextService.queryContext(contextQuery as ContextQuery);
-        
+
         await webview.postMessage({
             command: 'contextQueryResponse',
             requestId: message.requestId,
             data: result
         });
+    }
+
+    /**
+     * Handles the 'search' message
+     * Performs a search with the new advanced parameters
+     */
+    private async handleSearch(message: any, webview: vscode.Webview): Promise<void> {
+        const { query, maxResults = 20, includeContent = false } = message;
+
+        if (!query) {
+            await this.sendErrorResponse(webview, 'Search query is required');
+            return;
+        }
+
+        try {
+            // Create a ContextQuery object with the new parameters
+            const contextQuery: ContextQuery = {
+                query: query,
+                maxResults: maxResults,
+                includeContent: includeContent,
+                includeRelated: false // Default to false for basic search
+            };
+
+            const result = await this.contextService.queryContext(contextQuery);
+
+            // Check if XML formatting is requested and service is available
+            if (this.xmlFormatterService && includeContent) {
+                // Format results as XML when content is included
+                const xmlResults = this.xmlFormatterService.formatResults(result.results, {
+                    prettyPrint: true,
+                    includeMetadata: true
+                });
+
+                await webview.postMessage({
+                    command: 'searchResults',
+                    results: xmlResults, // Send XML string instead of array
+                    totalResults: result.totalResults,
+                    searchTime: result.processingTime,
+                    query: result.query,
+                    format: 'xml'
+                });
+            } else {
+                // Transform the results to match the expected format for the UI
+                const searchResults = result.results.map((r, index) => ({
+                    id: `${r.payload.filePath}-${r.payload.startLine}-${index}`,
+                    file: r.payload.filePath,
+                    content: r.payload.content || '',
+                    score: r.score,
+                    lineNumber: r.payload.startLine,
+                    context: r.payload.content
+                }));
+
+                await webview.postMessage({
+                    command: 'searchResults',
+                    results: searchResults,
+                    totalResults: result.totalResults,
+                    searchTime: result.processingTime,
+                    query: result.query,
+                    format: 'json'
+                });
+            }
+        } catch (error) {
+            console.error('Search failed:', error);
+            await webview.postMessage({
+                command: 'searchError',
+                message: `Search failed: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
     }
 
     /**
@@ -523,6 +606,12 @@ export class MessageRouter {
      */
     private async handleStartIndexing(webview: vscode.Webview): Promise<void> {
         try {
+            // Check if indexing is already in progress
+            if (this.stateManager.isIndexing()) {
+                await this.sendErrorResponse(webview, 'Indexing is already in progress. Please wait for the current operation to complete.');
+                return;
+            }
+
             // Check if workspace is available
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {

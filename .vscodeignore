@@ -3,6 +3,9 @@ src/**
 webview/src/**
 webview/node_modules/**
 
+# Include built webview artifacts
+!webview/build/**
+
 # Build artifacts
 *.vsix
 out/test/**

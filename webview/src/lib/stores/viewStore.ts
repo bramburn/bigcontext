@@ -3,7 +3,7 @@ import { writable } from 'svelte/store';
 /**
  * Type definition for the different views available in the application
  */
-export type ViewType = 'setup' | 'indexing' | 'query';
+export type ViewType = 'setup' | 'indexing' | 'query' | 'diagnostics';
 
 /**
  * Writable store to manage the currently active view

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageRouter } from './messageRouter';
+import { StateManager } from './stateManager';
 
 /**
  * WebviewManager class responsible for managing all webview panels and their lifecycle.
@@ -17,6 +18,7 @@ import { MessageRouter } from './messageRouter';
 export class WebviewManager {
     private context: vscode.ExtensionContext;
     private extensionManager: any; // Will be properly typed when we integrate
+    private stateManager: StateManager;
     private mainPanel: vscode.WebviewPanel | undefined;
     private settingsPanel: vscode.WebviewPanel | undefined;
     private diagnosticsPanel: vscode.WebviewPanel | undefined;
@@ -26,10 +28,12 @@ export class WebviewManager {
      * Creates a new WebviewManager instance
      * @param context - The VS Code extension context
      * @param extensionManager - The ExtensionManager instance for service access
+     * @param stateManager - The StateManager instance for state management
      */
-    constructor(context: vscode.ExtensionContext, extensionManager: any) {
+    constructor(context: vscode.ExtensionContext, extensionManager: any, stateManager: StateManager) {
         this.context = context;
         this.extensionManager = extensionManager;
+        this.stateManager = stateManager;
         this.initializeMessageRouter();
     }
 
@@ -46,22 +50,25 @@ export class WebviewManager {
                 const indexingService = this.extensionManager.getIndexingService();
 
                 if (contextService && indexingService) {
-                    this.messageRouter = new MessageRouter(contextService, indexingService, this.context);
+                    this.messageRouter = new MessageRouter(contextService, indexingService, this.context, this.stateManager);
 
                     // Set advanced managers if available
                     if (this.extensionManager.getSearchManager &&
                         this.extensionManager.getConfigurationManager &&
-                        this.extensionManager.getPerformanceManager) {
+                        this.extensionManager.getPerformanceManager &&
+                        this.extensionManager.getXmlFormatterService) {
 
                         const searchManager = this.extensionManager.getSearchManager();
                         const configurationManager = this.extensionManager.getConfigurationManager();
                         const performanceManager = this.extensionManager.getPerformanceManager();
+                        const xmlFormatterService = this.extensionManager.getXmlFormatterService();
 
-                        if (searchManager && configurationManager && performanceManager) {
+                        if (searchManager && configurationManager && performanceManager && xmlFormatterService) {
                             this.messageRouter.setAdvancedManagers(
                                 searchManager,
                                 configurationManager,
-                                performanceManager
+                                performanceManager,
+                                xmlFormatterService
                             );
                         }
                     }
@@ -189,6 +196,16 @@ export class WebviewManager {
 
         // Set up message handling for the diagnostics panel
         this.setupMessageHandling(this.diagnosticsPanel.webview);
+
+        // Set the view to diagnostics after a short delay to ensure the webview is ready
+        setTimeout(() => {
+            if (this.diagnosticsPanel) {
+                this.diagnosticsPanel.webview.postMessage({
+                    command: 'setView',
+                    view: 'diagnostics'
+                });
+            }
+        }, 100);
 
         console.log('WebviewManager: Diagnostics panel created and shown');
     }

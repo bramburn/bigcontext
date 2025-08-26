@@ -3,6 +3,7 @@ import { ConfigService } from '../../configService';
 import { QdrantService } from '../../db/qdrantService';
 import { ContextService } from '../../context/contextService';
 import { IndexingService } from '../../indexing/indexingService';
+import { StateManager } from '../../stateManager';
 import {
     MockQdrantService,
     MockEmbeddingProvider,
@@ -44,6 +45,7 @@ suite('Dependency Injection Tests', () => {
         const mockChunker = new MockChunker();
         const mockLspService = new MockLspService(workspaceRoot);
         
+        const mockStateManager = new StateManager();
         const mockIndexingService = new IndexingService(
             workspaceRoot,
             mockFileWalker as any,
@@ -51,7 +53,8 @@ suite('Dependency Injection Tests', () => {
             mockChunker as any,
             mockQdrantService as any,
             mockEmbeddingProvider,
-            mockLspService as any
+            mockLspService as any,
+            mockStateManager
         );
 
         const contextService = new ContextService(
@@ -72,6 +75,7 @@ suite('Dependency Injection Tests', () => {
         const mockChunker = new MockChunker();
         const mockLspService = new MockLspService(workspaceRoot);
 
+        const mockStateManager = new StateManager();
         const indexingService = new IndexingService(
             workspaceRoot,
             mockFileWalker as any,
@@ -79,7 +83,8 @@ suite('Dependency Injection Tests', () => {
             mockChunker as any,
             mockQdrantService as any,
             mockEmbeddingProvider,
-            mockLspService as any
+            mockLspService as any,
+            mockStateManager
         );
 
         assert.ok(indexingService);

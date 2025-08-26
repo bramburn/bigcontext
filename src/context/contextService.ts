@@ -55,11 +55,12 @@ export interface RelatedFile {
 
 /**
  * Parameters for performing a context query
- * 
+ *
  * @property query - The search query text
  * @property filePath - Optional current file path for context
  * @property includeRelated - Whether to include related files in results
  * @property maxResults - Maximum number of results to return
+ * @property includeContent - Whether to include file content in results
  * @property minSimilarity - Minimum similarity threshold (0-1)
  * @property fileTypes - Optional array of file types to filter by
  */
@@ -68,6 +69,7 @@ export interface ContextQuery {
     filePath?: string;
     includeRelated?: boolean;
     maxResults?: number;
+    includeContent?: boolean;
     minSimilarity?: number;
     fileTypes?: string[];
 }
@@ -388,17 +390,54 @@ export class ContextService {
                 };
             }
 
-            // Search for similar chunks
+            // Search for similar chunks - fetch more results to ensure good deduplication
+            const searchLimit = maxResults * 5; // Fetch 5x more to have enough for deduplication
             const searchResults = await this.qdrantService.search(
                 collectionName,
                 queryEmbeddings[0],
-                maxResults,
+                searchLimit,
                 filter
             );
 
             // Filter by minimum similarity if specified
             const minSimilarity = contextQuery.minSimilarity ?? defaultMinSimilarity;
             const filteredResults = searchResults.filter(r => r.score >= minSimilarity);
+
+            // Implement deduplication logic - group by file path and keep highest score
+            const uniqueFiles = new Map<string, SearchResult>();
+
+            for (const result of filteredResults) {
+                const filePath = result.payload.filePath;
+                const existing = uniqueFiles.get(filePath);
+
+                // If we haven't seen this file, or the new result has a higher score, store it
+                if (!existing || result.score > existing.score) {
+                    uniqueFiles.set(filePath, result);
+                }
+            }
+
+            // Convert map to array and sort by score (descending)
+            let deduplicatedResults = Array.from(uniqueFiles.values())
+                .sort((a, b) => b.score - a.score)
+                .slice(0, maxResults); // Limit to requested number of results
+
+            // Conditionally read file content if requested
+            if (contextQuery.includeContent) {
+                for (const result of deduplicatedResults) {
+                    try {
+                        const filePath = result.payload.filePath;
+                        const uri = vscode.Uri.file(path.join(this.workspaceRoot, filePath));
+                        const fileContent = await vscode.workspace.fs.readFile(uri);
+                        const content = Buffer.from(fileContent).toString('utf8');
+
+                        // Add content to the result payload
+                        result.payload.content = content;
+                    } catch (error) {
+                        console.warn(`Failed to read content for ${result.payload.filePath}:`, error);
+                        // Continue without content for this file
+                    }
+                }
+            }
 
             // Find related files if requested
             let relatedFiles: RelatedFile[] = [];
@@ -414,9 +453,9 @@ export class ContextService {
             // Return complete result object with timing information
             return {
                 query: contextQuery.query,
-                results: filteredResults,
+                results: deduplicatedResults,
                 relatedFiles: relatedFiles,
-                totalResults: filteredResults.length,
+                totalResults: deduplicatedResults.length,
                 processingTime: Date.now() - startTime
             };
 

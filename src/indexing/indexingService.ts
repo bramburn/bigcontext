@@ -13,6 +13,7 @@ import { Chunker, CodeChunk, ChunkType } from '../parsing/chunker';
 import { QdrantService } from '../db/qdrantService';
 import { IEmbeddingProvider, EmbeddingProviderFactory, EmbeddingConfig } from '../embeddings/embeddingProvider';
 import { LSPService } from '../lsp/lspService';
+import { StateManager } from '../stateManager';
 
 /**
  * Progress tracking interface for the indexing process.
@@ -110,6 +111,8 @@ export class IndexingService {
     private embeddingProvider: IEmbeddingProvider;
     /** Service for interacting with Language Server Protocol */
     private lspService: LSPService;
+    /** State manager for tracking application state and preventing concurrent operations */
+    private stateManager: StateManager;
 
     /**
      * Creates a new IndexingService instance using dependency injection
@@ -120,6 +123,7 @@ export class IndexingService {
      * @param qdrantService - Injected QdrantService instance
      * @param embeddingProvider - Injected embedding provider instance
      * @param lspService - Injected LSPService instance
+     * @param stateManager - Injected StateManager instance
      */
     constructor(
         workspaceRoot: string,
@@ -128,7 +132,8 @@ export class IndexingService {
         chunker: Chunker,
         qdrantService: QdrantService,
         embeddingProvider: IEmbeddingProvider,
-        lspService: LSPService
+        lspService: LSPService,
+        stateManager: StateManager
     ) {
         this.workspaceRoot = workspaceRoot;
         this.fileWalker = fileWalker;
@@ -137,6 +142,7 @@ export class IndexingService {
         this.qdrantService = qdrantService;
         this.embeddingProvider = embeddingProvider;
         this.lspService = lspService;
+        this.stateManager = stateManager;
     }
 
 
@@ -160,6 +166,12 @@ export class IndexingService {
     public async startIndexing(
         progressCallback?: (progress: IndexingProgress) => void
     ): Promise<IndexingResult> {
+        // Check if indexing is already in progress
+        if (this.stateManager.isIndexing()) {
+            console.warn('IndexingService: Indexing already in progress, skipping new request');
+            throw new Error('Indexing is already in progress');
+        }
+
         const startTime = Date.now();
         const result: IndexingResult = {
             success: false,
@@ -177,6 +189,9 @@ export class IndexingService {
                 vectorDimensions: 0
             }
         };
+
+        // Set indexing state to true
+        this.stateManager.setIndexing(true, 'Starting indexing process');
 
         try {
             // Phase 1: Initialize embedding provider
@@ -339,6 +354,10 @@ export class IndexingService {
             const errorMessage = `Indexing failed: ${error instanceof Error ? error.message : String(error)}`;
             result.errors.push(errorMessage);
             console.error(errorMessage);
+            this.stateManager.setError(errorMessage);
+        } finally {
+            // Always reset the indexing state, regardless of success or failure
+            this.stateManager.setIndexing(false);
         }
 
         result.duration = Date.now() - startTime;
