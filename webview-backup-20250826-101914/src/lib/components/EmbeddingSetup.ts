@@ -5,13 +5,19 @@
  * Provides UI for selecting between different embedding providers (Ollama, OpenAI).
  */
 
-import { setupStore, setupActions, SetupState } from '../stores/setupStore';
+import { setupStore, setupActions, SetupState, EmbeddingProvider } from '../stores/setupStore';
+import { OllamaConfigComponent, ollamaConfigStyles } from './OllamaConfig';
+import { OpenAIConfigComponent, openAIConfigStyles } from './OpenAIConfig';
 
 export class EmbeddingSetup {
     private container: HTMLElement;
     private selectElement: HTMLSelectElement | null = null;
     private configSection: HTMLElement | null = null;
     private unsubscribe: (() => void) | null = null;
+
+    // Provider-specific configuration components
+    private ollamaConfig: OllamaConfigComponent | null = null;
+    private openaiConfig: OpenAIConfigComponent | null = null;
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -96,15 +102,20 @@ export class EmbeddingSetup {
      * Handle provider selection
      */
     private handleProviderSelection(provider: string): void {
-        setupActions.selectProvider(provider);
-        this.updateProviderConfig(provider);
+        const embeddingProvider = provider as EmbeddingProvider | '';
+        setupActions.selectProvider(embeddingProvider);
+        this.updateProviderConfig(embeddingProvider);
     }
 
     /**
      * Update provider-specific configuration UI
      */
-    private updateProviderConfig(provider: string): void {
+    private updateProviderConfig(provider: EmbeddingProvider | ''): void {
         if (!this.configSection) return;
+
+        // Clean up existing configuration components
+        this.cleanupConfigComponents();
+        this.configSection.innerHTML = '';
 
         if (!provider) {
             this.configSection.classList.add('hidden');
@@ -113,178 +124,50 @@ export class EmbeddingSetup {
 
         this.configSection.classList.remove('hidden');
 
+        // Inject styles for the configuration components
+        this.injectConfigStyles();
+
         switch (provider) {
             case 'ollama':
-                this.configSection.innerHTML = `
-                    <div class="config-content">
-                        <h4>Ollama Configuration</h4>
-                        <p>Make sure Ollama is installed and running on your system.</p>
-                        <div class="config-item">
-                            <label>API URL:</label>
-                            <input type="text" id="ollama-url" value="http://localhost:11434" readonly>
-                            <small>Default Ollama API endpoint</small>
-                        </div>
-                        <div class="config-item">
-                            <label>Model:</label>
-                            <select id="ollama-model">
-                                <option value="nomic-embed-text">nomic-embed-text (Recommended)</option>
-                                <option value="all-minilm">all-minilm</option>
-                            </select>
-                            <small>Choose the embedding model to use</small>
-                        </div>
-                        <div class="config-actions">
-                            <button id="test-ollama" class="test-button">Test Connection</button>
-                        </div>
-                    </div>
-                `;
-                this.setupOllamaListeners();
+                this.ollamaConfig = new OllamaConfigComponent(this.configSection);
                 break;
-
             case 'openai':
-                this.configSection.innerHTML = `
-                    <div class="config-content">
-                        <h4>OpenAI Configuration</h4>
-                        <p>Enter your OpenAI API key to use cloud-based embeddings.</p>
-                        <div class="config-item">
-                            <label>API Key:</label>
-                            <input type="password" id="openai-key" placeholder="sk-...">
-                            <small>Your OpenAI API key (stored securely in VS Code settings)</small>
-                        </div>
-                        <div class="config-item">
-                            <label>Model:</label>
-                            <select id="openai-model">
-                                <option value="text-embedding-ada-002">text-embedding-ada-002</option>
-                                <option value="text-embedding-3-small">text-embedding-3-small</option>
-                                <option value="text-embedding-3-large">text-embedding-3-large</option>
-                            </select>
-                            <small>Choose the OpenAI embedding model</small>
-                        </div>
-                        <div class="config-actions">
-                            <button id="test-openai" class="test-button">Test API Key</button>
-                        </div>
-                    </div>
-                `;
-                this.setupOpenAIListeners();
+                this.openaiConfig = new OpenAIConfigComponent(this.configSection);
                 break;
         }
     }
 
     /**
-     * Set up Ollama-specific event listeners
+     * Inject CSS styles for configuration components
      */
-    private setupOllamaListeners(): void {
-        const testButton = this.configSection?.querySelector('#test-ollama') as HTMLButtonElement;
-        if (testButton) {
-            testButton.addEventListener('click', () => {
-                this.testOllamaConnection();
-            });
-        }
+    private injectConfigStyles(): void {
+        const styleId = 'embedding-config-styles';
+        if (document.getElementById(styleId)) return;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            ${ollamaConfigStyles}
+            ${openAIConfigStyles}
+        `;
+        document.head.appendChild(style);
     }
 
     /**
-     * Set up OpenAI-specific event listeners
+     * Clean up configuration components
      */
-    private setupOpenAIListeners(): void {
-        const testButton = this.configSection?.querySelector('#test-openai') as HTMLButtonElement;
-        const apiKeyInput = this.configSection?.querySelector('#openai-key') as HTMLInputElement;
-        
-        if (testButton) {
-            testButton.addEventListener('click', () => {
-                this.testOpenAIConnection();
-            });
+    private cleanupConfigComponents(): void {
+        if (this.ollamaConfig) {
+            this.ollamaConfig.dispose();
+            this.ollamaConfig = null;
         }
-
-        if (apiKeyInput) {
-            apiKeyInput.addEventListener('input', () => {
-                // Auto-validate API key format
-                const isValid = apiKeyInput.value.startsWith('sk-') && apiKeyInput.value.length > 20;
-                apiKeyInput.style.borderColor = isValid ? 'var(--vscode-charts-green)' : '';
-            });
+        if (this.openaiConfig) {
+            this.openaiConfig.dispose();
+            this.openaiConfig = null;
         }
     }
 
-    /**
-     * Test Ollama connection
-     */
-    private async testOllamaConnection(): Promise<void> {
-        const testButton = this.configSection?.querySelector('#test-ollama') as HTMLButtonElement;
-        if (testButton) {
-            testButton.textContent = 'Testing...';
-            testButton.disabled = true;
-        }
 
-        try {
-            // Test Ollama connection through extension
-            const response = await fetch('http://localhost:11434/api/tags');
-            if (response.ok) {
-                this.showConfigMessage('✅ Ollama connection successful!', 'success');
-            } else {
-                this.showConfigMessage('❌ Ollama not responding. Make sure it\'s running.', 'error');
-            }
-        } catch (error) {
-            this.showConfigMessage('❌ Cannot connect to Ollama. Is it installed and running?', 'error');
-        } finally {
-            if (testButton) {
-                testButton.textContent = 'Test Connection';
-                testButton.disabled = false;
-            }
-        }
-    }
-
-    /**
-     * Test OpenAI API key
-     */
-    private async testOpenAIConnection(): void {
-        const testButton = this.configSection?.querySelector('#test-openai') as HTMLButtonElement;
-        const apiKeyInput = this.configSection?.querySelector('#openai-key') as HTMLInputElement;
-        
-        if (!apiKeyInput?.value) {
-            this.showConfigMessage('❌ Please enter your API key first.', 'error');
-            return;
-        }
-
-        if (testButton) {
-            testButton.textContent = 'Testing...';
-            testButton.disabled = true;
-        }
-
-        try {
-            // Test API key through extension (for security)
-            // The extension will handle the actual API call
-            this.showConfigMessage('✅ API key format looks valid!', 'success');
-        } catch (error) {
-            this.showConfigMessage('❌ Invalid API key format.', 'error');
-        } finally {
-            if (testButton) {
-                testButton.textContent = 'Test API Key';
-                testButton.disabled = false;
-            }
-        }
-    }
-
-    /**
-     * Show configuration message
-     */
-    private showConfigMessage(message: string, type: 'success' | 'error'): void {
-        if (!this.configSection) return;
-
-        // Remove existing messages
-        const existingMessage = this.configSection.querySelector('.config-message');
-        if (existingMessage) {
-            existingMessage.remove();
-        }
-
-        // Add new message
-        const messageElement = document.createElement('div');
-        messageElement.className = `config-message ${type}`;
-        messageElement.textContent = message;
-        this.configSection.appendChild(messageElement);
-
-        // Auto-remove after 3 seconds
-        setTimeout(() => {
-            messageElement.remove();
-        }, 3000);
-    }
 
     /**
      * Update UI based on store state
@@ -305,6 +188,8 @@ export class EmbeddingSetup {
             this.unsubscribe();
             this.unsubscribe = null;
         }
+
+        this.cleanupConfigComponents();
     }
 }
 

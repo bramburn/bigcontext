@@ -5,21 +5,68 @@
  * tracking database status, embedding provider selection, and overall setup progress.
  */
 
+// Database provider types
+export type DatabaseProvider = 'qdrant' | 'chromadb' | 'pinecone';
+
+// Database configuration interfaces
+export interface QdrantConfig {
+    host: string;
+    port: number;
+    apiKey?: string;
+}
+
+export interface ChromaDBConfig {
+    host: string;
+    port: number;
+    ssl: boolean;
+    authToken?: string;
+}
+
+export interface PineconeConfig {
+    apiKey: string;
+    environment: string;
+    indexName: string;
+}
+
+export type DatabaseConfig = QdrantConfig | ChromaDBConfig | PineconeConfig;
+
+// Embedding provider types
+export type EmbeddingProvider = 'ollama' | 'openai';
+
+// Embedding provider configuration interfaces
+export interface OllamaConfig {
+    endpoint: string;
+    model: string;
+    apiKey?: string; // For secured Ollama instances
+    timeout?: number;
+}
+
+export interface OpenAIConfig {
+    apiKey: string;
+    model: string;
+    organization?: string;
+    baseURL?: string; // For custom OpenAI-compatible endpoints
+}
+
+export type EmbeddingConfig = OllamaConfig | OpenAIConfig;
+
 export interface SetupState {
     // Database configuration
-    selectedDatabase: string;
+    selectedDatabase: DatabaseProvider | '';
+    databaseConfig: DatabaseConfig | null;
     isDatabaseRunning: boolean;
     databaseStatus: 'not-configured' | 'starting' | 'running' | 'error';
-    
+
     // Embedding provider configuration
-    selectedProvider: string;
+    selectedProvider: EmbeddingProvider | '';
+    embeddingConfig: EmbeddingConfig | null;
     providerConfigured: boolean;
-    
+
     // Overall setup state
     isSetupComplete: boolean;
     isIndexing: boolean;
     setupStep: 'database' | 'provider' | 'ready' | 'indexing';
-    
+
     // Error handling
     lastError: string | null;
 }
@@ -27,9 +74,11 @@ export interface SetupState {
 class SetupStore {
     private state: SetupState = {
         selectedDatabase: '',
+        databaseConfig: null,
         isDatabaseRunning: false,
         databaseStatus: 'not-configured',
         selectedProvider: '',
+        embeddingConfig: null,
         providerConfigured: false,
         isSetupComplete: false,
         isIndexing: false,
@@ -65,10 +114,20 @@ class SetupStore {
     /**
      * Update database selection
      */
-    setSelectedDatabase(database: string): void {
+    setSelectedDatabase(database: DatabaseProvider | ''): void {
         this.updateState({
             selectedDatabase: database,
+            databaseConfig: null, // Reset config when changing database
             databaseStatus: database ? 'not-configured' : 'not-configured'
+        });
+    }
+
+    /**
+     * Update database configuration
+     */
+    setDatabaseConfig(config: DatabaseConfig): void {
+        this.updateState({
+            databaseConfig: config
         });
     }
 
@@ -86,11 +145,23 @@ class SetupStore {
     /**
      * Update embedding provider selection
      */
-    setSelectedProvider(provider: string): void {
+    setSelectedProvider(provider: EmbeddingProvider | ''): void {
         this.updateState({
             selectedProvider: provider,
+            embeddingConfig: null, // Reset config when changing provider
             providerConfigured: !!provider,
             setupStep: provider && this.state.isDatabaseRunning ? 'ready' : this.state.setupStep
+        });
+        this.checkSetupComplete();
+    }
+
+    /**
+     * Update embedding provider configuration
+     */
+    setEmbeddingConfig(config: EmbeddingConfig): void {
+        this.updateState({
+            embeddingConfig: config,
+            providerConfigured: true
         });
         this.checkSetupComplete();
     }
@@ -127,9 +198,11 @@ class SetupStore {
     reset(): void {
         this.state = {
             selectedDatabase: '',
+            databaseConfig: null,
             isDatabaseRunning: false,
             databaseStatus: 'not-configured',
             selectedProvider: '',
+            embeddingConfig: null,
             providerConfigured: false,
             isSetupComplete: false,
             isIndexing: false,
@@ -187,9 +260,11 @@ export const setupStore = new SetupStore();
 
 // Export convenience functions for common operations
 export const setupActions = {
-    selectDatabase: (database: string) => setupStore.setSelectedDatabase(database),
+    selectDatabase: (database: DatabaseProvider | '') => setupStore.setSelectedDatabase(database),
+    setDatabaseConfig: (config: DatabaseConfig) => setupStore.setDatabaseConfig(config),
     updateDatabaseStatus: (status: SetupState['databaseStatus']) => setupStore.setDatabaseStatus(status),
-    selectProvider: (provider: string) => setupStore.setSelectedProvider(provider),
+    selectProvider: (provider: EmbeddingProvider | '') => setupStore.setSelectedProvider(provider),
+    setEmbeddingConfig: (config: EmbeddingConfig) => setupStore.setEmbeddingConfig(config),
     startIndexing: () => setupStore.setIndexing(true),
     stopIndexing: () => setupStore.setIndexing(false),
     setError: (error: string) => setupStore.setError(error),
@@ -197,5 +272,4 @@ export const setupActions = {
     reset: () => setupStore.reset()
 };
 
-// Export types
-export type { SetupState };
+

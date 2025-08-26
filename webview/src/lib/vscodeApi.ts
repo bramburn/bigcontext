@@ -1,313 +1,229 @@
-// VS Code API types
-interface VSCodeApi {
-    postMessage(message: any): void;
-    getState(): any;
-    setState(state: any): void;
+/**
+ * VS Code API Wrapper
+ * 
+ * This module provides a clean, typed interface for communicating with the VS Code extension.
+ * It wraps the acquireVsCodeApi() call and provides helper functions for message passing.
+ */
+
+// Types for VS Code API communication
+export interface VSCodeMessage {
+    command: string;
+    requestId?: string;
+    [key: string]: any;
 }
 
-// Declare the global vscode API
-declare const acquireVsCodeApi: () => VSCodeApi;
-
-// Message types for type safety
-export interface SearchRequest {
-    command: 'search';
-    query: string;
+export interface VSCodeResponse {
+    command: string;
+    requestId?: string;
+    success?: boolean;
+    data?: any;
+    error?: string;
+    [key: string]: any;
 }
 
-export interface FileContentRequest {
-    command: 'getFileContent';
-    requestId: string;
-    filePath: string;
-    includeRelatedChunks?: boolean;
+// Message handler type
+export type MessageHandler = (message: VSCodeResponse) => void;
+
+// VS Code API instance
+let vscodeApi: any = null;
+
+// Message handlers registry
+const messageHandlers = new Map<string, MessageHandler[]>();
+
+// Request-response tracking
+const pendingRequests = new Map<string, {
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+    timeout: NodeJS.Timeout;
+}>();
+
+/**
+ * Initialize the VS Code API
+ * This should be called once when the webview loads
+ */
+export function initializeVSCodeApi(): void {
+    if (typeof window !== 'undefined' && (window as any).acquireVsCodeApi) {
+        vscodeApi = (window as any).acquireVsCodeApi();
+        
+        // Set up the global message listener
+        window.addEventListener('message', handleIncomingMessage);
+        
+        console.log('VS Code API initialized');
+    } else {
+        console.warn('VS Code API not available - running outside of VS Code webview');
+    }
 }
 
-export interface RelatedFilesRequest {
-    command: 'findRelatedFiles';
-    requestId: string;
-    query: string;
-    currentFilePath?: string;
-    maxResults?: number;
-    minSimilarity?: number;
+/**
+ * Handle incoming messages from the extension
+ */
+function handleIncomingMessage(event: MessageEvent): void {
+    const message: VSCodeResponse = event.data;
+    
+    // Handle request-response pattern
+    if (message.requestId && pendingRequests.has(message.requestId)) {
+        const request = pendingRequests.get(message.requestId)!;
+        clearTimeout(request.timeout);
+        pendingRequests.delete(message.requestId);
+        
+        if (message.error) {
+            request.reject(new Error(message.error));
+        } else {
+            request.resolve(message.data || message);
+        }
+        return;
+    }
+    
+    // Handle command-based messages
+    if (message.command && messageHandlers.has(message.command)) {
+        const handlers = messageHandlers.get(message.command)!;
+        handlers.forEach(handler => {
+            try {
+                handler(message);
+            } catch (error) {
+                console.error(`Error in message handler for command '${message.command}':`, error);
+            }
+        });
+    }
 }
 
-export interface ContextQueryRequest {
-    command: 'queryContext';
-    requestId: string;
-    contextQuery: {
-        query: string;
-        filePath?: string;
-        includeRelated?: boolean;
-        maxResults?: number;
-        minSimilarity?: number;
-        fileTypes?: string[];
+/**
+ * Send a message to the VS Code extension
+ * @param command - The command to send
+ * @param data - Additional data to send with the command
+ */
+export function postMessage(command: string, data: any = {}): void {
+    if (!vscodeApi) {
+        console.warn('VS Code API not initialized. Call initializeVSCodeApi() first.');
+        return;
+    }
+    
+    const message: VSCodeMessage = {
+        command,
+        ...data
+    };
+    
+    vscodeApi.postMessage(message);
+}
+
+/**
+ * Send a message and wait for a response
+ * @param command - The command to send
+ * @param data - Additional data to send with the command
+ * @param timeout - Timeout in milliseconds (default: 10000)
+ * @returns Promise that resolves with the response
+ */
+export function sendRequest(command: string, data: any = {}, timeout: number = 10000): Promise<any> {
+    return new Promise((resolve, reject) => {
+        if (!vscodeApi) {
+            reject(new Error('VS Code API not initialized'));
+            return;
+        }
+        
+        const requestId = generateRequestId();
+        
+        // Set up timeout
+        const timeoutHandle = setTimeout(() => {
+            pendingRequests.delete(requestId);
+            reject(new Error(`Request timeout for command: ${command}`));
+        }, timeout);
+        
+        // Store the request
+        pendingRequests.set(requestId, {
+            resolve,
+            reject,
+            timeout: timeoutHandle
+        });
+        
+        // Send the message
+        const message: VSCodeMessage = {
+            command,
+            requestId,
+            ...data
+        };
+        
+        vscodeApi.postMessage(message);
+    });
+}
+
+/**
+ * Register a message handler for a specific command
+ * @param command - The command to listen for
+ * @param handler - The handler function
+ * @returns Unsubscribe function
+ */
+export function onMessage(command: string, handler: MessageHandler): () => void {
+    if (!messageHandlers.has(command)) {
+        messageHandlers.set(command, []);
+    }
+    
+    const handlers = messageHandlers.get(command)!;
+    handlers.push(handler);
+    
+    // Return unsubscribe function
+    return () => {
+        const index = handlers.indexOf(handler);
+        if (index > -1) {
+            handlers.splice(index, 1);
+        }
+        
+        // Clean up empty handler arrays
+        if (handlers.length === 0) {
+            messageHandlers.delete(command);
+        }
     };
 }
 
-export interface ServiceStatusRequest {
-    command: 'getServiceStatus';
+/**
+ * Remove all message handlers for a command
+ * @param command - The command to clear handlers for
+ */
+export function clearMessageHandlers(command?: string): void {
+    if (command) {
+        messageHandlers.delete(command);
+    } else {
+        messageHandlers.clear();
+    }
 }
-
-// Response types
-export interface SearchResult {
-    file: string;
-    snippet: string;
-    line: number;
-    score?: number;
-    type?: string;
-    name?: string;
-    language?: string;
-}
-
-export interface FileContentResult {
-    filePath: string;
-    content: string;
-    language?: string;
-    size: number;
-    lastModified: string;
-    relatedChunks?: any[];
-}
-
-export interface RelatedFile {
-    filePath: string;
-    similarity: number;
-    reason: string;
-    chunkCount: number;
-    language?: string;
-}
-
-export interface ContextResult {
-    query: string;
-    results: any[];
-    relatedFiles: RelatedFile[];
-    totalResults: number;
-    processingTime: number;
-}
-
-export interface ServiceStatus {
-    qdrantConnected: boolean;
-    embeddingProvider: string | null;
-    collectionExists: boolean;
-    collectionInfo?: any;
-}
-
-export interface SetupStatus {
-    isConfigured: boolean;
-    hasConfigFile: boolean;
-    databaseConfigured?: boolean;
-    embeddingConfigured?: boolean;
-}
-
-// Event listener type
-type MessageListener = (event: MessageEvent) => void;
 
 /**
- * VS Code API wrapper for webview communication
+ * Generate a unique request ID
  */
-export class VSCodeApiClient {
-    private vscode: VSCodeApi;
-    private messageListeners: Map<string, MessageListener[]> = new Map();
-    private pendingRequests: Map<string, {
-        resolve: (value: any) => void;
-        reject: (error: any) => void;
-        timeout: NodeJS.Timeout;
-    }> = new Map();
-
-    constructor() {
-        this.vscode = acquireVsCodeApi();
-        this.setupMessageListener();
-    }
-
-    private setupMessageListener() {
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            
-            // Handle responses with request IDs
-            if (message.requestId && this.pendingRequests.has(message.requestId)) {
-                const request = this.pendingRequests.get(message.requestId)!;
-                clearTimeout(request.timeout);
-                this.pendingRequests.delete(message.requestId);
-                
-                if (message.error) {
-                    request.reject(new Error(message.error));
-                } else {
-                    request.resolve(message.result);
-                }
-                return;
-            }
-
-            // Handle general messages
-            const listeners = this.messageListeners.get(message.command) || [];
-            listeners.forEach(listener => listener(event));
-        });
-    }
-
-    private generateRequestId(): string {
-        return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    }
-
-    private sendRequestWithResponse<T>(message: any, timeoutMs: number = 30000): Promise<T> {
-        return new Promise((resolve, reject) => {
-            const requestId = this.generateRequestId();
-            message.requestId = requestId;
-
-            const timeout = setTimeout(() => {
-                this.pendingRequests.delete(requestId);
-                reject(new Error('Request timeout'));
-            }, timeoutMs);
-
-            this.pendingRequests.set(requestId, { resolve, reject, timeout });
-            this.vscode.postMessage(message);
-        });
-    }
-
-    /**
-     * Send a message to the extension
-     */
-    postMessage(message: any): void {
-        this.vscode.postMessage(message);
-    }
-
-    /**
-     * Listen for messages from the extension
-     */
-    onMessage(command: string, listener: MessageListener): void {
-        if (!this.messageListeners.has(command)) {
-            this.messageListeners.set(command, []);
-        }
-        this.messageListeners.get(command)!.push(listener);
-    }
-
-    /**
-     * Remove message listener
-     */
-    offMessage(command: string, listener: MessageListener): void {
-        const listeners = this.messageListeners.get(command);
-        if (listeners) {
-            const index = listeners.indexOf(listener);
-            if (index > -1) {
-                listeners.splice(index, 1);
-            }
-        }
-    }
-
-    /**
-     * Perform a search
-     */
-    async search(query: string): Promise<SearchResult[]> {
-        return new Promise((resolve) => {
-            const listener = (event: MessageEvent) => {
-                if (event.data.command === 'searchResults') {
-                    this.offMessage('searchResults', listener);
-                    resolve(event.data.results || []);
-                }
-            };
-            
-            this.onMessage('searchResults', listener);
-            this.postMessage({ command: 'search', query });
-        });
-    }
-
-    /**
-     * Get file content
-     */
-    async getFileContent(filePath: string, includeRelatedChunks: boolean = false): Promise<FileContentResult> {
-        return this.sendRequestWithResponse<FileContentResult>({
-            command: 'getFileContent',
-            filePath,
-            includeRelatedChunks
-        });
-    }
-
-    /**
-     * Find related files
-     */
-    async findRelatedFiles(
-        query: string, 
-        currentFilePath?: string, 
-        maxResults: number = 10, 
-        minSimilarity: number = 0.5
-    ): Promise<RelatedFile[]> {
-        return this.sendRequestWithResponse<RelatedFile[]>({
-            command: 'findRelatedFiles',
-            query,
-            currentFilePath,
-            maxResults,
-            minSimilarity
-        });
-    }
-
-    /**
-     * Perform context query
-     */
-    async queryContext(contextQuery: {
-        query: string;
-        filePath?: string;
-        includeRelated?: boolean;
-        maxResults?: number;
-        minSimilarity?: number;
-        fileTypes?: string[];
-    }): Promise<ContextResult> {
-        return this.sendRequestWithResponse<ContextResult>({
-            command: 'queryContext',
-            contextQuery
-        });
-    }
-
-    /**
-     * Get service status
-     */
-    async getServiceStatus(): Promise<ServiceStatus> {
-        return this.sendRequestWithResponse<ServiceStatus>({
-            command: 'getServiceStatus'
-        });
-    }
-
-    /**
-     * Check setup status
-     */
-    async checkSetupStatus(): Promise<SetupStatus> {
-        return this.sendRequestWithResponse<SetupStatus>({
-            command: 'checkSetupStatus'
-        });
-    }
-
-    /**
-     * Send ping to test communication
-     */
-    async ping(): Promise<any> {
-        return this.sendRequestWithResponse<any>({
-            command: 'ping'
-        });
-    }
-
-    /**
-     * Start indexing
-     */
-    startIndexing(): void {
-        this.postMessage({ command: 'startIndexing' });
-    }
-
-    /**
-     * Open settings
-     */
-    openSettings(): void {
-        this.postMessage({ command: 'openSettings' });
-    }
-
-    /**
-     * Get webview state
-     */
-    getState(): any {
-        return this.vscode.getState();
-    }
-
-    /**
-     * Set webview state
-     */
-    setState(state: any): void {
-        this.vscode.setState(state);
-    }
+function generateRequestId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Create and export a singleton instance
-export const vscodeApi = new VSCodeApiClient();
+/**
+ * Get the current state of the VS Code API
+ */
+export function getState(): any {
+    if (!vscodeApi) {
+        return null;
+    }
+    return vscodeApi.getState();
+}
+
+/**
+ * Set the state in VS Code
+ * @param state - The state to save
+ */
+export function setState(state: any): void {
+    if (!vscodeApi) {
+        console.warn('VS Code API not initialized');
+        return;
+    }
+    vscodeApi.setState(state);
+}
+
+/**
+ * Check if the VS Code API is available and initialized
+ */
+export function isInitialized(): boolean {
+    return vscodeApi !== null;
+}
+
+// Auto-initialize when the module is loaded
+if (typeof window !== 'undefined') {
+    // Initialize on next tick to ensure DOM is ready
+    setTimeout(initializeVSCodeApi, 0);
+}

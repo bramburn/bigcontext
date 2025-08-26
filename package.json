@@ -15,26 +15,34 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:code-context-engine.openMainPanel",
-    "onCommand:code-context-engine.startIndexing",
-    "onCommand:code-context-engine.setupProject"
+    "onCommand:code-context-engine.openMainPanel"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "code-context-engine.openMainPanel",
-        "title": "Open Code Context Panel",
+        "title": "Open Main Panel",
         "category": "Code Context"
       },
       {
         "command": "code-context-engine.startIndexing",
-        "title": "Index Repository",
+        "title": "Start Indexing",
         "category": "Code Context"
       },
       {
         "command": "code-context-engine.setupProject",
         "title": "Setup Project",
+        "category": "Code Context"
+      },
+      {
+        "command": "code-context-engine.openSettings",
+        "title": "Open Settings",
+        "category": "Code Context"
+      },
+      {
+        "command": "code-context-engine.openDiagnostics",
+        "title": "Open Diagnostics",
         "category": "Code Context"
       }
     ],
@@ -161,7 +169,21 @@
           "description": "Programming languages to include in indexing"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "code-context-engine.openMainPanel",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "code-context-engine.startIndexing",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "editorTextFocus"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build-webview",

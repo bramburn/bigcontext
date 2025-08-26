@@ -62,6 +62,13 @@ export class CommandManager {
         );
         disposables.push(setupProjectDisposable);
 
+        // Register the open diagnostics command
+        const openDiagnosticsDisposable = vscode.commands.registerCommand(
+            'code-context-engine.openDiagnostics',
+            this.handleOpenDiagnostics.bind(this)
+        );
+        disposables.push(openDiagnosticsDisposable);
+
         console.log('CommandManager: All commands registered successfully');
         return disposables;
     }
@@ -137,15 +144,16 @@ export class CommandManager {
 
     /**
      * Handles the 'code-context-engine.openSettings' command
-     * Opens the extension settings panel using WebviewManager
+     * Opens the native VS Code settings UI filtered for this extension
      */
     private async handleOpenSettings(): Promise<void> {
         try {
-            console.log('CommandManager: Opening settings...');
+            console.log('CommandManager: Opening native settings...');
 
-            this.webviewManager.showSettingsPanel();
+            // Open the native VS Code settings UI, filtered for this extension
+            await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bramburn.code-context-engine');
 
-            console.log('CommandManager: Settings opened successfully');
+            console.log('CommandManager: Native settings opened successfully');
         } catch (error) {
             console.error('CommandManager: Failed to open settings:', error);
             vscode.window.showErrorMessage('Failed to open Code Context Engine settings');
@@ -191,6 +199,23 @@ export class CommandManager {
         } catch (error) {
             console.error('CommandManager: Failed to setup project:', error);
             vscode.window.showErrorMessage('Failed to setup Code Context Engine project');
+        }
+    }
+
+    /**
+     * Handles the 'code-context-engine.openDiagnostics' command
+     * Opens the diagnostics panel for testing connections and viewing system status
+     */
+    private async handleOpenDiagnostics(): Promise<void> {
+        try {
+            console.log('CommandManager: Opening diagnostics panel...');
+
+            this.webviewManager.showDiagnosticsPanel();
+
+            console.log('CommandManager: Diagnostics panel opened successfully');
+        } catch (error) {
+            console.error('CommandManager: Failed to open diagnostics panel:', error);
+            vscode.window.showErrorMessage('Failed to open Code Context Engine diagnostics');
         }
     }
 }

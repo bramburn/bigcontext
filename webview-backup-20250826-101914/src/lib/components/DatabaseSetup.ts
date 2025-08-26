@@ -5,15 +5,22 @@
  * Provides UI for selecting database type, starting services, and monitoring status.
  */
 
-import { setupStore, setupActions, SetupState } from '../stores/setupStore';
+import { setupStore, setupActions, SetupState, DatabaseProvider } from '../stores/setupStore';
 import { vscodeApi } from '../vscodeApi';
+import { ChromaDBConfigComponent, chromaDBConfigStyles } from './ChromaDBConfig';
+import { PineconeConfigComponent, pineconeConfigStyles } from './PineconeConfig';
 
 export class DatabaseSetup {
     private container: HTMLElement;
     private selectElement: HTMLSelectElement | null = null;
     private startButton: HTMLButtonElement | null = null;
     private statusElement: HTMLElement | null = null;
+    private configContainer: HTMLElement | null = null;
     private unsubscribe: (() => void) | null = null;
+
+    // Database-specific configuration components
+    private chromaDBConfig: ChromaDBConfigComponent | null = null;
+    private pineconeConfig: PineconeConfigComponent | null = null;
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -35,8 +42,14 @@ export class DatabaseSetup {
                     <label for="database-select">Vector Database:</label>
                     <select id="database-select" class="database-select">
                         <option value="">Select a database...</option>
-                        <option value="qdrant">Qdrant (Recommended)</option>
+                        <option value="qdrant">Qdrant (Local/Docker)</option>
+                        <option value="chromadb">ChromaDB (Local/Docker)</option>
+                        <option value="pinecone">Pinecone (Cloud)</option>
                     </select>
+                </div>
+
+                <div id="database-config-container" class="database-config-container">
+                    <!-- Database-specific configuration will be inserted here -->
                 </div>
 
                 <div class="database-actions">
@@ -62,6 +75,7 @@ export class DatabaseSetup {
         this.selectElement = this.container.querySelector('#database-select') as HTMLSelectElement;
         this.startButton = this.container.querySelector('#start-database-btn') as HTMLButtonElement;
         this.statusElement = this.container.querySelector('#database-status') as HTMLElement;
+        this.configContainer = this.container.querySelector('#database-config-container') as HTMLElement;
     }
 
     /**
@@ -95,11 +109,117 @@ export class DatabaseSetup {
      * Handle database selection
      */
     private handleDatabaseSelection(database: string): void {
-        setupActions.selectDatabase(database);
-        
-        // Enable start button if database is selected
+        const dbProvider = database as DatabaseProvider | '';
+        setupActions.selectDatabase(dbProvider);
+
+        // Update configuration UI based on selected database
+        this.updateDatabaseConfiguration(dbProvider);
+
+        // Enable start button if database is selected (except for Pinecone which doesn't need starting)
         if (this.startButton) {
             this.startButton.disabled = !database;
+
+            // Update button text based on database type
+            if (database === 'pinecone') {
+                this.startButton.textContent = 'Validate Configuration';
+                this.startButton.style.display = 'inline-block';
+            } else if (database === 'chromadb') {
+                this.startButton.textContent = 'Start Local ChromaDB';
+                this.startButton.style.display = 'inline-block';
+            } else if (database === 'qdrant') {
+                this.startButton.textContent = 'Start Local Qdrant';
+                this.startButton.style.display = 'inline-block';
+            } else {
+                this.startButton.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Update database configuration UI based on selected provider
+     */
+    private updateDatabaseConfiguration(database: DatabaseProvider | ''): void {
+        if (!this.configContainer) return;
+
+        // Clean up existing configuration components
+        this.cleanupConfigComponents();
+        this.configContainer.innerHTML = '';
+
+        if (!database) return;
+
+        // Inject styles for the configuration components
+        this.injectConfigStyles();
+
+        switch (database) {
+            case 'chromadb':
+                this.chromaDBConfig = new ChromaDBConfigComponent(this.configContainer);
+                break;
+            case 'pinecone':
+                this.pineconeConfig = new PineconeConfigComponent(this.configContainer);
+                break;
+            case 'qdrant':
+                // Qdrant uses simple connection string, no complex config needed
+                this.configContainer.innerHTML = `
+                    <div class="simple-config">
+                        <h4>Qdrant Configuration</h4>
+                        <p>Qdrant will run locally on <code>http://localhost:6333</code></p>
+                        <p>Click "Start Local Qdrant" to launch it with Docker.</p>
+                    </div>
+                `;
+                break;
+        }
+    }
+
+    /**
+     * Inject CSS styles for configuration components
+     */
+    private injectConfigStyles(): void {
+        const styleId = 'database-config-styles';
+        if (document.getElementById(styleId)) return;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            ${chromaDBConfigStyles}
+            ${pineconeConfigStyles}
+            .simple-config {
+                padding: 15px;
+                border: 1px solid var(--vscode-panel-border);
+                border-radius: 4px;
+                background-color: var(--vscode-editor-background);
+            }
+            .simple-config h4 {
+                margin: 0 0 8px 0;
+                color: var(--vscode-textLink-foreground);
+                font-size: 14px;
+            }
+            .simple-config p {
+                margin: 0 0 8px 0;
+                color: var(--vscode-foreground);
+                font-size: 13px;
+            }
+            .simple-config code {
+                padding: 2px 4px;
+                background-color: var(--vscode-textCodeBlock-background);
+                border-radius: 2px;
+                font-family: var(--vscode-editor-font-family);
+                font-size: 12px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    /**
+     * Clean up configuration components
+     */
+    private cleanupConfigComponents(): void {
+        if (this.chromaDBConfig) {
+            this.chromaDBConfig.dispose();
+            this.chromaDBConfig = null;
+        }
+        if (this.pineconeConfig) {
+            this.pineconeConfig.dispose();
+            this.pineconeConfig = null;
         }
     }
 
@@ -108,30 +228,99 @@ export class DatabaseSetup {
      */
     private async handleStartDatabase(): Promise<void> {
         const state = setupStore.getState();
-        
+
         if (!state.selectedDatabase) {
             setupActions.setError('Please select a database first');
             return;
         }
 
         try {
-            // Update status to starting
-            setupActions.updateDatabaseStatus('starting');
             setupActions.clearError();
 
-            // Send message to extension to start database
-            vscodeApi.postMessage({
-                command: 'startDatabase',
-                database: state.selectedDatabase
-            });
-
-            console.log('Database start command sent to extension');
+            switch (state.selectedDatabase) {
+                case 'qdrant':
+                    await this.startQdrant();
+                    break;
+                case 'chromadb':
+                    await this.startChromaDB();
+                    break;
+                case 'pinecone':
+                    await this.validatePinecone();
+                    break;
+                default:
+                    setupActions.setError(`Unsupported database: ${state.selectedDatabase}`);
+            }
 
         } catch (error) {
-            console.error('Failed to start database:', error);
-            setupActions.setError(`Failed to start database: ${error}`);
+            console.error('Failed to handle database operation:', error);
+            setupActions.setError(`Failed to handle database: ${error}`);
             setupActions.updateDatabaseStatus('error');
         }
+    }
+
+    /**
+     * Start Qdrant database
+     */
+    private async startQdrant(): Promise<void> {
+        setupActions.updateDatabaseStatus('starting');
+
+        vscodeApi.postMessage({
+            command: 'startDatabase',
+            database: 'qdrant'
+        });
+
+        console.log('Qdrant start command sent to extension');
+    }
+
+    /**
+     * Start ChromaDB database
+     */
+    private async startChromaDB(): Promise<void> {
+        // Validate ChromaDB configuration first
+        if (this.chromaDBConfig) {
+            const validation = this.chromaDBConfig.validateConfiguration();
+            if (!validation.isValid) {
+                setupActions.setError(`ChromaDB configuration errors: ${validation.errors.join(', ')}`);
+                return;
+            }
+        }
+
+        setupActions.updateDatabaseStatus('starting');
+
+        vscodeApi.postMessage({
+            command: 'startDatabase',
+            database: 'chromadb',
+            config: setupStore.getState().databaseConfig
+        });
+
+        console.log('ChromaDB start command sent to extension');
+    }
+
+    /**
+     * Validate Pinecone configuration
+     */
+    private async validatePinecone(): Promise<void> {
+        if (!this.pineconeConfig) {
+            setupActions.setError('Pinecone configuration not available');
+            return;
+        }
+
+        const validation = this.pineconeConfig.validateConfiguration();
+        if (!validation.isValid) {
+            setupActions.setError(`Pinecone configuration errors: ${validation.errors.join(', ')}`);
+            return;
+        }
+
+        setupActions.updateDatabaseStatus('starting');
+
+        // For Pinecone, we just validate the connection since it's cloud-based
+        vscodeApi.postMessage({
+            command: 'validateDatabase',
+            database: 'pinecone',
+            config: setupStore.getState().databaseConfig
+        });
+
+        console.log('Pinecone validation command sent to extension');
     }
 
     /**
@@ -204,6 +393,8 @@ export class DatabaseSetup {
             this.unsubscribe();
             this.unsubscribe = null;
         }
+
+        this.cleanupConfigComponents();
     }
 }
 
@@ -316,6 +507,11 @@ export const databaseSetupStyles = `
 .status-text {
     font-size: 13px;
     color: var(--vscode-foreground);
+}
+
+.database-config-container {
+    margin-top: 15px;
+    margin-bottom: 15px;
 }
 
 .database-info {

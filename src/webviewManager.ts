@@ -19,6 +19,7 @@ export class WebviewManager {
     private extensionManager: any; // Will be properly typed when we integrate
     private mainPanel: vscode.WebviewPanel | undefined;
     private settingsPanel: vscode.WebviewPanel | undefined;
+    private diagnosticsPanel: vscode.WebviewPanel | undefined;
     private messageRouter: MessageRouter | undefined;
 
     /**
@@ -45,7 +46,7 @@ export class WebviewManager {
                 const indexingService = this.extensionManager.getIndexingService();
 
                 if (contextService && indexingService) {
-                    this.messageRouter = new MessageRouter(contextService, indexingService);
+                    this.messageRouter = new MessageRouter(contextService, indexingService, this.context);
 
                     // Set advanced managers if available
                     if (this.extensionManager.getSearchManager &&
@@ -93,7 +94,7 @@ export class WebviewManager {
                 enableScripts: true,
                 retainContextWhenHidden: true,
                 localResourceRoots: [
-                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'dist'))
+                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
                 ]
             }
         );
@@ -115,6 +116,8 @@ export class WebviewManager {
     /**
      * Shows the settings panel
      * Creates a new panel if one doesn't exist, or reveals the existing one
+     * @deprecated The settings are now managed in the native VS Code Settings UI.
+     * This webview will be repurposed for diagnostics.
      */
     public showSettingsPanel(): void {
         // If panel already exists, just reveal it
@@ -132,7 +135,7 @@ export class WebviewManager {
                 enableScripts: true,
                 retainContextWhenHidden: true,
                 localResourceRoots: [
-                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'dist'))
+                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
                 ]
             }
         );
@@ -152,6 +155,45 @@ export class WebviewManager {
     }
 
     /**
+     * Shows the diagnostics panel
+     * Creates a new panel if one doesn't exist, or reveals the existing one
+     */
+    public showDiagnosticsPanel(): void {
+        // If panel already exists, just reveal it
+        if (this.diagnosticsPanel) {
+            this.diagnosticsPanel.reveal(vscode.ViewColumn.Two);
+            return;
+        }
+
+        // Create new diagnostics panel
+        this.diagnosticsPanel = vscode.window.createWebviewPanel(
+            'codeContextDiagnostics',
+            'Code Context Diagnostics',
+            vscode.ViewColumn.Two,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [
+                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
+                ]
+            }
+        );
+
+        // Set the webview content
+        this.diagnosticsPanel.webview.html = this.getWebviewContent(this.diagnosticsPanel.webview, 'diagnostics');
+
+        // Handle panel disposal
+        this.diagnosticsPanel.onDidDispose(() => {
+            this.diagnosticsPanel = undefined;
+        });
+
+        // Set up message handling for the diagnostics panel
+        this.setupMessageHandling(this.diagnosticsPanel.webview);
+
+        console.log('WebviewManager: Diagnostics panel created and shown');
+    }
+
+    /**
      * Gets the HTML content for a webview panel
      * Reads the HTML template and replaces placeholders with proper webview URIs
      * @param webview - The webview instance
@@ -160,8 +202,8 @@ export class WebviewManager {
      */
     private getWebviewContent(webview: vscode.Webview, panelName: string): string {
         try {
-            // Path to the webview HTML file
-            const htmlPath = path.join(this.context.extensionPath, 'webview', 'dist', 'index.html');
+            // Path to the SvelteKit build HTML file
+            const htmlPath = path.join(this.context.extensionPath, 'webview', 'build', 'index.html');
 
             // Check if the HTML file exists
             if (!fs.existsSync(htmlPath)) {
@@ -172,14 +214,16 @@ export class WebviewManager {
             // Read the HTML content
             let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
-            // Replace relative paths with webview-specific URIs using regex
-            // This handles webpack-generated assets like bundle.js, styles, etc.
+            // Replace SvelteKit asset paths with webview-specific URIs
+            // This handles SvelteKit's /_app/ paths and other assets
             htmlContent = htmlContent.replace(
-                /(<script[^>]+src="|<link[^>]+href="|src="|href=")(?!https?:\/\/)([^"]*\.(?:js|css|png|jpg|jpeg|gif|svg|ico))"/g,
+                /(<script[^>]+src="|<link[^>]+href="|src="|href=")(?!https?:\/\/)([^"]*)/g,
                 (_match, prefix, relativePath) => {
-                    const resourcePath = path.join(this.context.extensionPath, 'webview', 'dist', relativePath);
+                    // Remove leading slash if present
+                    const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+                    const resourcePath = path.join(this.context.extensionPath, 'webview', 'build', cleanPath);
                     const uri = webview.asWebviewUri(vscode.Uri.file(resourcePath));
-                    return `${prefix}${uri}"`;
+                    return `${prefix}${uri}`;
                 }
             );
 
@@ -196,25 +240,84 @@ export class WebviewManager {
      * @returns Basic HTML content
      */
     private getFallbackContent(panelName: string): string {
-        const title = panelName === 'main' ? 'Code Context Engine' : 'Code Context Settings';
-        const content = panelName === 'main' 
-            ? `
-                <h1>Code Context Engine</h1>
-                <p>Welcome to Code Context Engine!</p>
-                <p>This is a placeholder interface. The full webview is being developed.</p>
-                <button onclick="startIndexing()">Start Indexing</button>
-                <script>
-                    const vscode = acquireVsCodeApi();
-                    function startIndexing() {
-                        vscode.postMessage({ command: 'startIndexing' });
-                    }
-                </script>
-            `
-            : `
-                <h1>Code Context Settings</h1>
-                <p>Configure your Code Context Engine settings here.</p>
-                <p>This is a placeholder interface. The full settings panel is being developed.</p>
-            `;
+        let title: string;
+        let content: string;
+
+        switch (panelName) {
+            case 'main':
+                title = 'Code Context Engine';
+                content = `
+                    <h1>Code Context Engine</h1>
+                    <p>Welcome to Code Context Engine!</p>
+                    <p>This is a placeholder interface. The full webview is being developed.</p>
+                    <button onclick="startIndexing()">Start Indexing</button>
+                    <script>
+                        const vscode = acquireVsCodeApi();
+                        function startIndexing() {
+                            vscode.postMessage({ command: 'startIndexing' });
+                        }
+                    </script>
+                `;
+                break;
+            case 'diagnostics':
+                title = 'Code Context Diagnostics';
+                content = `
+                    <h1>Status & Diagnostics</h1>
+
+                    <div style="margin-bottom: 30px;">
+                        <h2>Current Configuration</h2>
+                        <div style="background-color: var(--vscode-editor-background); padding: 15px; border-radius: 4px; border: 1px solid var(--vscode-panel-border);">
+                            <p><strong>Embedding Provider:</strong> <span id="embeddingProvider">Loading...</span></p>
+                            <p><strong>Database Connection:</strong> <span id="databaseConnection">Loading...</span></p>
+                            <p><strong>Model:</strong> <span id="embeddingModel">Loading...</span></p>
+                        </div>
+                        <button onclick="editSettings()" style="margin-top: 10px;">Edit Configuration</button>
+                    </div>
+
+                    <div>
+                        <h2>Actions</h2>
+                        <button onclick="testDatabase()" style="margin-right: 10px;">Test Database Connection</button>
+                        <button onclick="testEmbedding()">Test Embedding Provider</button>
+                    </div>
+
+                    <script>
+                        const vscode = acquireVsCodeApi();
+
+                        // Request current settings on load
+                        vscode.postMessage({ command: 'getSettings' });
+
+                        function editSettings() {
+                            vscode.postMessage({ command: 'MapToSettings' });
+                        }
+
+                        function testDatabase() {
+                            vscode.postMessage({ command: 'testDatabaseConnection' });
+                        }
+
+                        function testEmbedding() {
+                            vscode.postMessage({ command: 'testEmbeddingProvider' });
+                        }
+
+                        // Listen for messages from the extension
+                        window.addEventListener('message', event => {
+                            const message = event.data;
+                            if (message.command === 'updateSettings') {
+                                document.getElementById('embeddingProvider').textContent = message.data.embeddingProvider || 'Not configured';
+                                document.getElementById('databaseConnection').textContent = message.data.databaseConnectionString || 'Not configured';
+                                document.getElementById('embeddingModel').textContent = message.data.embeddingModel || 'Not configured';
+                            }
+                        });
+                    </script>
+                `;
+                break;
+            default:
+                title = 'Code Context Settings';
+                content = `
+                    <h1>Code Context Settings</h1>
+                    <p>Configure your Code Context Engine settings here.</p>
+                    <p>This is a placeholder interface. The full settings panel is being developed.</p>
+                `;
+        }
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -305,6 +408,11 @@ export class WebviewManager {
         if (this.settingsPanel) {
             this.settingsPanel.dispose();
             this.settingsPanel = undefined;
+        }
+
+        if (this.diagnosticsPanel) {
+            this.diagnosticsPanel.dispose();
+            this.diagnosticsPanel = undefined;
         }
 
         console.log('WebviewManager: Disposal completed');
