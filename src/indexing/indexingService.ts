@@ -657,4 +657,86 @@ export class IndexingService {
     public async isQdrantAvailable(): Promise<boolean> {
         return await this.qdrantService.healthCheck();
     }
+
+    /**
+     * Updates a single file in the index by re-parsing and re-indexing it
+     *
+     * This method is used for incremental indexing when files are modified.
+     * It removes the old vectors for the file and adds new ones based on
+     * the current file content.
+     *
+     * @param uri - The URI of the file to update in the index
+     * @returns Promise that resolves when the file has been updated
+     */
+    public async updateFileInIndex(uri: vscode.Uri): Promise<void> {
+        try {
+            console.log(`IndexingService: Updating file in index: ${uri.fsPath}`);
+
+            // First, remove any existing vectors for this file
+            await this.removeFileFromIndex(uri);
+
+            // Read the file content
+            const fileContent = await vscode.workspace.fs.readFile(uri);
+            const content = Buffer.from(fileContent).toString('utf8');
+
+            // Process the file to get chunks
+            const fileResult = await this.processFile(uri.fsPath);
+
+            if (!fileResult.success || fileResult.chunks.length === 0) {
+                console.warn(`IndexingService: Failed to process file or no chunks generated: ${uri.fsPath}`);
+                return;
+            }
+
+            // Generate embeddings for the chunks
+            const chunkContents = fileResult.chunks.map(chunk => chunk.content);
+            const embeddings = await this.embeddingProvider.generateEmbeddings(chunkContents);
+
+            if (embeddings.length !== fileResult.chunks.length) {
+                console.error(`IndexingService: Embedding count mismatch for ${uri.fsPath}: ${embeddings.length} embeddings for ${fileResult.chunks.length} chunks`);
+                return;
+            }
+
+            // Store the chunks and embeddings in Qdrant
+            const collectionName = this.generateCollectionName();
+            const success = await this.qdrantService.upsertChunks(collectionName, fileResult.chunks, embeddings);
+
+            if (success) {
+                console.log(`IndexingService: Successfully updated ${fileResult.chunks.length} chunks for file: ${uri.fsPath}`);
+            } else {
+                console.error(`IndexingService: Failed to upsert chunks for file: ${uri.fsPath}`);
+            }
+
+        } catch (error) {
+            console.error(`IndexingService: Error updating file in index ${uri.fsPath}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Removes a file from the index by deleting all associated vectors
+     *
+     * This method is used when files are deleted or when updating files
+     * (as part of the delete-then-add strategy).
+     *
+     * @param uri - The URI of the file to remove from the index
+     * @returns Promise that resolves when the file has been removed
+     */
+    public async removeFileFromIndex(uri: vscode.Uri): Promise<void> {
+        try {
+            console.log(`IndexingService: Removing file from index: ${uri.fsPath}`);
+
+            // Use the relative path for consistency with how files are stored
+            const relativePath = vscode.workspace.asRelativePath(uri);
+
+            // Delete all vectors associated with this file
+            await this.qdrantService.deleteVectorsForFile(relativePath);
+
+            console.log(`IndexingService: Successfully removed file from index: ${relativePath}`);
+
+        } catch (error) {
+            console.error(`IndexingService: Error removing file from index ${uri.fsPath}:`, error);
+            throw error;
+        }
+    }
+
 }

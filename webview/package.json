@@ -46,6 +46,7 @@
 		"vitest-browser-svelte": "^0.1.0"
 	},
 	"dependencies": {
-		"@fluentui/web-components": "^2.6.1"
+		"@fluentui/web-components": "^2.6.1",
+		"highlight.js": "^11.11.1"
 	}
 }

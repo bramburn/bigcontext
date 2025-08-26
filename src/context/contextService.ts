@@ -63,6 +63,8 @@ export interface RelatedFile {
  * @property includeContent - Whether to include file content in results
  * @property minSimilarity - Minimum similarity threshold (0-1)
  * @property fileTypes - Optional array of file types to filter by
+ * @property page - Page number for pagination (1-based, default: 1)
+ * @property pageSize - Number of results per page (default: 20)
  */
 export interface ContextQuery {
     query: string;
@@ -72,16 +74,22 @@ export interface ContextQuery {
     includeContent?: boolean;
     minSimilarity?: number;
     fileTypes?: string[];
+    page?: number;
+    pageSize?: number;
 }
 
 /**
  * Results of a context query operation
- * 
+ *
  * @property query - The original search query
- * @property results - Array of matching code chunks
+ * @property results - Array of matching code chunks for current page
  * @property relatedFiles - Array of related files
- * @property totalResults - Total number of results found
+ * @property totalResults - Total number of results found across all pages
  * @property processingTime - Time taken to process the query in milliseconds
+ * @property page - Current page number (1-based)
+ * @property pageSize - Number of results per page
+ * @property totalPages - Total number of pages available
+ * @property hasMore - Whether there are more results available
  */
 export interface ContextResult {
     query: string;
@@ -89,6 +97,10 @@ export interface ContextResult {
     relatedFiles: RelatedFile[];
     totalResults: number;
     processingTime: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    hasMore: boolean;
 }
 
 /**
@@ -113,18 +125,24 @@ export class ContextService {
     /**
      * Creates an empty context result object
      * Helper method to reduce code duplication
-     * 
+     *
      * @param query - The original query string
+     * @param page - Current page number
+     * @param pageSize - Page size
      * @param startTime - Optional start time for calculating processing time
      * @returns An empty ContextResult object
      */
-    private createEmptyResult(query: string, startTime?: number): ContextResult {
+    private createEmptyResult(query: string, page: number = 1, pageSize: number = 20, startTime?: number): ContextResult {
         return {
             query: query,
             results: [],
             relatedFiles: [],
             totalResults: 0,
-            processingTime: startTime ? Date.now() - startTime : 0
+            processingTime: startTime ? Date.now() - startTime : 0,
+            page: page,
+            pageSize: pageSize,
+            totalPages: 0,
+            hasMore: false
         };
     }
 
@@ -359,23 +377,29 @@ export class ContextService {
      */
     async queryContext(contextQuery: ContextQuery): Promise<ContextResult> {
         const startTime = Date.now();
-        
+
         try {
             if (!this.embeddingProvider) {
                 throw new Error('Embedding provider not available');
             }
 
+            // Extract pagination parameters with defaults
+            const page = Math.max(1, contextQuery.page ?? 1); // Ensure page is at least 1
+            const pageSize = Math.max(1, Math.min(100, contextQuery.pageSize ?? 20)); // Limit pageSize between 1-100
+
             // Generate embedding for the query
             const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([contextQuery.query]);
             if (queryEmbeddings.length === 0) {
-                return this.createEmptyResult(contextQuery.query, startTime);
+                return this.createEmptyResult(contextQuery.query, page, pageSize, startTime);
             }
 
             const collectionName = this.generateCollectionName();
 
             // Get configuration values with fallbacks
             const config = vscode.workspace.getConfiguration('code-context-engine');
-            const maxResults = contextQuery.maxResults ?? config.get<number>('maxSearchResults') ?? 20;
+            // For pagination, we need to fetch more results than just the current page
+            // to ensure we have enough data for proper pagination
+            const maxSearchResults = contextQuery.maxResults ?? config.get<number>('maxSearchResults') ?? 100;
             const defaultMinSimilarity = config.get<number>('minSimilarityThreshold') ?? 0.5;
             
             // Build filter for file types if specified
@@ -391,7 +415,7 @@ export class ContextService {
             }
 
             // Search for similar chunks - fetch more results to ensure good deduplication
-            const searchLimit = maxResults * 5; // Fetch 5x more to have enough for deduplication
+            const searchLimit = maxSearchResults * 5; // Fetch 5x more to have enough for deduplication
             const searchResults = await this.qdrantService.search(
                 collectionName,
                 queryEmbeddings[0],
@@ -417,13 +441,22 @@ export class ContextService {
             }
 
             // Convert map to array and sort by score (descending)
-            let deduplicatedResults = Array.from(uniqueFiles.values())
-                .sort((a, b) => b.score - a.score)
-                .slice(0, maxResults); // Limit to requested number of results
+            const allDeduplicatedResults = Array.from(uniqueFiles.values())
+                .sort((a, b) => b.score - a.score);
 
-            // Conditionally read file content if requested
+            // Calculate pagination metadata
+            const totalResults = allDeduplicatedResults.length;
+            const totalPages = Math.ceil(totalResults / pageSize);
+            const startIndex = (page - 1) * pageSize;
+            const endIndex = Math.min(startIndex + pageSize, totalResults);
+            const hasMore = page < totalPages;
+
+            // Get the results for the current page
+            const paginatedResults = allDeduplicatedResults.slice(startIndex, endIndex);
+
+            // Conditionally read file content if requested (only for current page results)
             if (contextQuery.includeContent) {
-                for (const result of deduplicatedResults) {
+                for (const result of paginatedResults) {
                     try {
                         const filePath = result.payload.filePath;
                         const uri = vscode.Uri.file(path.join(this.workspaceRoot, filePath));
@@ -450,19 +483,25 @@ export class ContextService {
                 );
             }
 
-            // Return complete result object with timing information
+            // Return complete result object with timing and pagination information
             return {
                 query: contextQuery.query,
-                results: deduplicatedResults,
+                results: paginatedResults,
                 relatedFiles: relatedFiles,
-                totalResults: deduplicatedResults.length,
-                processingTime: Date.now() - startTime
+                totalResults: totalResults,
+                processingTime: Date.now() - startTime,
+                page: page,
+                pageSize: pageSize,
+                totalPages: totalPages,
+                hasMore: hasMore
             };
 
         } catch (error) {
             console.error('Context query failed:', error);
-            // Return empty results with timing information on error
-            return this.createEmptyResult(contextQuery.query, startTime);
+            // Return empty results with timing and pagination information on error
+            const page = Math.max(1, contextQuery.page ?? 1);
+            const pageSize = Math.max(1, Math.min(100, contextQuery.pageSize ?? 20));
+            return this.createEmptyResult(contextQuery.query, page, pageSize, startTime);
         }
     }
 

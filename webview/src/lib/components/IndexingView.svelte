@@ -64,6 +64,9 @@
 
                 if (message.success) {
                     successMessage = `Indexing completed successfully! Processed ${message.totalFiles || 0} files.`;
+
+                    // Check if this is the first successful indexing and trigger tour
+                    postMessage('checkFirstRunAndStartTour');
                 } else {
                     errorMessage = 'Indexing failed. Please check the logs and try again.';
                 }

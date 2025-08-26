@@ -234,4 +234,70 @@ export class QdrantService {
             return [];
         }
     }
+
+    /**
+     * Delete all vectors associated with a specific file path
+     *
+     * This method removes all points from the collection that have a matching
+     * filePath in their payload. It's used for incremental indexing when files
+     * are deleted or updated.
+     *
+     * @param filePath - The file path to match for deletion
+     * @returns Promise resolving to true if deletion was successful
+     */
+    async deleteVectorsForFile(filePath: string): Promise<boolean> {
+        try {
+            console.log(`QdrantService: Deleting vectors for file: ${filePath}`);
+
+            // For now, we need to determine which collection to use
+            // This is a simplified approach - in a real implementation,
+            // we might need to search across collections or maintain collection metadata
+            const collections = await this.getCollections();
+
+            if (collections.length === 0) {
+                console.warn(`QdrantService: No collections found, cannot delete vectors for file: ${filePath}`);
+                return false;
+            }
+
+            // Try to delete from all collections (in case the file exists in multiple)
+            let deletedFromAny = false;
+
+            for (const collectionName of collections) {
+                try {
+                    // Use the delete points API with a filter to match the file path
+                    await this.client.delete(collectionName, {
+                        filter: {
+                            must: [
+                                {
+                                    key: 'filePath',
+                                    match: {
+                                        value: filePath
+                                    }
+                                }
+                            ]
+                        }
+                    });
+
+                    console.log(`QdrantService: Deleted vectors for file: ${filePath} from collection: ${collectionName}`);
+                    deletedFromAny = true;
+
+                } catch (error) {
+                    console.warn(`QdrantService: Failed to delete from collection '${collectionName}':`, error);
+                    // Continue with other collections
+                }
+            }
+
+            if (deletedFromAny) {
+                console.log(`QdrantService: Successfully deleted vectors for file: ${filePath}`);
+                return true;
+            } else {
+                console.warn(`QdrantService: No vectors found for file: ${filePath}`);
+                return false;
+            }
+
+        } catch (error) {
+            console.error(`QdrantService: Failed to delete vectors for file '${filePath}':`, error);
+            return false;
+        }
+    }
 }

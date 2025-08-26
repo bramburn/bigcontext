@@ -15,6 +15,8 @@
         searchActions,
         appActions
     } from '$lib/stores/appStore';
+    import ResultCard from './ResultCard.svelte';
+    import HistoryView from './HistoryView.svelte';
     
     // Register Fluent UI components
     provideFluentDesignSystem().register(
@@ -34,7 +36,16 @@
     let searchResults: SearchResult[] = [];
     let xmlResults = ''; // For XML formatted results
     let resultFormat: 'json' | 'xml' = 'json'; // Track result format
+    let viewMode: 'UI' | 'XML' = 'UI'; // Toggle between UI cards and raw XML
     let searchHistory: string[] = [];
+
+    // Pagination state
+    let currentPage = 1;
+    let pageSize = 20;
+    let totalResults = 0;
+    let totalPages = 0;
+    let hasMore = false;
+    let isLoadingMore = false;
     let errorMessage = '';
     let searchStats = {
         totalResults: 0,
@@ -66,23 +77,62 @@
         unsubscribeFunctions.push(
             onMessage('searchResults', (message) => {
                 isSearching = false;
+                isLoadingMore = false;
                 resultFormat = message.format || 'json';
 
+                // Update pagination state
+                const newPage = message.page || 1;
+                const newPageSize = message.pageSize || 20;
+                const newTotalResults = message.totalResults || 0;
+                const newTotalPages = message.totalPages || 0;
+                const newHasMore = message.hasMore || false;
+
+                // Determine if this is a new search or pagination
+                const isNewSearch = newPage === 1 || currentPage === 1;
+                const isPagination = newPage > 1 && newPage > currentPage;
+
                 if (resultFormat === 'xml') {
-                    // Handle XML results
+                    // Handle XML results (no pagination for XML)
                     xmlResults = message.results || '';
                     searchResults = []; // Clear JSON results
                 } else {
-                    // Handle JSON results
-                    searchResults = message.results || [];
+                    // Handle JSON results with pagination support
+                    if (isNewSearch) {
+                        // New search: replace results
+                        searchResults = message.results || [];
+                    } else if (isPagination) {
+                        // Pagination: append results
+                        searchResults = [...searchResults, ...(message.results || [])];
+                    } else {
+                        // Fallback: replace results
+                        searchResults = message.results || [];
+                    }
                     xmlResults = ''; // Clear XML results
                 }
 
+                // Update pagination state
+                currentPage = newPage;
+                pageSize = newPageSize;
+                totalResults = newTotalResults;
+                totalPages = newTotalPages;
+                hasMore = newHasMore;
+
                 searchStats = {
-                    totalResults: message.totalResults || 0,
+                    totalResults: totalResults,
                     searchTime: message.searchTime || 0,
                     query: message.query || ''
                 };
+
+                // Save search to history (only for first page to avoid duplicates)
+                if (message.query && message.query.trim() && currentPage === 1) {
+                    const resultsCount = resultFormat === 'json' ? totalResults : (xmlResults ? 1 : 0);
+                    postMessage('addSearchHistory', {
+                        query: message.query.trim(),
+                        resultsCount: resultsCount,
+                        resultFormat: resultFormat,
+                        executionTime: message.searchTime || 0
+                    });
+                }
 
                 if ((resultFormat === 'json' && searchResults.length === 0) ||
                     (resultFormat === 'xml' && !xmlResults.trim())) {
@@ -114,7 +164,7 @@
 
 
 
-    function handleSearch() {
+    function handleSearch(resetPagination = true) {
         if (!searchQuery.trim()) {
             errorMessage = 'Please enter a search query.';
             return;
@@ -122,12 +172,19 @@
 
         isSearching = true;
         errorMessage = '';
-        searchResults = [];
+
+        // Reset pagination for new searches
+        if (resetPagination) {
+            currentPage = 1;
+            searchResults = [];
+        }
 
         postMessage('search', {
             query: searchQuery.trim(),
             maxResults: maxResults,
-            includeContent: includeContent
+            includeContent: includeContent,
+            page: currentPage,
+            pageSize: pageSize
         });
     }
 
@@ -140,6 +197,23 @@
     function selectHistoryItem(query: string) {
         searchQuery = query;
         handleSearch();
+    }
+
+    function loadMoreResults() {
+        if (!hasMore || isLoadingMore || !searchQuery.trim()) {
+            return;
+        }
+
+        isLoadingMore = true;
+        currentPage += 1;
+
+        postMessage('search', {
+            query: searchQuery.trim(),
+            maxResults: maxResults,
+            includeContent: includeContent,
+            page: currentPage,
+            pageSize: pageSize
+        });
     }
 
     function openFile(filePath: string, lineNumber?: number) {
@@ -290,77 +364,140 @@
         </fluent-card>
     {/if}
 
-    <!-- Search Results (JSON Format) -->
-    {#if resultFormat === 'json' && searchResults.length > 0}
-        <div class="results-section">
-            {#each searchResults as result}
-                <fluent-card class="result-item">
-                    <div class="result-header">
-                        <div class="result-file">
-                            <button
-                                class="file-link"
-                                on:click={() => openFile(result.file, result.lineNumber)}
-                                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => openFile(result.file, result.lineNumber))}
-                                role="button"
-                                tabindex="0"
-                            >
-                                📄 {result.file}
-                                {#if result.lineNumber}
-                                    <span class="line-number">:{result.lineNumber}</span>
-                                {/if}
-                            </button>
-                        </div>
-
-                        <fluent-badge
-                            style="background-color: {getScoreColor(result.score)}"
-                        >
-                            {Math.round(result.score * 100)}%
-                        </fluent-badge>
-                    </div>
-
-                    <div class="result-content">
-                        <pre><code>{truncateContent(result.content)}</code></pre>
-                    </div>
-
-                    {#if result.context}
-                        <div class="result-context">
-                            <strong>Context:</strong> {result.context}
-                        </div>
-                    {/if}
-
-                    {#if result.relatedFiles && result.relatedFiles.length > 0}
-                        <fluent-accordion class="related-files">
-                            <fluent-accordion-item>
-                                <span slot="heading">Related Files ({result.relatedFiles.length})</span>
-                                <div class="related-files-list">
-                                    {#each result.relatedFiles as relatedFile}
-                                        <div class="related-file">
-                                            <button
-                                                class="file-link"
-                                                on:click={() => openFile(relatedFile.file)}
-                                                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => openFile(relatedFile.file))}
-                                                role="button"
-                                                tabindex="0"
-                                            >
-                                                📄 {relatedFile.file}
-                                            </button>
-                                            <span class="related-reason">{relatedFile.reason}</span>
-                                            <fluent-badge>
-                                                {Math.round(relatedFile.score * 100)}%
-                                            </fluent-badge>
-                                        </div>
-                                    {/each}
-                                </div>
-                            </fluent-accordion-item>
-                        </fluent-accordion>
-                    {/if}
-                </fluent-card>
-            {/each}
+    <!-- Search History (show when no active search and no results) -->
+    {#if !isSearching && !searchQuery.trim() && searchResults.length === 0 && !xmlResults}
+        <div class="history-section">
+            <HistoryView on:rerun={(event) => {
+                searchQuery = event.detail.query;
+                handleSearch();
+            }} />
         </div>
     {/if}
 
-    <!-- Search Results (XML Format) -->
-    {#if resultFormat === 'xml' && xmlResults}
+    <!-- View Mode Toggle (only show when we have results) -->
+    {#if (resultFormat === 'json' && searchResults.length > 0) || (resultFormat === 'xml' && xmlResults)}
+        <div class="view-toggle-section">
+            <fluent-card class="view-toggle-card">
+                <div class="view-toggle-container">
+                    <span class="toggle-label">View Mode:</span>
+                    <div class="toggle-buttons">
+                        <button
+                            class="toggle-btn {viewMode === 'UI' ? 'active' : ''}"
+                            on:click={() => viewMode = 'UI'}
+                        >
+                            🎨 UI View
+                        </button>
+                        <button
+                            class="toggle-btn {viewMode === 'XML' ? 'active' : ''}"
+                            on:click={() => viewMode = 'XML'}
+                        >
+                            📄 XML View
+                        </button>
+                    </div>
+                </div>
+            </fluent-card>
+        </div>
+    {/if}
+
+    <!-- Search Results Display -->
+    {#if (resultFormat === 'json' && searchResults.length > 0) || (resultFormat === 'xml' && xmlResults)}
+        <div class="results-section">
+            {#if viewMode === 'UI'}
+                <!-- UI View: Interactive Cards -->
+                {#if resultFormat === 'json' && searchResults.length > 0}
+                    {#each searchResults as result, index}
+                        <ResultCard {result} {index} />
+                    {/each}
+                {:else if resultFormat === 'xml' && xmlResults}
+                    <!-- For XML results, show a message that UI view is not available -->
+                    <fluent-card class="xml-ui-message">
+                        <div class="message-content">
+                            <h3>🎨 UI View Not Available</h3>
+                            <p>The UI view is only available for JSON formatted results. Switch to XML view to see the raw data.</p>
+                        </div>
+                    </fluent-card>
+                {/if}
+            {:else}
+                <!-- XML View: Raw Data -->
+                {#if resultFormat === 'json' && searchResults.length > 0}
+                    <!-- Convert JSON results to XML-like display -->
+                    <fluent-card class="xml-results">
+                        <div class="xml-header">
+                            <h3>📄 Search Results (JSON Data)</h3>
+                            <div class="xml-actions">
+                                <fluent-button
+                                    appearance="outline"
+                                    on:click={() => copyToClipboard(JSON.stringify(searchResults, null, 2))}
+                                >
+                                    📋 Copy JSON
+                                </fluent-button>
+                            </div>
+                        </div>
+                        <pre class="xml-content"><code>{JSON.stringify(searchResults, null, 2)}</code></pre>
+                    </fluent-card>
+                {:else if resultFormat === 'xml' && xmlResults}
+                    <!-- Show actual XML results -->
+                    <fluent-card class="xml-results">
+                        <div class="xml-header">
+                            <h3>📄 Search Results (XML Format)</h3>
+                            <div class="xml-actions">
+                                <fluent-button
+                                    appearance="outline"
+                                    on:click={() => copyToClipboard(xmlResults)}
+                                >
+                                    📋 Copy XML
+                                </fluent-button>
+                            </div>
+                        </div>
+                        <pre class="xml-content"><code>{xmlResults}</code></pre>
+                    </fluent-card>
+                {/if}
+            {/if}
+        </div>
+    {/if}
+
+    <!-- Pagination Controls -->
+    {#if (resultFormat === 'json' && searchResults.length > 0) || (resultFormat === 'xml' && xmlResults)}
+        <div class="pagination-section">
+            <fluent-card class="pagination-card">
+                <div class="pagination-info">
+                    <span class="results-summary">
+                        Showing {searchResults.length} of {totalResults} results
+                        {#if totalPages > 1}
+                            (Page {currentPage} of {totalPages})
+                        {/if}
+                    </span>
+
+                    {#if searchStats.searchTime > 0}
+                        <span class="search-time">
+                            • {formatSearchTime(searchStats.searchTime)}
+                        </span>
+                    {/if}
+                </div>
+
+                {#if hasMore && viewMode === 'UI'}
+                    <div class="pagination-actions">
+                        <fluent-button
+                            appearance="outline"
+                            disabled={isLoadingMore}
+                            on:click={loadMoreResults}
+                            class="load-more-btn"
+                        >
+                            {#if isLoadingMore}
+                                <div class="loading-spinner small"></div>
+                                Loading...
+                            {:else}
+                                📄 Load More Results
+                            {/if}
+                        </fluent-button>
+                    </div>
+                {/if}
+            </fluent-card>
+        </div>
+    {/if}
+
+    <!-- Legacy XML Results (keeping for backward compatibility) -->
+    {#if false && resultFormat === 'xml' && xmlResults}
         <div class="results-section">
             <fluent-card class="xml-results">
                 <div class="xml-header">
@@ -851,5 +988,124 @@
         font-family: inherit;
         font-size: inherit;
         color: inherit;
+    }
+
+    /* View Toggle Styles */
+    .view-toggle-section {
+        margin-bottom: 16px;
+    }
+
+    .view-toggle-card {
+        padding: 12px 16px;
+    }
+
+    .view-toggle-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .toggle-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--vscode-foreground);
+    }
+
+    .toggle-buttons {
+        display: flex;
+        gap: 4px;
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .toggle-btn {
+        background-color: var(--vscode-button-secondaryBackground);
+        border: none;
+        color: var(--vscode-button-secondaryForeground);
+        cursor: pointer;
+        font-size: 12px;
+        padding: 8px 12px;
+        transition: all 0.2s ease;
+        border-radius: 0;
+    }
+
+    .toggle-btn:hover {
+        background-color: var(--vscode-button-secondaryHoverBackground);
+    }
+
+    .toggle-btn.active {
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+    }
+
+    .xml-ui-message {
+        padding: 20px;
+        text-align: center;
+    }
+
+    .message-content h3 {
+        margin: 0 0 8px 0;
+        color: var(--vscode-foreground);
+    }
+
+    .message-content p {
+        margin: 0;
+        color: var(--vscode-descriptionForeground);
+        font-size: 13px;
+    }
+
+    /* History Section Styles */
+    .history-section {
+        margin-bottom: 16px;
+    }
+
+    /* Pagination Styles */
+    .pagination-section {
+        margin-top: 16px;
+    }
+
+    .pagination-card {
+        padding: 16px 20px;
+        background-color: var(--vscode-sideBar-background);
+        border: 1px solid var(--vscode-panel-border);
+    }
+
+    .pagination-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 13px;
+        color: var(--vscode-descriptionForeground);
+    }
+
+    .results-summary {
+        font-weight: 500;
+        color: var(--vscode-foreground);
+    }
+
+    .search-time {
+        color: var(--vscode-charts-green);
+        font-family: var(--vscode-editor-font-family);
+    }
+
+    .pagination-actions {
+        display: flex;
+        justify-content: center;
+    }
+
+    .load-more-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 160px;
+        justify-content: center;
+    }
+
+    .loading-spinner.small {
+        width: 14px;
+        height: 14px;
+        border-width: 2px;
     }
 </style>

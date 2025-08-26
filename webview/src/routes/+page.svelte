@@ -4,9 +4,11 @@
     import { initializePersistence } from '$lib/stores/persistence';
     import { appActions } from '$lib/stores/appStore';
     import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
+    import GuidedTour from '$lib/components/GuidedTour.svelte';
     import { performanceTracker, measureComponentLoad } from '$lib/utils/performance';
     import { registerCoreComponents } from '$lib/utils/fluentUI';
     import { fadeIn, slideInFromBottom } from '$lib/utils/animations';
+    import { postMessage, onMessage } from '$lib/vscodeApi';
 
     // Dynamic imports for code splitting
     let SetupView: any = null;
@@ -27,6 +29,10 @@
 
     // Current view state
     let view: ViewType = 'setup';
+
+    // Guided tour state
+    let guidedTourComponent: GuidedTour;
+    let hasCompletedFirstRun = true; // Default to true, will be updated from extension
 
     /**
      * Animate component when it loads
@@ -133,11 +139,24 @@
             const message = event.data;
             if (message.command === 'setView') {
                 currentView.set(message.view);
+            } else if (message.command === 'globalStateResponse') {
+                // Handle global state response for first-run check
+                if (message.key === 'hasCompletedFirstRun') {
+                    hasCompletedFirstRun = message.value ?? false;
+                }
+            } else if (message.command === 'startTour') {
+                // Start the guided tour
+                if (guidedTourComponent && !hasCompletedFirstRun) {
+                    guidedTourComponent.startTour();
+                }
             }
         });
 
         // Request initial view state
         vscode.postMessage({ command: 'getInitialView' });
+
+        // Request first-run state
+        vscode.postMessage({ command: 'getGlobalState', key: 'hasCompletedFirstRun' });
 
         // Load initial component
         preloadComponents(view);
@@ -205,6 +224,11 @@
             {/if}
         {/if}
     </ErrorBoundary>
+
+    <!-- Guided Tour Component -->
+    <GuidedTour bind:this={guidedTourComponent} on:tourCompleted={() => {
+        hasCompletedFirstRun = true;
+    }} />
 </main>
 
 <style>

@@ -1,13 +1,21 @@
+// VS Code API imports
 import * as vscode from 'vscode';
+
+// Core service imports
 import { ConfigService } from './configService';
 import { QdrantService } from './db/qdrantService';
 import { EmbeddingProviderFactory, IEmbeddingProvider } from './embeddings/embeddingProvider';
 import { ContextService } from './context/contextService';
 import { IndexingService } from './indexing/indexingService';
+
+// Supporting service imports for indexing
 import { FileWalker } from './indexing/fileWalker';
 import { AstParser } from './parsing/astParser';
 import { Chunker } from './parsing/chunker';
 import { LSPService } from './lsp/lspService';
+import { FileSystemWatcherManager } from './fileSystemWatcherManager';
+
+// Manager imports
 import { CommandManager } from './commandManager';
 import { WebviewManager } from './webviewManager';
 import { SearchManager } from './searchManager';
@@ -15,6 +23,8 @@ import { ConfigurationManager } from './configurationManager';
 import { PerformanceManager } from './performanceManager';
 import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
+import { StatusBarManager } from './statusBarManager';
+import { HistoryManager } from './historyManager';
 
 /**
  * ExtensionManager class responsible for managing the lifecycle of all core services
@@ -25,19 +35,24 @@ import { XmlFormatterService } from './formatting/XmlFormatterService';
  * - Command registration through CommandManager
  * - Resource cleanup and disposal
  * - Error handling during initialization
+ * 
+ * The ExtensionManager follows a dependency injection pattern, ensuring that services
+ * are initialized in the correct order based on their dependencies. It acts as the
+ * central point of access to all core services and managers throughout the extension.
  */
 export class ExtensionManager {
     private context: vscode.ExtensionContext;
     private disposables: vscode.Disposable[] = [];
 
-    // Core services
+    // Core services - fundamental services that provide core functionality
     private configService!: ConfigService;
     private qdrantService!: QdrantService;
     private embeddingProvider!: IEmbeddingProvider;
     private contextService!: ContextService;
     private indexingService!: IndexingService;
+    private fileSystemWatcherManager!: FileSystemWatcherManager;
 
-    // Managers
+    // Managers - services that manage specific aspects of the extension
     private commandManager!: CommandManager;
     private webviewManager!: WebviewManager;
     private searchManager!: SearchManager;
@@ -45,51 +60,73 @@ export class ExtensionManager {
     private performanceManager!: PerformanceManager;
     private stateManager!: StateManager;
     private xmlFormatterService!: XmlFormatterService;
+    private statusBarManager!: StatusBarManager;
+    private historyManager!: HistoryManager;
 
     /**
      * Creates a new ExtensionManager instance
-     * @param context - The VS Code extension context
+     * @param context - The VS Code extension context providing access to extension APIs
      */
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
+        // Note: All services are initialized in the initialize() method to allow for async initialization
     }
 
     /**
      * Initializes all core services and managers using dependency injection
-     * This method sets up the entire extension architecture
+     * This method sets up the entire extension architecture in a specific order
+     * to ensure dependencies are available when needed.
+     * 
+     * The initialization follows a specific order:
+     * 1. Services with no dependencies (StateManager, ConfigService)
+     * 2. Services that depend on basic configuration (QdrantService, EmbeddingProvider)
+     * 3. Workspace-dependent services (IndexingService, ContextService)
+     * 4. UI and management services (PerformanceManager, ConfigurationManager, etc.)
+     * 5. User interface services (WebviewManager, CommandManager, StatusBarManager)
+     * 
+     * @throws Error if any service fails to initialize
      */
     async initialize(): Promise<void> {
         try {
             console.log('ExtensionManager: Starting service initialization...');
 
             // Step 1: Initialize StateManager first (no dependencies)
+            // StateManager must be initialized first as it manages the extension's state
+            // and may be needed by other services during their initialization
             this.stateManager = new StateManager();
             console.log('ExtensionManager: StateManager initialized');
 
             // Step 2: Initialize ConfigService (no dependencies)
+            // ConfigService provides configuration settings needed by other services
             this.configService = new ConfigService();
             console.log('ExtensionManager: ConfigService initialized');
 
             // Step 3: Initialize QdrantService with configuration
+            // QdrantService requires the database connection string from ConfigService
             this.qdrantService = new QdrantService(this.configService.getQdrantConnectionString());
             console.log('ExtensionManager: QdrantService initialized');
 
             // Step 4: Initialize EmbeddingProvider using factory and configuration
+            // EmbeddingProvider is created asynchronously using the factory pattern
+            // and depends on configuration settings from ConfigService
             this.embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(this.configService);
             console.log('ExtensionManager: EmbeddingProvider initialized');
 
             // Step 5: Initialize workspace-dependent services
+            // These services require a workspace folder to function properly
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (workspaceFolders && workspaceFolders.length > 0) {
                 const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
                 // Create all dependencies for IndexingService
+                // These services are used internally by IndexingService and don't need to be stored as class properties
                 const fileWalker = new FileWalker(workspaceRoot);
                 const astParser = new AstParser();
                 const chunker = new Chunker();
                 const lspService = new LSPService(workspaceRoot);
 
                 // Initialize IndexingService with all dependencies including StateManager
+                // IndexingService coordinates file indexing, parsing, and storage in the vector database
                 this.indexingService = new IndexingService(
                     workspaceRoot,
                     fileWalker,
@@ -103,6 +140,7 @@ export class ExtensionManager {
                 console.log('ExtensionManager: IndexingService initialized');
 
                 // Initialize ContextService with dependencies
+                // ContextService provides context-aware functionality and search capabilities
                 this.contextService = new ContextService(
                     workspaceRoot,
                     this.qdrantService,
@@ -110,31 +148,47 @@ export class ExtensionManager {
                     this.indexingService
                 );
                 console.log('ExtensionManager: ContextService initialized');
+
+                // Initialize FileSystemWatcherManager for automatic indexing
+                // FileSystemWatcherManager monitors file changes and keeps the index up-to-date
+                // It depends on IndexingService for performing incremental updates
+                this.fileSystemWatcherManager = new FileSystemWatcherManager(this.indexingService);
+                await this.fileSystemWatcherManager.initialize();
+                this.disposables.push(this.fileSystemWatcherManager);
+                console.log('ExtensionManager: FileSystemWatcherManager initialized');
             } else {
                 console.warn('ExtensionManager: No workspace folder found, some services not initialized');
             }
 
             // Step 6: Initialize PerformanceManager
+            // PerformanceManager tracks and monitors extension performance metrics
             this.performanceManager = new PerformanceManager();
             console.log('ExtensionManager: PerformanceManager initialized');
 
             // Step 7: Initialize ConfigurationManager
+            // ConfigurationManager handles dynamic configuration changes and updates
             this.configurationManager = new ConfigurationManager(this.configService);
             console.log('ExtensionManager: ConfigurationManager initialized');
 
             // Step 8: Initialize XmlFormatterService
+            // XmlFormatterService provides XML formatting capabilities for search results
             this.xmlFormatterService = new XmlFormatterService();
             console.log('ExtensionManager: XmlFormatterService initialized');
 
             // Step 9: Initialize SearchManager
+            // SearchManager coordinates search operations across the codebase
+            // Depends on ContextService for context-aware search functionality
             this.searchManager = new SearchManager(this.contextService);
             console.log('ExtensionManager: SearchManager initialized');
 
             // Step 10: Initialize WebviewManager with StateManager
+            // WebviewManager handles the UI webview and user interactions
+            // Requires the extension context and StateManager for state management
             this.webviewManager = new WebviewManager(this.context, this, this.stateManager);
             console.log('ExtensionManager: WebviewManager initialized');
 
             // Step 10.1: Register WebviewViewProvider for sidebar integration
+            // This registers the webview as a sidebar view in VS Code
             const webviewViewProviderDisposable = vscode.window.registerWebviewViewProvider(
                 WebviewManager.viewType,
                 this.webviewManager
@@ -143,10 +197,26 @@ export class ExtensionManager {
             console.log('ExtensionManager: WebviewViewProvider registered for sidebar');
 
             // Step 11: Initialize CommandManager and register commands
+            // CommandManager handles all extension commands and their execution
+            // Depends on IndexingService and WebviewManager for command functionality
             this.commandManager = new CommandManager(this.indexingService, this.webviewManager);
             const commandDisposables = this.commandManager.registerCommands();
             this.disposables.push(...commandDisposables);
             console.log('ExtensionManager: CommandManager initialized and commands registered');
+
+            // Step 12: Initialize StatusBarManager
+            // StatusBarManager manages the status bar items and their visibility
+            // Requires the extension context and StateManager for state tracking
+            this.statusBarManager = new StatusBarManager(this.context, this.stateManager);
+            this.disposables.push(this.statusBarManager);
+            console.log('ExtensionManager: StatusBarManager initialized');
+
+            // Step 13: Initialize HistoryManager
+            // HistoryManager tracks user search history and interactions
+            // Requires the extension context for persistent storage
+            this.historyManager = new HistoryManager(this.context);
+            this.disposables.push(this.historyManager);
+            console.log('ExtensionManager: HistoryManager initialized');
 
             console.log('ExtensionManager: All services initialized successfully');
 
@@ -159,11 +229,22 @@ export class ExtensionManager {
     /**
      * Disposes of all resources and cleans up services
      * This method should be called when the extension is deactivated
+     * 
+     * The disposal follows the reverse order of initialization to ensure
+     * that services are properly cleaned up and no dangling references remain.
+     * Each service is checked for existence before disposal to handle cases
+     * where initialization may have failed partially.
      */
     dispose(): void {
         console.log('ExtensionManager: Starting disposal...');
 
-        // Dispose of managers in reverse order
+        // Dispose of managers in reverse order of initialization
+        // This ensures that services with dependencies are disposed first
+        
+        if (this.statusBarManager) {
+            this.statusBarManager.dispose();
+        }
+
         if (this.webviewManager) {
             this.webviewManager.dispose();
         }
@@ -185,6 +266,7 @@ export class ExtensionManager {
         }
 
         // Dispose of all registered disposables
+        // This includes command registrations, event listeners, and other VS Code resources
         this.disposables.forEach(disposable => {
             try {
                 disposable.dispose();
@@ -199,7 +281,7 @@ export class ExtensionManager {
 
     /**
      * Gets the ConfigService instance
-     * @returns The ConfigService instance
+     * @returns The ConfigService instance that manages extension configuration
      */
     getConfigService(): ConfigService {
         return this.configService;
@@ -207,7 +289,7 @@ export class ExtensionManager {
 
     /**
      * Gets the QdrantService instance
-     * @returns The QdrantService instance
+     * @returns The QdrantService instance that handles vector database operations
      */
     getQdrantService(): QdrantService {
         return this.qdrantService;
@@ -215,7 +297,7 @@ export class ExtensionManager {
 
     /**
      * Gets the EmbeddingProvider instance
-     * @returns The EmbeddingProvider instance
+     * @returns The EmbeddingProvider instance that generates text embeddings
      */
     getEmbeddingProvider(): IEmbeddingProvider {
         return this.embeddingProvider;
@@ -223,7 +305,7 @@ export class ExtensionManager {
 
     /**
      * Gets the ContextService instance
-     * @returns The ContextService instance
+     * @returns The ContextService instance that provides context-aware functionality
      */
     getContextService(): ContextService {
         return this.contextService;
@@ -231,7 +313,7 @@ export class ExtensionManager {
 
     /**
      * Gets the IndexingService instance
-     * @returns The IndexingService instance
+     * @returns The IndexingService instance that handles file indexing and processing
      */
     getIndexingService(): IndexingService {
         return this.indexingService;
@@ -239,7 +321,7 @@ export class ExtensionManager {
 
     /**
      * Gets the CommandManager instance
-     * @returns The CommandManager instance
+     * @returns The CommandManager instance that manages extension commands
      */
     getCommandManager(): CommandManager {
         return this.commandManager;
@@ -247,7 +329,7 @@ export class ExtensionManager {
 
     /**
      * Gets the WebviewManager instance
-     * @returns The WebviewManager instance
+     * @returns The WebviewManager instance that handles the UI webview
      */
     getWebviewManager(): WebviewManager {
         return this.webviewManager;
@@ -255,7 +337,7 @@ export class ExtensionManager {
 
     /**
      * Gets the SearchManager instance
-     * @returns The SearchManager instance
+     * @returns The SearchManager instance that coordinates search operations
      */
     getSearchManager(): SearchManager {
         return this.searchManager;
@@ -263,7 +345,7 @@ export class ExtensionManager {
 
     /**
      * Gets the ConfigurationManager instance
-     * @returns The ConfigurationManager instance
+     * @returns The ConfigurationManager instance that handles dynamic configuration
      */
     getConfigurationManager(): ConfigurationManager {
         return this.configurationManager;
@@ -271,7 +353,7 @@ export class ExtensionManager {
 
     /**
      * Gets the PerformanceManager instance
-     * @returns The PerformanceManager instance
+     * @returns The PerformanceManager instance that tracks performance metrics
      */
     getPerformanceManager(): PerformanceManager {
         return this.performanceManager;
@@ -279,7 +361,7 @@ export class ExtensionManager {
 
     /**
      * Gets the StateManager instance
-     * @returns The StateManager instance
+     * @returns The StateManager instance that manages extension state
      */
     getStateManager(): StateManager {
         return this.stateManager;
@@ -287,15 +369,31 @@ export class ExtensionManager {
 
     /**
      * Gets the XmlFormatterService instance
-     * @returns The XmlFormatterService instance
+     * @returns The XmlFormatterService instance that formats XML output
      */
     getXmlFormatterService(): XmlFormatterService {
         return this.xmlFormatterService;
     }
 
     /**
+     * Gets the HistoryManager instance
+     * @returns The HistoryManager instance that tracks user history
+     */
+    getHistoryManager(): HistoryManager {
+        return this.historyManager;
+    }
+
+    /**
+     * Gets the FileSystemWatcherManager instance
+     * @returns The FileSystemWatcherManager instance that monitors file changes
+     */
+    getFileSystemWatcherManager(): FileSystemWatcherManager {
+        return this.fileSystemWatcherManager;
+    }
+
+    /**
      * Gets the VS Code extension context
-     * @returns The extension context
+     * @returns The extension context providing access to VS Code APIs
      */
     getContext(): vscode.ExtensionContext {
         return this.context;

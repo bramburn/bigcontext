@@ -1,484 +1,680 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import { MessageRouter } from './messageRouter';
-import { StateManager } from './stateManager';
 
 /**
- * WebviewManager class responsible for managing all webview panels and their lifecycle.
- *
- * This class centralizes webview creation, content management, and message handling,
- * providing a clean separation between webview logic and command handlers.
- * It handles:
- * - Main panel and settings panel creation and lifecycle
- * - Webview content loading with proper resource URIs
- * - Panel state management (showing, hiding, disposing)
- * - Integration with ExtensionManager for service access
- * - Sidebar view provider for Activity Bar integration
+ * Webview panel configuration interface
+ * 
+ * Defines the configuration options for creating a webview panel in VS Code.
+ * These options determine how the webview behaves, what resources it can access,
+ * and how it's displayed in the editor.
  */
-export class WebviewManager implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'code-context-engine-view';
-    private context: vscode.ExtensionContext;
-    private extensionManager: any; // Will be properly typed when we integrate
-    private stateManager: StateManager;
-    private mainPanel: vscode.WebviewPanel | undefined;
-    private settingsPanel: vscode.WebviewPanel | undefined;
-    private diagnosticsPanel: vscode.WebviewPanel | undefined;
-    private messageRouter: MessageRouter | undefined;
+export interface WebviewConfig {
+    /** Unique identifier for the webview panel */
+    id: string;
+    /** Title displayed in the webview panel's tab */
+    title: string;
+    /** Editor column where the webview should be shown (defaults to first column) */
+    viewColumn?: vscode.ViewColumn;
+    /** Whether to preserve focus when showing the panel (defaults to false) */
+    preserveFocus?: boolean;
+    /** Whether to enable JavaScript in the webview (defaults to true) */
+    enableScripts?: boolean;
+    /** Whether to enable command URIs in the webview (defaults to false) */
+    enableCommandUris?: boolean;
+    /** Local resources that the webview can access (defaults to resources folder) */
+    localResourceRoots?: vscode.Uri[];
+    /** Port mapping for local development servers */
+    portMapping?: vscode.WebviewPortMapping[];
+}
+
+/**
+ * Enhanced webview panel interface with metadata
+ * 
+ * Extends the basic VS Code webview panel with additional metadata for tracking
+ * panel state, configuration, and message handlers. This interface provides
+ * a comprehensive view of the webview panel's current state and capabilities.
+ */
+export interface WebviewPanel {
+    /** Unique identifier for the webview panel */
+    id: string;
+    /** The underlying VS Code webview panel */
+    panel: vscode.WebviewPanel;
+    /** Configuration used to create this panel */
+    config: WebviewConfig;
+    /** Whether the panel is currently visible */
+    visible: boolean;
+    /** Timestamp of the last update to this panel */
+    lastUpdated: Date;
+    /** Map of message type to handler functions for processing webview messages */
+    messageHandlers: Map<string, Function>;
+}
+
+/**
+ * Webview message structure
+ * 
+ * Defines the standard format for messages exchanged between the extension
+ * and webview content. This standardized format ensures consistent
+ * message handling and processing across all webview communications.
+ */
+export interface WebviewMessage {
+    /** Type of message for routing to appropriate handlers */
+    type: string;
+    /** Message payload containing the actual data */
+    data: any;
+    /** Timestamp when the message was created */
+    timestamp: Date;
+}
+
+/**
+ * Centralized webview management system for VS Code extensions
+ * 
+ * The WebviewManager class provides a comprehensive solution for managing multiple
+ * webview panels within a VS Code extension. It handles the complete lifecycle of
+ * webview panels including creation, configuration, message passing, resource management,
+ * and disposal. This manager implements a debounced message queue system to optimize
+ * performance and prevent excessive updates to webview content.
+ * 
+ * Key features:
+ * - Dynamic creation and configuration of webview panels with customizable options
+ * - Bidirectional message passing between extension and webview content
+ * - Resource management with secure local file access through webview URIs
+ * - Panel lifecycle management with proper disposal and cleanup
+ * - Event-driven updates and notifications with debouncing for performance
+ * - Centralized error handling and logging throughout all operations
+ */
+export class WebviewManager {
+    /** Map storing all managed webview panels by their unique IDs */
+    private panels: Map<string, WebviewPanel> = new Map();
+    /** Array of disposable resources for cleanup */
+    private disposables: vscode.Disposable[] = [];
+    /** Message queues for each panel to enable debounced updates */
+    private messageQueue: Map<string, WebviewMessage[]> = new Map();
+    /** Update timers for debouncing message processing */
+    private updateTimers: Map<string, NodeJS.Timeout> = new Map();
+    /** Debounce delay in milliseconds for message processing */
+    private readonly updateDebounceMs = 100;
 
     /**
-     * Creates a new WebviewManager instance
-     * @param context - The VS Code extension context
-     * @param extensionManager - The ExtensionManager instance for service access
-     * @param stateManager - The StateManager instance for state management
+     * Initializes a new WebviewManager instance
+     * 
+     * Sets up the manager with empty data structures and registers
+     * event listeners for configuration changes and other system events.
      */
-    constructor(context: vscode.ExtensionContext, extensionManager: any, stateManager: StateManager) {
-        this.context = context;
-        this.extensionManager = extensionManager;
-        this.stateManager = stateManager;
-        this.initializeMessageRouter();
+    constructor() {
+        this.setupEventListeners();
     }
 
     /**
-     * Initializes the MessageRouter with services from ExtensionManager
+     * Creates a new webview panel with the specified configuration
+     * 
+     * This method creates a VS Code webview panel and wraps it with additional
+     * metadata and functionality. It sets up message handling, disposal callbacks,
+     * and stores the panel in the internal management system.
+     * 
+     * @param config - Configuration object defining the webview panel properties
+     * @returns The unique ID of the created webview panel
+     * @throws Error if panel creation fails
      */
-    private initializeMessageRouter(): void {
+    createPanel(config: WebviewConfig): string {
         try {
-            if (this.extensionManager &&
-                this.extensionManager.getContextService &&
-                this.extensionManager.getIndexingService) {
+            console.log('WebviewManager: Creating webview panel:', config.id);
 
-                const contextService = this.extensionManager.getContextService();
-                const indexingService = this.extensionManager.getIndexingService();
-
-                if (contextService && indexingService) {
-                    this.messageRouter = new MessageRouter(contextService, indexingService, this.context, this.stateManager);
-
-                    // Set advanced managers if available
-                    if (this.extensionManager.getSearchManager &&
-                        this.extensionManager.getConfigurationManager &&
-                        this.extensionManager.getPerformanceManager &&
-                        this.extensionManager.getXmlFormatterService) {
-
-                        const searchManager = this.extensionManager.getSearchManager();
-                        const configurationManager = this.extensionManager.getConfigurationManager();
-                        const performanceManager = this.extensionManager.getPerformanceManager();
-                        const xmlFormatterService = this.extensionManager.getXmlFormatterService();
-
-                        if (searchManager && configurationManager && performanceManager && xmlFormatterService) {
-                            this.messageRouter.setAdvancedManagers(
-                                searchManager,
-                                configurationManager,
-                                performanceManager,
-                                xmlFormatterService
-                            );
-                        }
-                    }
-
-                    console.log('WebviewManager: MessageRouter initialized');
-                }
-            }
-        } catch (error) {
-            console.error('WebviewManager: Failed to initialize MessageRouter:', error);
-        }
-    }
-
-    /**
-     * Resolves the webview view for the sidebar integration
-     * This method is called by VS Code when the sidebar view needs to be rendered
-     * @param webviewView - The webview view to resolve
-     * @param context - The webview view resolve context
-     * @param _token - Cancellation token
-     */
-    public resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
-    ): void {
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [
-                this.context.extensionUri,
-                vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
-            ],
-        };
-
-        // Set the webview content using our existing helper
-        webviewView.webview.html = this.getWebviewContent(webviewView.webview, 'main');
-
-        // Set up message handling for the sidebar view
-        this.setupMessageHandling(webviewView.webview);
-
-        console.log('WebviewManager: Sidebar view resolved successfully');
-    }
-
-    /**
-     * Shows the main Code Context Engine panel
-     * Creates a new panel if one doesn't exist, or reveals the existing one
-     */
-    public showMainPanel(): void {
-        // If panel already exists, just reveal it
-        if (this.mainPanel) {
-            this.mainPanel.reveal(vscode.ViewColumn.One);
-            return;
-        }
-
-        // Create new main panel
-        this.mainPanel = vscode.window.createWebviewPanel(
-            'codeContextMain',
-            'Code Context Engine',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
-                ]
-            }
-        );
-
-        // Set the webview content
-        this.mainPanel.webview.html = this.getWebviewContent(this.mainPanel.webview, 'main');
-
-        // Handle panel disposal
-        this.mainPanel.onDidDispose(() => {
-            this.mainPanel = undefined;
-        });
-
-        // Set up message handling for the main panel
-        this.setupMessageHandling(this.mainPanel.webview);
-
-        console.log('WebviewManager: Main panel created and shown');
-    }
-
-    /**
-     * Shows the settings panel
-     * Creates a new panel if one doesn't exist, or reveals the existing one
-     * @deprecated The settings are now managed in the native VS Code Settings UI.
-     * This webview will be repurposed for diagnostics.
-     */
-    public showSettingsPanel(): void {
-        // If panel already exists, just reveal it
-        if (this.settingsPanel) {
-            this.settingsPanel.reveal(vscode.ViewColumn.Two);
-            return;
-        }
-
-        // Create new settings panel
-        this.settingsPanel = vscode.window.createWebviewPanel(
-            'codeContextSettings',
-            'Code Context Settings',
-            vscode.ViewColumn.Two,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
-                ]
-            }
-        );
-
-        // Set the webview content
-        this.settingsPanel.webview.html = this.getWebviewContent(this.settingsPanel.webview, 'settings');
-
-        // Handle panel disposal
-        this.settingsPanel.onDidDispose(() => {
-            this.settingsPanel = undefined;
-        });
-
-        // Set up message handling for the settings panel
-        this.setupMessageHandling(this.settingsPanel.webview);
-
-        console.log('WebviewManager: Settings panel created and shown');
-    }
-
-    /**
-     * Shows the diagnostics panel
-     * Creates a new panel if one doesn't exist, or reveals the existing one
-     */
-    public showDiagnosticsPanel(): void {
-        // If panel already exists, just reveal it
-        if (this.diagnosticsPanel) {
-            this.diagnosticsPanel.reveal(vscode.ViewColumn.Two);
-            return;
-        }
-
-        // Create new diagnostics panel
-        this.diagnosticsPanel = vscode.window.createWebviewPanel(
-            'codeContextDiagnostics',
-            'Code Context Diagnostics',
-            vscode.ViewColumn.Two,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
-                ]
-            }
-        );
-
-        // Set the webview content
-        this.diagnosticsPanel.webview.html = this.getWebviewContent(this.diagnosticsPanel.webview, 'diagnostics');
-
-        // Handle panel disposal
-        this.diagnosticsPanel.onDidDispose(() => {
-            this.diagnosticsPanel = undefined;
-        });
-
-        // Set up message handling for the diagnostics panel
-        this.setupMessageHandling(this.diagnosticsPanel.webview);
-
-        // Set the view to diagnostics after a short delay to ensure the webview is ready
-        setTimeout(() => {
-            if (this.diagnosticsPanel) {
-                this.diagnosticsPanel.webview.postMessage({
-                    command: 'setView',
-                    view: 'diagnostics'
-                });
-            }
-        }, 100);
-
-        console.log('WebviewManager: Diagnostics panel created and shown');
-    }
-
-    /**
-     * Gets the HTML content for a webview panel
-     * Reads the HTML template and replaces placeholders with proper webview URIs
-     * @param webview - The webview instance
-     * @param panelName - The name of the panel ('main' or 'settings')
-     * @returns The HTML content with proper resource URIs
-     */
-    private getWebviewContent(webview: vscode.Webview, panelName: string): string {
-        try {
-            // Path to the SvelteKit build HTML file
-            const htmlPath = path.join(this.context.extensionPath, 'webview', 'build', 'index.html');
-
-            // Check if the HTML file exists
-            if (!fs.existsSync(htmlPath)) {
-                console.warn('WebviewManager: HTML file not found, using fallback content');
-                return this.getFallbackContent(panelName);
+            // Check if panel already exists to prevent duplicates
+            if (this.panels.has(config.id)) {
+                console.warn(`WebviewManager: Panel with ID '${config.id}' already exists`);
+                return config.id;
             }
 
-            // Read the HTML content
-            let htmlContent = fs.readFileSync(htmlPath, 'utf8');
-
-            // Replace SvelteKit asset paths with webview-specific URIs
-            // This handles SvelteKit's /_app/ paths and other assets
-            htmlContent = htmlContent.replace(
-                /(<script[^>]+src="|<link[^>]+href="|src="|href=")(?!https?:\/\/)([^"]*)/g,
-                (_match, prefix, relativePath) => {
-                    // Remove leading slash if present
-                    const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
-                    const resourcePath = path.join(this.context.extensionPath, 'webview', 'build', cleanPath);
-                    const uri = webview.asWebviewUri(vscode.Uri.file(resourcePath));
-                    return `${prefix}${uri}`;
+            // Create VS Code webview panel with specified configuration
+            const panel = vscode.window.createWebviewPanel(
+                config.id,
+                config.title,
+                config.viewColumn || vscode.ViewColumn.One,
+                {
+                    enableScripts: config.enableScripts || true,
+                    enableCommandUris: config.enableCommandUris || false,
+                    localResourceRoots: config.localResourceRoots || [vscode.Uri.joinPath(vscode.Uri.file(__dirname), 'resources')],
+                    portMapping: config.portMapping
                 }
             );
 
-            return htmlContent;
+            // Set up message handling for bidirectional communication
+            panel.webview.onDidReceiveMessage(
+                message => this.handleMessage(config.id, message),
+                undefined,
+                this.disposables
+            );
+
+            // Handle panel disposal to maintain consistent state
+            panel.onDidDispose(
+                () => this.handlePanelDispose(config.id),
+                undefined,
+                this.disposables
+            );
+
+            // Create enhanced panel object with metadata
+            const webviewPanel: WebviewPanel = {
+                id: config.id,
+                panel,
+                config,
+                visible: true,
+                lastUpdated: new Date(),
+                messageHandlers: new Map()
+            };
+
+            // Store the panel in our management system
+            this.panels.set(config.id, webviewPanel);
+            
+            console.log(`WebviewManager: Created webview panel '${config.id}'`);
+            return config.id;
+
         } catch (error) {
-            console.error('WebviewManager: Error loading webview content:', error);
-            return this.getFallbackContent(panelName);
+            console.error('WebviewManager: Failed to create webview panel:', error);
+            throw error;
         }
     }
 
     /**
-     * Provides fallback HTML content when the main webview files are not available
-     * @param panelName - The name of the panel
-     * @returns Basic HTML content
+     * Shows an existing webview panel by bringing it to focus
+     * 
+     * This method reveals a previously created or hidden webview panel,
+     * making it visible in the specified editor column. The panel's
+     * visibility state is updated accordingly.
+     * 
+     * @param id - Unique identifier of the webview panel to show
      */
-    private getFallbackContent(panelName: string): string {
-        let title: string;
-        let content: string;
-
-        switch (panelName) {
-            case 'main':
-                title = 'Code Context Engine';
-                content = `
-                    <h1>Code Context Engine</h1>
-                    <p>Welcome to Code Context Engine!</p>
-                    <p>This is a placeholder interface. The full webview is being developed.</p>
-                    <button onclick="startIndexing()">Start Indexing</button>
-                    <script>
-                        const vscode = acquireVsCodeApi();
-                        function startIndexing() {
-                            vscode.postMessage({ command: 'startIndexing' });
-                        }
-                    </script>
-                `;
-                break;
-            case 'diagnostics':
-                title = 'Code Context Diagnostics';
-                content = `
-                    <h1>Status & Diagnostics</h1>
-
-                    <div style="margin-bottom: 30px;">
-                        <h2>Current Configuration</h2>
-                        <div style="background-color: var(--vscode-editor-background); padding: 15px; border-radius: 4px; border: 1px solid var(--vscode-panel-border);">
-                            <p><strong>Embedding Provider:</strong> <span id="embeddingProvider">Loading...</span></p>
-                            <p><strong>Database Connection:</strong> <span id="databaseConnection">Loading...</span></p>
-                            <p><strong>Model:</strong> <span id="embeddingModel">Loading...</span></p>
-                        </div>
-                        <button onclick="editSettings()" style="margin-top: 10px;">Edit Configuration</button>
-                    </div>
-
-                    <div>
-                        <h2>Actions</h2>
-                        <button onclick="testDatabase()" style="margin-right: 10px;">Test Database Connection</button>
-                        <button onclick="testEmbedding()">Test Embedding Provider</button>
-                    </div>
-
-                    <script>
-                        const vscode = acquireVsCodeApi();
-
-                        // Request current settings on load
-                        vscode.postMessage({ command: 'getSettings' });
-
-                        function editSettings() {
-                            vscode.postMessage({ command: 'MapToSettings' });
-                        }
-
-                        function testDatabase() {
-                            vscode.postMessage({ command: 'testDatabaseConnection' });
-                        }
-
-                        function testEmbedding() {
-                            vscode.postMessage({ command: 'testEmbeddingProvider' });
-                        }
-
-                        // Listen for messages from the extension
-                        window.addEventListener('message', event => {
-                            const message = event.data;
-                            if (message.command === 'updateSettings') {
-                                document.getElementById('embeddingProvider').textContent = message.data.embeddingProvider || 'Not configured';
-                                document.getElementById('databaseConnection').textContent = message.data.databaseConnectionString || 'Not configured';
-                                document.getElementById('embeddingModel').textContent = message.data.embeddingModel || 'Not configured';
-                            }
-                        });
-                    </script>
-                `;
-                break;
-            default:
-                title = 'Code Context Settings';
-                content = `
-                    <h1>Code Context Settings</h1>
-                    <p>Configure your Code Context Engine settings here.</p>
-                    <p>This is a placeholder interface. The full settings panel is being developed.</p>
-                `;
-        }
-
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title}</title>
-    <style>
-        body {
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-editor-background);
-            padding: 20px;
-        }
-        h1 {
-            color: var(--vscode-textLink-foreground);
-        }
-        button {
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-    </style>
-</head>
-<body>
-    ${content}
-</body>
-</html>`;
-    }
-
-    /**
-     * Sets up message handling for a webview using MessageRouter
-     * @param webview - The webview to set up message handling for
-     */
-    private setupMessageHandling(webview: vscode.Webview): void {
-        webview.onDidReceiveMessage(async (message) => {
-            try {
-                console.log('WebviewManager: Received message:', message.command);
-
-                if (this.messageRouter) {
-                    // Use MessageRouter for centralized message handling
-                    await this.messageRouter.handleMessage(message, webview);
-                } else {
-                    // Fallback for basic commands when MessageRouter is not available
-                    console.warn('WebviewManager: MessageRouter not available, using fallback handling');
-
-                    switch (message.command) {
-                        case 'startIndexing':
-                            // Delegate to command
-                            await vscode.commands.executeCommand('code-context-engine.startIndexing');
-                            break;
-                        default:
-                            console.log('WebviewManager: Unknown command:', message.command);
-                            await webview.postMessage({
-                                command: 'error',
-                                message: `Command not supported: ${message.command}`
-                            });
-                            break;
-                    }
-                }
-            } catch (error) {
-                console.error('WebviewManager: Error handling message:', error);
-                await webview.postMessage({
-                    command: 'error',
-                    message: error instanceof Error ? error.message : String(error)
-                });
+    showPanel(id: string): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
             }
+
+            // Reveal the panel in the specified column with focus options
+            webviewPanel.panel.reveal(webviewPanel.config.viewColumn, webviewPanel.config.preserveFocus);
+            webviewPanel.visible = true;
+            webviewPanel.lastUpdated = new Date();
+
+            console.log(`WebviewManager: Showed webview panel '${id}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to show webview panel:', error);
+        }
+    }
+
+    /**
+     * Hides a webview panel by disposing its VS Code panel instance
+     * 
+     * This method disposes the underlying VS Code webview panel,
+     * effectively hiding it from view while maintaining the panel
+     * metadata in our management system for potential later use.
+     * 
+     * @param id - Unique identifier of the webview panel to hide
+     */
+    hidePanel(id: string): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Dispose the VS Code panel to hide it
+            webviewPanel.panel.dispose();
+            webviewPanel.visible = false;
+            webviewPanel.lastUpdated = new Date();
+
+            console.log(`WebviewManager: Hid webview panel '${id}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to hide webview panel:', error);
+        }
+    }
+
+    /**
+     * Toggles the visibility state of a webview panel
+     * 
+     * This method provides a convenient way to switch between showing
+     * and hiding a webview panel based on its current visibility state.
+     * If the panel is visible, it will be hidden; if hidden, it will be shown.
+     * 
+     * @param id - Unique identifier of the webview panel to toggle
+     */
+    togglePanel(id: string): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Toggle visibility based on current state
+            if (webviewPanel.visible) {
+                this.hidePanel(id);
+            } else {
+                this.showPanel(id);
+            }
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to toggle webview panel:', error);
+        }
+    }
+
+    /**
+     * Retrieves a webview panel by its unique identifier
+     * 
+     * This method provides access to the enhanced webview panel object
+     * containing both the VS Code panel and additional metadata.
+     * 
+     * @param id - Unique identifier of the webview panel to retrieve
+     * @returns The webview panel object if found, undefined otherwise
+     */
+    getPanel(id: string): WebviewPanel | undefined {
+        return this.panels.get(id);
+    }
+
+    /**
+     * Retrieves all managed webview panels
+     * 
+     * This method returns an array of all webview panels currently
+     * managed by this WebviewManager instance, regardless of their
+     * visibility state.
+     * 
+     * @returns Array of all managed webview panels
+     */
+    getAllPanels(): WebviewPanel[] {
+        return Array.from(this.panels.values());
+    }
+
+    /**
+     * Retrieves all currently visible webview panels
+     * 
+     * This method filters the managed panels to return only those
+     * that are currently visible to the user.
+     * 
+     * @returns Array of visible webview panels
+     */
+    getVisiblePanels(): WebviewPanel[] {
+        return Array.from(this.panels.values()).filter(panel => panel.visible);
+    }
+
+    /**
+     * Completely removes a webview panel from management
+     * 
+     * This method performs a full cleanup of the specified webview panel,
+     * including disposal of the VS Code panel, removal from internal maps,
+     * and cleanup of any associated timers and message queues.
+     * 
+     * @param id - Unique identifier of the webview panel to delete
+     */
+    deletePanel(id: string): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Dispose the VS Code panel to free resources
+            webviewPanel.panel.dispose();
+            
+            // Remove from our management system
+            this.panels.delete(id);
+            this.messageQueue.delete(id);
+            
+            // Clear any pending update timers
+            const timer = this.updateTimers.get(id);
+            if (timer) {
+                clearTimeout(timer);
+                this.updateTimers.delete(id);
+            }
+
+            console.log(`WebviewManager: Deleted webview panel '${id}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to delete webview panel:', error);
+        }
+    }
+
+    /**
+     * Sets the HTML content for a webview panel
+     * 
+     * This method updates the webview panel's HTML content, which will
+     * be immediately rendered in the panel. The content can include
+     * references to local resources through the webview's URI system.
+     * 
+     * @param id - Unique identifier of the webview panel
+     * @param html - HTML content to set for the webview
+     */
+    setHtml(id: string, html: string): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Set the HTML content directly on the webview
+            webviewPanel.panel.webview.html = html;
+            webviewPanel.lastUpdated = new Date();
+
+            console.log(`WebviewManager: Set HTML for panel '${id}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to set HTML:', error);
+        }
+    }
+
+    /**
+     * Posts a message to a webview panel with debouncing
+     * 
+     * This method queues messages for delivery to webview panels,
+     * implementing a debouncing mechanism to optimize performance.
+     * Messages are standardized to the WebviewMessage format and
+     * processed in batches to minimize webview updates.
+     * 
+     * @param id - Unique identifier of the webview panel
+     * @param message - Message data to post (can be string or object)
+     */
+    postMessage(id: string, message: any): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Initialize message queue for this panel if it doesn't exist
+            if (!this.messageQueue.has(id)) {
+                this.messageQueue.set(id, []);
+            }
+            
+            // Standardize message format for consistent handling
+            const webviewMessage: WebviewMessage = {
+                type: typeof message === 'string' ? message : message.type || 'default',
+                data: typeof message === 'string' ? { text: message } : message.data || message,
+                timestamp: new Date()
+            };
+
+            // Add message to queue and schedule debounced processing
+            this.messageQueue.get(id)!.push(webviewMessage);
+            this.scheduleMessageUpdate(id);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to post message:', error);
+        }
+    }
+
+    /**
+     * Registers a message handler for a specific message type
+     * 
+     * This method allows the extension to handle incoming messages
+     * from the webview content. Each message type can have its own
+     * dedicated handler function for processing the message data.
+     * 
+     * @param id - Unique identifier of the webview panel
+     * @param messageType - Type of message to handle
+     * @param handler - Function to process messages of this type
+     */
+    registerMessageHandler(id: string, messageType: string, handler: Function): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Register the handler for the specified message type
+            webviewPanel.messageHandlers.set(messageType, handler);
+            console.log(`WebviewManager: Registered message handler for '${messageType}' on panel '${id}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to register message handler:', error);
+        }
+    }
+
+    /**
+     * Unregisters a previously registered message handler
+     * 
+     * This method removes a message handler for a specific message type,
+     * effectively stopping the processing of messages of that type.
+     * 
+     * @param id - Unique identifier of the webview panel
+     * @param messageType - Type of message to unregister
+     */
+    unregisterMessageHandler(id: string, messageType: string): void {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return;
+            }
+
+            // Remove the handler for the specified message type
+            webviewPanel.messageHandlers.delete(messageType);
+            console.log(`WebviewManager: Unregistered message handler for '${messageType}' on panel '${id}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to unregister message handler:', error);
+        }
+    }
+
+    /**
+     * Gets a webview-compatible URI for local resources
+     * 
+     * This method converts local file paths to webview-compatible URIs
+     * that can be safely accessed from within the webview content.
+     * This is essential for loading local resources like images, stylesheets,
+     * or scripts in the webview.
+     * 
+     * @param id - Unique identifier of the webview panel
+     * @param path - Relative path to the local resource
+     * @returns Webview-compatible URI for the resource, or undefined if panel not found
+     */
+    getLocalResourceUri(id: string, path: string): vscode.Uri | undefined {
+        try {
+            const webviewPanel = this.panels.get(id);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${id}' not found`);
+                return undefined;
+            }
+
+            // Create a file URI and convert it to a webview URI
+            const resourcePath = vscode.Uri.joinPath(vscode.Uri.file(__dirname), path);
+            return webviewPanel.panel.webview.asWebviewUri(resourcePath);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to get local resource URI:', error);
+            return undefined;
+        }
+    }
+
+    /**
+     * Processes incoming messages from webview panels
+     * 
+     * This private method handles messages received from webview content,
+     * routing them to the appropriate registered handlers based on the
+     * message type. It provides centralized message processing with
+     * error handling and logging.
+     * 
+     * @param panelId - Unique identifier of the source webview panel
+     * @param message - The message data received from the webview
+     */
+    private handleMessage(panelId: string, message: any): void {
+        try {
+            const webviewPanel = this.panels.get(panelId);
+            if (!webviewPanel) {
+                console.warn(`WebviewManager: Panel with ID '${panelId}' not found`);
+                return;
+            }
+
+            // Determine message type and get appropriate handler
+            const messageType = message.type || 'default';
+            const handler = webviewPanel.messageHandlers.get(messageType);
+            
+            if (handler) {
+                // Execute the handler with the message data
+                handler(message);
+            } else {
+                console.warn(`WebviewManager: No handler registered for message type '${messageType}' on panel '${panelId}'`);
+            }
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to handle message:', error);
+        }
+    }
+
+    /**
+     * Handles the disposal of webview panels
+     * 
+     * This private method is called when a webview panel is disposed,
+     * either by the user or programmatically. It updates the panel's
+     * visibility state and cleans up associated resources like message
+     * queues and update timers.
+     * 
+     * @param panelId - Unique identifier of the disposed webview panel
+     */
+    private handlePanelDispose(panelId: string): void {
+        try {
+            const webviewPanel = this.panels.get(panelId);
+            if (webviewPanel) {
+                // Update panel state to reflect disposal
+                webviewPanel.visible = false;
+                webviewPanel.lastUpdated = new Date();
+                console.log(`WebviewManager: Panel '${panelId}' disposed`);
+            }
+
+            // Clean up associated resources
+            this.messageQueue.delete(panelId);
+            const timer = this.updateTimers.get(panelId);
+            if (timer) {
+                clearTimeout(timer);
+                this.updateTimers.delete(panelId);
+            }
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to handle panel disposal:', error);
+        }
+    }
+
+    /**
+     * Schedules debounced message processing for a panel
+     * 
+     * This private method implements the debouncing mechanism for message
+     * processing. It cancels any existing timer for the panel and creates
+     * a new one to process the message queue after the specified delay.
+     * This prevents excessive updates and improves performance.
+     * 
+     * @param panelId - Unique identifier of the webview panel
+     */
+    private scheduleMessageUpdate(panelId: string): void {
+        // Cancel any existing timer for this panel
+        const existingTimer = this.updateTimers.get(panelId);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+
+        // Create a new timer to process messages after debounce delay
+        const timer = setTimeout(() => {
+            this.processMessageQueue(panelId);
+            this.updateTimers.delete(panelId);
+        }, this.updateDebounceMs);
+
+        this.updateTimers.set(panelId, timer);
+    }
+
+    /**
+     * Processes the message queue for a specific panel
+     * 
+     * This private method processes all queued messages for a panel,
+     * sending them to the webview content in a batch. It clears the
+     * queue after processing to prepare for new messages.
+     * 
+     * @param panelId - Unique identifier of the webview panel
+     */
+    private processMessageQueue(panelId: string): void {
+        try {
+            const webviewPanel = this.panels.get(panelId);
+            if (!webviewPanel) {
+                return;
+            }
+
+            const messages = this.messageQueue.get(panelId);
+            if (!messages || messages.length === 0) {
+                return;
+            }
+
+            // Send all queued messages to the webview
+            messages.forEach(message => {
+                webviewPanel.panel.webview.postMessage(message);
+            });
+
+            // Clear the queue after processing
+            this.messageQueue.set(panelId, []);
+
+            console.log(`WebviewManager: Processed ${messages.length} messages for panel '${panelId}'`);
+
+        } catch (error) {
+            console.error('WebviewManager: Failed to process message queue:', error);
+        }
+    }
+
+    /**
+     * Sets up event listeners for system and configuration changes
+     * 
+     * This private method registers event listeners for various system
+     * events that may affect webview panels, such as configuration changes.
+     * These listeners ensure that webview panels remain synchronized with
+     * the current system state.
+     */
+    private setupEventListeners(): void {
+        // Listen for configuration changes that might affect webviews
+        const configChangeListener = vscode.workspace.onDidChangeConfiguration(e => {
+            console.log('WebviewManager: Configuration changed, updating webview panels');
+            // Update panels based on configuration changes
+            this.panels.forEach((webviewPanel, id) => {
+                // Re-apply configuration if needed
+                if (webviewPanel.visible) {
+                    webviewPanel.lastUpdated = new Date();
+                }
+            });
         });
+
+        // Store the listener for proper cleanup
+        this.disposables.push(configChangeListener);
     }
 
     /**
-     * Disposes of all webview panels and cleans up resources
+     * Disposes of the WebviewManager and all associated resources
+     * 
+     * This method performs a complete cleanup of all resources managed
+     * by the WebviewManager, including all webview panels, timers,
+     * message queues, and event listeners. This should be called when
+     * the extension is deactivated to prevent memory leaks.
      */
-    public dispose(): void {
-        console.log('WebviewManager: Starting disposal...');
+    dispose(): void {
+        try {
+            // Clear all pending update timers
+            this.updateTimers.forEach(timer => clearTimeout(timer));
+            this.updateTimers.clear();
 
-        if (this.mainPanel) {
-            this.mainPanel.dispose();
-            this.mainPanel = undefined;
+            // Dispose all managed webview panels
+            this.panels.forEach(webviewPanel => {
+                webviewPanel.panel.dispose();
+            });
+            this.panels.clear();
+
+            // Clear all message queues
+            this.messageQueue.clear();
+
+            // Dispose all registered event listeners
+            this.disposables.forEach(disposable => disposable.dispose());
+            this.disposables = [];
+
+            console.log('WebviewManager: Disposed');
+
+        } catch (error) {
+            console.error('WebviewManager: Error during disposal:', error);
         }
-
-        if (this.settingsPanel) {
-            this.settingsPanel.dispose();
-            this.settingsPanel = undefined;
-        }
-
-        if (this.diagnosticsPanel) {
-            this.diagnosticsPanel.dispose();
-            this.diagnosticsPanel = undefined;
-        }
-
-        console.log('WebviewManager: Disposal completed');
-    }
-
-    /**
-     * Gets the current main panel instance
-     * @returns The main panel or undefined if not created
-     */
-    public getMainPanel(): vscode.WebviewPanel | undefined {
-        return this.mainPanel;
-    }
-
-    /**
-     * Gets the current settings panel instance
-     * @returns The settings panel or undefined if not created
-     */
-    public getSettingsPanel(): vscode.WebviewPanel | undefined {
-        return this.settingsPanel;
     }
 }
