@@ -1,9 +1,38 @@
-import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [sveltekit()],
+	build: {
+		// Optimize bundle size
+		minify: 'terser',
+		terserOptions: {
+			compress: {
+				drop_console: true,
+				drop_debugger: true,
+			},
+		},
+		// Enable tree-shaking
+		rollupOptions: {
+			output: {
+				manualChunks: (id) => {
+					// Separate vendor chunks for better caching
+					if (id.includes('node_modules')) {
+						if (id.includes('@fluentui/web-components')) {
+							return 'fluent-ui';
+						}
+						return 'vendor';
+					}
+				},
+			},
+		},
+		// Set chunk size warning limit
+		chunkSizeWarningLimit: 1000,
+	},
+	// Optimize dependencies
+	optimizeDeps: {
+		include: ['@fluentui/web-components'],
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

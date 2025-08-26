@@ -1,17 +1,10 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
-    import { 
-        provideFluentDesignSystem,
-        fluentButton,
-        fluentCard
-    } from '@fluentui/web-components';
+    import { onMount } from 'svelte';
     import { appActions } from '$lib/stores/appStore';
-    
+    import { registerCoreComponents } from '$lib/utils/fluentUI';
+
     // Register Fluent UI components
-    provideFluentDesignSystem().register(
-        fluentButton(),
-        fluentCard()
-    );
+    registerCoreComponents();
 
     // Props
     export let fallbackMessage = 'Something went wrong. Please try again.';

@@ -13,13 +13,16 @@
     import {
         setupState,
         indexingState,
-        appState,
         setupActions,
         indexingActions,
         appActions,
         isSetupComplete,
         canStartIndexing
     } from '$lib/stores/appStore';
+    import ValidatedInput from './ValidatedInput.svelte';
+    import ConnectionTester from './ConnectionTester.svelte';
+    import { validators } from '$lib/utils/validation';
+    import type { ValidationResult } from '$lib/utils/validation';
     
     // Register Fluent UI components
     provideFluentDesignSystem().register(
@@ -34,6 +37,21 @@
     // Local UI state (non-persistent)
     let errorMessage = '';
     let successMessage = '';
+
+    // Validation state
+    let databaseValidation: ValidationResult | null = null;
+    let providerValidation: ValidationResult | null = null;
+    let databaseConfigFields = {
+        host: '',
+        port: '',
+        apiKey: '',
+        environment: ''
+    };
+    let providerConfigFields = {
+        apiKey: '',
+        endpoint: '',
+        model: ''
+    };
 
     // Message handlers
     let unsubscribeFunctions: (() => void)[] = [];
@@ -81,17 +99,7 @@
 
 
 
-    function handleDatabaseSelection(event: Event) {
-        const target = event.target as HTMLSelectElement;
-        setupActions.setSelectedDatabase(target.value);
-        errorMessage = '';
-    }
 
-    function handleProviderSelection(event: Event) {
-        const target = event.target as HTMLSelectElement;
-        setupActions.setSelectedProvider(target.value);
-        errorMessage = '';
-    }
 
     function startDatabase() {
         const currentSetup = $setupState;
@@ -193,33 +201,118 @@
         <h3>Database Configuration</h3>
         <p>Select and configure your vector database for code indexing.</p>
         
-        <div class="form-group">
-            <label for="database-select">Vector Database:</label>
-            <fluent-select id="database-select" on:change={handleDatabaseSelection}>
-                <fluent-option value="">Select a database...</fluent-option>
-                <fluent-option value="qdrant">Qdrant (Local/Docker)</fluent-option>
-                <fluent-option value="chromadb">ChromaDB (Local/Docker)</fluent-option>
-                <fluent-option value="pinecone">Pinecone (Cloud)</fluent-option>
-            </fluent-select>
-        </div>
+        <ValidatedInput
+            type="select"
+            label="Vector Database"
+            value={$setupState.selectedDatabase}
+            required={true}
+            placeholder="Select a database..."
+            options={[
+                { value: "qdrant", label: "Qdrant (Local/Docker)" },
+                { value: "chromadb", label: "ChromaDB (Local/Docker)" },
+                { value: "pinecone", label: "Pinecone (Cloud)" }
+            ]}
+            validator={(value) => validators.required(value, 'Database')}
+            on:input={(e) => {
+                setupActions.setSelectedDatabase(e.detail.value);
+                errorMessage = '';
+            }}
+            on:validation={(e) => {
+                databaseValidation = e.detail.result;
+            }}
+        />
 
-        {#if selectedDatabase}
+        {#if $setupState.selectedDatabase}
+            <!-- Database-specific configuration fields -->
+            {#if $setupState.selectedDatabase === 'qdrant' || $setupState.selectedDatabase === 'chromadb'}
+                <div class="config-fields">
+                    <ValidatedInput
+                        type="text"
+                        label="Host"
+                        value={databaseConfigFields.host}
+                        placeholder="localhost"
+                        validator={(value) => value ? validators.url(`http://${value}`, 'Host') : { isValid: true, errors: [], warnings: [], suggestions: ['Default localhost will be used'] }}
+                        on:input={(e) => {
+                            databaseConfigFields.host = e.detail.value;
+                        }}
+                    />
+
+                    <ValidatedInput
+                        type="number"
+                        label="Port"
+                        value={databaseConfigFields.port}
+                        placeholder={$setupState.selectedDatabase === 'qdrant' ? '6333' : '8000'}
+                        validator={(value) => value ? validators.port(value, 'Port') : { isValid: true, errors: [], warnings: [], suggestions: [`Default port ${$setupState.selectedDatabase === 'qdrant' ? '6333' : '8000'} will be used`] }}
+                        on:input={(e) => {
+                            databaseConfigFields.port = e.detail.value;
+                        }}
+                    />
+                </div>
+            {:else if $setupState.selectedDatabase === 'pinecone'}
+                <div class="config-fields">
+                    <ValidatedInput
+                        type="password"
+                        label="API Key"
+                        value={databaseConfigFields.apiKey}
+                        placeholder="Enter your Pinecone API key"
+                        required={true}
+                        validator={(value) => validators.apiKey(value, 'Pinecone API Key')}
+                        on:input={(e) => {
+                            databaseConfigFields.apiKey = e.detail.value;
+                        }}
+                    />
+
+                    <ValidatedInput
+                        type="text"
+                        label="Environment"
+                        value={databaseConfigFields.environment}
+                        placeholder="us-west1-gcp"
+                        required={true}
+                        validator={(value) => validators.stringLength(value, 1, 50, 'Environment')}
+                        on:input={(e) => {
+                            databaseConfigFields.environment = e.detail.value;
+                        }}
+                    />
+                </div>
+            {/if}
+
+            <!-- Connection Testing -->
+            <ConnectionTester
+                type="database"
+                config={{
+                    type: $setupState.selectedDatabase as 'qdrant' | 'chromadb' | 'pinecone',
+                    host: databaseConfigFields.host || 'localhost',
+                    port: databaseConfigFields.port ? parseInt(databaseConfigFields.port) : undefined,
+                    apiKey: databaseConfigFields.apiKey,
+                    environment: databaseConfigFields.environment
+                }}
+                disabled={$setupState.databaseStatus === 'starting'}
+                showDetails={true}
+                on:testComplete={(e) => {
+                    if (e.detail.result.success) {
+                        successMessage = 'Database connection test successful!';
+                    } else {
+                        errorMessage = `Database connection test failed: ${e.detail.result.message}`;
+                    }
+                }}
+            />
+
             <div class="action-section">
                 <fluent-button
                     appearance="accent"
-                    disabled={databaseStatus === 'starting' || databaseStatus === 'ready'}
+                    disabled={$setupState.databaseStatus === 'starting' || $setupState.databaseStatus === 'ready'}
                     on:click={startDatabase}
                     role="button"
                     tabindex="0"
                     on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && startDatabase()}
                 >
-                    {#if databaseStatus === 'starting'}
+                    {#if $setupState.databaseStatus === 'starting'}
                         <fluent-progress-ring></fluent-progress-ring>
                         Starting...
-                    {:else if databaseStatus === 'ready'}
+                    {:else if $setupState.databaseStatus === 'ready'}
                         ✓ Database Ready
                     {:else}
-                        Start {selectedDatabase === 'pinecone' ? 'Validate' : 'Local'} {selectedDatabase}
+                        Start {$setupState.selectedDatabase === 'pinecone' ? 'Validate' : 'Local'} {$setupState.selectedDatabase}
                     {/if}
                 </fluent-button>
             </div>
@@ -231,33 +324,142 @@
         <h3>Embedding Provider Configuration</h3>
         <p>Choose your AI embedding provider for semantic code search.</p>
         
-        <div class="form-group">
-            <label for="provider-select">Embedding Provider:</label>
-            <fluent-select id="provider-select" on:change={handleProviderSelection}>
-                <fluent-option value="">Select a provider...</fluent-option>
-                <fluent-option value="ollama">Ollama (Local)</fluent-option>
-                <fluent-option value="openai">OpenAI</fluent-option>
-                <fluent-option value="azure">Azure OpenAI</fluent-option>
-            </fluent-select>
-        </div>
+        <ValidatedInput
+            type="select"
+            label="Embedding Provider"
+            value={$setupState.selectedProvider}
+            required={true}
+            placeholder="Select a provider..."
+            options={[
+                { value: "ollama", label: "Ollama (Local)" },
+                { value: "openai", label: "OpenAI" },
+                { value: "azure", label: "Azure OpenAI" }
+            ]}
+            validator={(value) => validators.required(value, 'Provider')}
+            on:input={(e) => {
+                setupActions.setSelectedProvider(e.detail.value);
+                errorMessage = '';
+            }}
+            on:validation={(e) => {
+                providerValidation = e.detail.result;
+            }}
+        />
 
-        {#if selectedProvider}
+        {#if $setupState.selectedProvider}
+            <!-- Provider-specific configuration fields -->
+            {#if $setupState.selectedProvider === 'openai'}
+                <div class="config-fields">
+                    <ValidatedInput
+                        type="password"
+                        label="OpenAI API Key"
+                        value={providerConfigFields.apiKey}
+                        placeholder="sk-..."
+                        required={true}
+                        validator={(value) => validators.apiKey(value, 'OpenAI API Key')}
+                        on:input={(e) => {
+                            providerConfigFields.apiKey = e.detail.value;
+                        }}
+                    />
+
+                    <ValidatedInput
+                        type="text"
+                        label="Model (Optional)"
+                        value={providerConfigFields.model}
+                        placeholder="text-embedding-ada-002"
+                        validator={(value) => value ? validators.stringLength(value, 1, 100, 'Model') : { isValid: true, errors: [], warnings: [], suggestions: [] }}
+                        on:input={(e) => {
+                            providerConfigFields.model = e.detail.value;
+                        }}
+                    />
+                </div>
+            {:else if $setupState.selectedProvider === 'azure'}
+                <div class="config-fields">
+                    <ValidatedInput
+                        type="password"
+                        label="Azure API Key"
+                        value={providerConfigFields.apiKey}
+                        placeholder="Enter your Azure API key"
+                        required={true}
+                        validator={(value) => validators.apiKey(value, 'Azure API Key')}
+                        on:input={(e) => {
+                            providerConfigFields.apiKey = e.detail.value;
+                        }}
+                    />
+
+                    <ValidatedInput
+                        type="url"
+                        label="Azure Endpoint"
+                        value={providerConfigFields.endpoint}
+                        placeholder="https://your-resource.openai.azure.com/"
+                        required={true}
+                        validator={(value) => validators.url(value, 'Azure Endpoint')}
+                        on:input={(e) => {
+                            providerConfigFields.endpoint = e.detail.value;
+                        }}
+                    />
+                </div>
+            {:else if $setupState.selectedProvider === 'ollama'}
+                <div class="config-fields">
+                    <ValidatedInput
+                        type="url"
+                        label="Ollama Endpoint"
+                        value={providerConfigFields.endpoint}
+                        placeholder="http://localhost:11434"
+                        validator={(value) => value ? validators.url(value, 'Ollama Endpoint') : { isValid: true, errors: [], warnings: [], suggestions: ['Default endpoint http://localhost:11434 will be used'] }}
+                        on:input={(e) => {
+                            providerConfigFields.endpoint = e.detail.value;
+                        }}
+                    />
+
+                    <ValidatedInput
+                        type="text"
+                        label="Model (Optional)"
+                        value={providerConfigFields.model}
+                        placeholder="nomic-embed-text"
+                        validator={(value) => value ? validators.stringLength(value, 1, 100, 'Model') : { isValid: true, errors: [], warnings: [], suggestions: [] }}
+                        on:input={(e) => {
+                            providerConfigFields.model = e.detail.value;
+                        }}
+                    />
+                </div>
+            {/if}
+
+            <!-- Connection Testing -->
+            <ConnectionTester
+                type="provider"
+                config={{
+                    type: $setupState.selectedProvider as 'ollama' | 'openai' | 'azure',
+                    apiKey: providerConfigFields.apiKey,
+                    endpoint: providerConfigFields.endpoint,
+                    model: providerConfigFields.model
+                }}
+                disabled={$setupState.providerStatus === 'starting'}
+                showDetails={true}
+                on:testComplete={(e) => {
+                    if (e.detail.result.success) {
+                        successMessage = 'Provider connection test successful!';
+                    } else {
+                        errorMessage = `Provider connection test failed: ${e.detail.result.message}`;
+                    }
+                }}
+            />
+
             <div class="action-section">
                 <fluent-button
                     appearance="accent"
-                    disabled={providerStatus === 'starting' || providerStatus === 'ready'}
+                    disabled={$setupState.providerStatus === 'starting' || $setupState.providerStatus === 'ready'}
                     on:click={configureProvider}
                     role="button"
                     tabindex="0"
                     on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && configureProvider()}
                 >
-                    {#if providerStatus === 'starting'}
+                    {#if $setupState.providerStatus === 'starting'}
                         <fluent-progress-ring></fluent-progress-ring>
                         Configuring...
-                    {:else if providerStatus === 'ready'}
+                    {:else if $setupState.providerStatus === 'ready'}
                         ✓ Provider Ready
                     {:else}
-                        Configure {selectedProvider}
+                        Configure {$setupState.selectedProvider}
                     {/if}
                 </fluent-button>
             </div>
@@ -269,13 +471,13 @@
         <fluent-button
             appearance="accent"
             size="large"
-            disabled={!canStartIndexing}
+            disabled={!$canStartIndexing}
             on:click={startIndexing}
             role="button"
             tabindex="0"
             on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && startIndexing()}
         >
-            {#if isIndexing}
+            {#if $indexingState.isIndexing}
                 <fluent-progress-ring></fluent-progress-ring>
                 Indexing...
             {:else}
@@ -284,7 +486,7 @@
         </fluent-button>
         
         <p class="action-help">
-            {#if isSetupComplete}
+            {#if $isSetupComplete}
                 Ready to index your codebase!
             {:else}
                 Complete the configuration above to enable indexing.
@@ -293,13 +495,13 @@
     </div>
 
     <!-- Indexing Progress -->
-    {#if isIndexing}
+    {#if $indexingState.isIndexing}
         <fluent-card class="indexing-progress">
             <h3>Indexing in Progress</h3>
             <div class="progress-bar">
-                <div class="progress-fill" style="width: {indexingProgress}%"></div>
+                <div class="progress-fill" style="width: {$indexingState.progress}%"></div>
             </div>
-            <p class="progress-text">{indexingMessage}</p>
+            <p class="progress-text">{$indexingState.message}</p>
         </fluent-card>
     {/if}
 </div>
@@ -403,16 +605,15 @@
         color: var(--vscode-descriptionForeground);
     }
 
-    .form-group {
-        margin-bottom: 15px;
+    .config-fields {
+        margin: 20px 0;
+        padding: 16px;
+        background-color: var(--vscode-textCodeBlock-background);
+        border-radius: 6px;
+        border: 1px solid var(--vscode-panel-border);
     }
 
-    .form-group label {
-        display: block;
-        margin-bottom: 5px;
-        color: var(--vscode-foreground);
-        font-weight: 500;
-    }
+
 
     .action-section {
         margin-top: 15px;
