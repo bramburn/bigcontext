@@ -28,7 +28,15 @@
         lastError: null as string | null
     };
 
+    // Index management state
+    let indexInfo = {
+        fileCount: 0,
+        vectorCount: 0,
+        collectionName: 'No collection found'
+    };
+
     let isTestingConnections = false;
+    let isClearingIndex = false;
     let testResults = {
         database: null as any,
         provider: null as any
@@ -51,15 +59,37 @@
                 }
                 isTestingConnections = false;
             }),
+            onMessage('getIndexInfoResponse', (message) => {
+                if (message.success) {
+                    indexInfo = { ...indexInfo, ...message.data };
+                }
+            }),
+            onMessage('clearIndexResponse', (message) => {
+                isClearingIndex = false;
+                if (message.success) {
+                    // Refresh index info after clearing
+                    indexInfo = {
+                        fileCount: 0,
+                        vectorCount: 0,
+                        collectionName: 'No collection found'
+                    };
+                    // Clear any previous errors since the operation was successful
+                    appActions.clearError();
+                } else {
+                    appActions.setError(message.error || 'Failed to clear index');
+                }
+            }),
             onMessage('error', (message) => {
                 systemStatus.lastError = message.message;
                 appActions.setError(message.message);
                 isTestingConnections = false;
+                isClearingIndex = false;
             })
         );
 
-        // Request initial system status
+        // Request initial system status and index info
         postMessage('getSystemStatus');
+        postMessage('getIndexInfo');
     });
 
     onDestroy(() => {
@@ -109,6 +139,20 @@
     function clearError() {
         systemStatus.lastError = null;
         appActions.clearError();
+    }
+
+    function refreshIndexInfo() {
+        postMessage('getIndexInfo');
+    }
+
+    function clearIndex() {
+        if (isClearingIndex) return;
+
+        // Confirm with user before clearing
+        if (confirm('Are you sure you want to clear the entire index? This action cannot be undone.')) {
+            isClearingIndex = true;
+            postMessage('clearIndex');
+        }
     }
 
     // Helper functions
@@ -221,6 +265,64 @@
                     <span id="total-chunks-value">{systemStatus.totalChunks.toLocaleString()}</span>
                 </div>
             </div>
+        </div>
+    </fluent-card>
+
+    <!-- Index Management -->
+    <fluent-card class="index-section">
+        <h3>Index Management</h3>
+        <p>Monitor and manage your workspace index.</p>
+
+        <div class="index-grid">
+            <div class="index-item">
+                <label for="file-count-value">Indexed Files:</label>
+                <div class="index-value">
+                    <span id="file-count-value">{indexInfo.fileCount.toLocaleString()}</span>
+                </div>
+            </div>
+
+            <div class="index-item">
+                <label for="vector-count-value">Total Vectors:</label>
+                <div class="index-value">
+                    <span id="vector-count-value">{indexInfo.vectorCount.toLocaleString()}</span>
+                </div>
+            </div>
+
+            <div class="index-item">
+                <label for="collection-name-value">Collection:</label>
+                <div class="index-value">
+                    <span id="collection-name-value">{indexInfo.collectionName}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="index-actions">
+            <fluent-button
+                appearance="outline"
+                on:click={refreshIndexInfo}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, refreshIndexInfo)}
+                role="button"
+                tabindex="0"
+            >
+                🔄 Refresh Index Info
+            </fluent-button>
+
+            <fluent-button
+                appearance="outline"
+                disabled={isClearingIndex || indexInfo.vectorCount === 0}
+                on:click={clearIndex}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, clearIndex)}
+                role="button"
+                tabindex="0"
+                style="color: var(--vscode-errorForeground);"
+            >
+                {#if isClearingIndex}
+                    <fluent-progress-ring></fluent-progress-ring>
+                    Clearing...
+                {:else}
+                    🗑️ Clear Index
+                {/if}
+            </fluent-button>
         </div>
     </fluent-card>
 
@@ -378,12 +480,12 @@
         flex: 1;
     }
 
-    .config-section, .testing-section, .actions-section {
+    .config-section, .index-section, .testing-section, .actions-section {
         margin-bottom: 20px;
         padding: 20px;
     }
 
-    .config-section h3, .testing-section h3, .actions-section h3 {
+    .config-section h3, .index-section h3, .testing-section h3, .actions-section h3 {
         margin: 0 0 15px 0;
         color: var(--vscode-textLink-foreground);
     }
@@ -414,6 +516,44 @@
 
     .config-value span {
         color: var(--vscode-descriptionForeground);
+    }
+
+    .index-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .index-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .index-item label {
+        font-weight: 600;
+        color: var(--vscode-foreground);
+        font-size: 14px;
+    }
+
+    .index-value {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .index-value span {
+        color: var(--vscode-descriptionForeground);
+        font-size: 16px;
+        font-weight: 500;
+    }
+
+    .index-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-start;
     }
 
     .test-grid {

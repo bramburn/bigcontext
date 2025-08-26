@@ -196,31 +196,7 @@ export class QdrantService {
         }
     }
 
-    /**
-     * Get collection info
-     */
-    async getCollectionInfo(collectionName: string): Promise<any> {
-        try {
-            return await this.client.getCollection(collectionName);
-        } catch (error) {
-            console.error(`Failed to get collection info for '${collectionName}':`, error);
-            return null;
-        }
-    }
 
-    /**
-     * Delete collection
-     */
-    async deleteCollection(collectionName: string): Promise<boolean> {
-        try {
-            await this.client.deleteCollection(collectionName);
-            console.log(`Collection '${collectionName}' deleted successfully`);
-            return true;
-        } catch (error) {
-            console.error(`Failed to delete collection '${collectionName}':`, error);
-            return false;
-        }
-    }
 
     /**
      * Get all collections
@@ -298,6 +274,106 @@ export class QdrantService {
         } catch (error) {
             console.error(`QdrantService: Failed to delete vectors for file '${filePath}':`, error);
             return false;
+        }
+    }
+
+    /**
+     * Get information about a specific collection
+     *
+     * This method retrieves detailed information about a collection including
+     * the number of points, vector dimensions, and other metadata.
+     *
+     * @param collectionName - The name of the collection to get info for
+     * @returns Promise resolving to collection information or null if not found
+     */
+    async getCollectionInfo(collectionName: string): Promise<any | null> {
+        try {
+            console.log(`QdrantService: Getting collection info for: ${collectionName}`);
+
+            const collectionInfo = await this.client.getCollection(collectionName);
+
+            if (collectionInfo) {
+                console.log(`QdrantService: Retrieved info for collection: ${collectionName}`);
+                return collectionInfo;
+            } else {
+                console.warn(`QdrantService: Collection not found: ${collectionName}`);
+                return null;
+            }
+
+        } catch (error) {
+            console.error(`QdrantService: Failed to get collection info for '${collectionName}':`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Delete an entire collection
+     *
+     * This method completely removes a collection and all its data from Qdrant.
+     * This operation is irreversible and should be used with caution.
+     *
+     * @param collectionName - The name of the collection to delete
+     * @returns Promise resolving to true if deletion was successful
+     */
+    async deleteCollection(collectionName: string): Promise<boolean> {
+        try {
+            console.log(`QdrantService: Deleting collection: ${collectionName}`);
+
+            // Check if collection exists first
+            const collections = await this.getCollections();
+            if (!collections.includes(collectionName)) {
+                console.warn(`QdrantService: Collection '${collectionName}' does not exist`);
+                return false;
+            }
+
+            // Delete the collection
+            await this.client.deleteCollection(collectionName);
+
+            console.log(`QdrantService: Successfully deleted collection: ${collectionName}`);
+            return true;
+
+        } catch (error) {
+            console.error(`QdrantService: Failed to delete collection '${collectionName}':`, error);
+            return false;
+        }
+    }
+
+    /**
+     * Get statistics for all collections
+     *
+     * This method retrieves summary statistics for all collections in the database,
+     * useful for providing an overview of the index state.
+     *
+     * @returns Promise resolving to an array of collection statistics
+     */
+    async getAllCollectionStats(): Promise<Array<{ name: string; pointCount: number; vectorSize: number }>> {
+        try {
+            console.log('QdrantService: Getting statistics for all collections');
+
+            const collections = await this.getCollections();
+            const stats = [];
+
+            for (const collectionName of collections) {
+                try {
+                    const info = await this.getCollectionInfo(collectionName);
+                    if (info) {
+                        stats.push({
+                            name: collectionName,
+                            pointCount: info.points_count || 0,
+                            vectorSize: info.config?.params?.vectors?.size || 0
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`QdrantService: Failed to get stats for collection '${collectionName}':`, error);
+                }
+            }
+
+            console.log(`QdrantService: Retrieved stats for ${stats.length} collections`);
+            return stats;
+
+        } catch (error) {
+            console.error('QdrantService: Failed to get collection statistics:', error);
+            return [];
         }
     }
 }

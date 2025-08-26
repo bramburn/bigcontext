@@ -24,6 +24,7 @@
 
     // Component state
     let isIndexing = false;
+    let isPaused = false;
     let indexingProgress = 0;
     let indexingMessage = 'Ready to start indexing...';
     let filesProcessed = 0;
@@ -74,6 +75,22 @@
             onMessage('indexingStopped', () => {
                 indexingActions.stopIndexing();
             }),
+            onMessage('pauseIndexingResponse', (message) => {
+                if (message.success) {
+                    isPaused = true;
+                    indexingMessage = 'Indexing paused';
+                } else {
+                    errorMessage = message.error || 'Failed to pause indexing';
+                }
+            }),
+            onMessage('resumeIndexingResponse', (message) => {
+                if (message.success) {
+                    isPaused = false;
+                    indexingMessage = 'Indexing resumed';
+                } else {
+                    errorMessage = message.error || 'Failed to resume indexing';
+                }
+            }),
             onMessage('indexingStatus', (message) => {
                 if (message.isIndexing) {
                     indexingActions.startIndexing();
@@ -82,6 +99,10 @@
                     message.progress || 0,
                     message.message || 'Ready to start indexing...'
                 );
+                // Update pause state if provided
+                if (message.isPaused !== undefined) {
+                    isPaused = message.isPaused;
+                }
             }),
             onMessage('error', (message) => {
                 errorMessage = message.message;
@@ -109,6 +130,14 @@
 
     function stopIndexing() {
         postMessage('stopIndexing');
+    }
+
+    function pauseIndexing() {
+        postMessage('pauseIndexing');
+    }
+
+    function resumeIndexing() {
+        postMessage('resumeIndexing');
     }
 
     function clearMessages() {
@@ -165,10 +194,10 @@
     <fluent-card class="indexing-status">
         <div class="status-header">
             <h2>Indexing Status</h2>
-            <fluent-badge 
-                appearance={isIndexing ? 'accent' : (successMessage ? 'success' : 'neutral')}
+            <fluent-badge
+                appearance={isIndexing ? (isPaused ? 'neutral' : 'accent') : (successMessage ? 'success' : 'neutral')}
             >
-                {isIndexing ? 'In Progress' : (successMessage ? 'Completed' : 'Ready')}
+                {isIndexing ? (isPaused ? 'Paused' : 'In Progress') : (successMessage ? 'Completed' : 'Ready')}
             </fluent-badge>
         </div>
 
@@ -197,15 +226,42 @@
 
         <div class="action-section">
             {#if isIndexing}
-                <fluent-button
-                    appearance="accent"
-                    on:click={stopIndexing}
-                    role="button"
-                    tabindex="0"
-                    on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && stopIndexing()}
-                >
-                    Stop Indexing
-                </fluent-button>
+                <div class="indexing-controls">
+                    {#if isPaused}
+                        <fluent-button
+                            appearance="accent"
+                            on:click={resumeIndexing}
+                            role="button"
+                            tabindex="0"
+                            on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && resumeIndexing()}
+                        >
+                            <span class="button-icon">▶️</span>
+                            Resume Indexing
+                        </fluent-button>
+                    {:else}
+                        <fluent-button
+                            appearance="outline"
+                            on:click={pauseIndexing}
+                            role="button"
+                            tabindex="0"
+                            on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && pauseIndexing()}
+                        >
+                            <span class="button-icon">⏸️</span>
+                            Pause Indexing
+                        </fluent-button>
+                    {/if}
+
+                    <fluent-button
+                        appearance="stealth"
+                        on:click={stopIndexing}
+                        role="button"
+                        tabindex="0"
+                        on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && stopIndexing()}
+                    >
+                        <span class="button-icon">⏹️</span>
+                        Stop Indexing
+                    </fluent-button>
+                </div>
             {:else}
                 <fluent-button
                     appearance="accent"
@@ -373,6 +429,13 @@
 
     .action-section {
         text-align: center;
+    }
+
+    .indexing-controls {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
     }
 
     .button-icon {

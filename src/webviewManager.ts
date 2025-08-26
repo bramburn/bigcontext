@@ -95,7 +95,7 @@ export class WebviewManager {
 
     /**
      * Initializes a new WebviewManager instance
-     * 
+     *
      * Sets up the manager with empty data structures and registers
      * event listeners for configuration changes and other system events.
      */
@@ -643,6 +643,59 @@ export class WebviewManager {
         // Store the listener for proper cleanup
         this.disposables.push(configChangeListener);
     }
+
+    /**
+     * Shows the main panel (legacy compatibility method)
+     *
+     * This method provides backward compatibility with the expected interface.
+     * It creates or shows the main code context panel.
+     */
+    showMainPanel(): void {
+        const mainPanelId = 'codeContextMain';
+
+        // Check if panel already exists
+        if (this.panels.has(mainPanelId)) {
+            this.showPanel(mainPanelId);
+            return;
+        }
+
+        // Create new main panel
+        this.createPanel({
+            id: mainPanelId,
+            title: 'Code Context',
+            viewColumn: vscode.ViewColumn.One,
+            enableScripts: true
+        });
+    }
+
+    /**
+     * Shows the diagnostics panel (legacy compatibility method)
+     *
+     * This method provides backward compatibility with the expected interface.
+     * It creates or shows the diagnostics panel.
+     */
+    showDiagnosticsPanel(): void {
+        const diagnosticsPanelId = 'codeContextDiagnostics';
+
+        // Check if panel already exists
+        if (this.panels.has(diagnosticsPanelId)) {
+            this.showPanel(diagnosticsPanelId);
+            return;
+        }
+
+        // Create new diagnostics panel
+        this.createPanel({
+            id: diagnosticsPanelId,
+            title: 'Code Context Diagnostics',
+            viewColumn: vscode.ViewColumn.Two,
+            enableScripts: true
+        });
+    }
+
+    /**
+     * Static property for view type (legacy compatibility)
+     */
+    static readonly viewType = 'codeContextMain';
 
     /**
      * Disposes of the WebviewManager and all associated resources

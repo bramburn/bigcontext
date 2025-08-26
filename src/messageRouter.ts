@@ -175,6 +175,18 @@ export class MessageRouter {
                 case 'startIndexing':
                     await this.handleStartIndexing(webview);
                     break;
+                case 'pauseIndexing':
+                    await this.handlePauseIndexing(webview);
+                    break;
+                case 'resumeIndexing':
+                    await this.handleResumeIndexing(webview);
+                    break;
+                case 'getIndexInfo':
+                    await this.handleGetIndexInfo(webview);
+                    break;
+                case 'clearIndex':
+                    await this.handleClearIndex(webview);
+                    break;
                 case 'advancedSearch':
                     await this.handleAdvancedSearch(message, webview);
                     break;
@@ -710,15 +722,177 @@ export class MessageRouter {
 
     /**
      * Initiates the document indexing process
-     * 
+     *
      * This handler triggers the indexing of workspace documents to make them
      * searchable. It delegates to a VS Code command for the actual implementation.
-     * 
+     *
      * @param webview - The webview (not used in this implementation but kept for consistency)
      */
     private async handleStartIndexing(webview: vscode.Webview): Promise<void> {
         // Delegate to the existing VS Code command for indexing
         await vscode.commands.executeCommand('code-context-engine.startIndexing');
+    }
+
+    /**
+     * Pauses the current indexing operation
+     *
+     * This handler pauses an ongoing indexing process, allowing it to be resumed later.
+     * The indexing state is preserved so it can continue from where it left off.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handlePauseIndexing(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling pause indexing request');
+
+            // Check if indexing is currently running
+            if (!this.stateManager.isIndexing()) {
+                await webview.postMessage({
+                    command: 'pauseIndexingResponse',
+                    success: false,
+                    error: 'No indexing operation is currently running'
+                });
+                return;
+            }
+
+            // Check if already paused
+            if (this.stateManager.isPaused()) {
+                await webview.postMessage({
+                    command: 'pauseIndexingResponse',
+                    success: false,
+                    error: 'Indexing is already paused'
+                });
+                return;
+            }
+
+            // Pause the indexing operation
+            this.indexingService.pause();
+
+            await webview.postMessage({
+                command: 'pauseIndexingResponse',
+                success: true,
+                message: 'Indexing paused successfully'
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error pausing indexing:', error);
+            await this.sendErrorResponse(webview, `Failed to pause indexing: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Resumes a paused indexing operation
+     *
+     * This handler resumes a previously paused indexing process, continuing
+     * from where it left off using the saved state.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handleResumeIndexing(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling resume indexing request');
+
+            // Check if indexing is paused
+            if (!this.stateManager.isPaused()) {
+                await webview.postMessage({
+                    command: 'resumeIndexingResponse',
+                    success: false,
+                    error: 'No paused indexing operation to resume'
+                });
+                return;
+            }
+
+            // Resume the indexing operation
+            await this.indexingService.resume();
+
+            await webview.postMessage({
+                command: 'resumeIndexingResponse',
+                success: true,
+                message: 'Indexing resumed successfully'
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error resuming indexing:', error);
+            await this.sendErrorResponse(webview, `Failed to resume indexing: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Gets information about the current index
+     *
+     * This handler retrieves statistics about the current workspace index,
+     * including the number of indexed files and vectors.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handleGetIndexInfo(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling get index info request');
+
+            // Get index information from the indexing service
+            const indexInfo = await this.indexingService.getIndexInfo();
+
+            if (indexInfo) {
+                await webview.postMessage({
+                    command: 'getIndexInfoResponse',
+                    success: true,
+                    data: {
+                        fileCount: indexInfo.fileCount,
+                        vectorCount: indexInfo.vectorCount,
+                        collectionName: indexInfo.collectionName
+                    }
+                });
+            } else {
+                await webview.postMessage({
+                    command: 'getIndexInfoResponse',
+                    success: true,
+                    data: {
+                        fileCount: 0,
+                        vectorCount: 0,
+                        collectionName: 'No collection found'
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting index info:', error);
+            await this.sendErrorResponse(webview, `Failed to get index info: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Clears the entire index for the current workspace
+     *
+     * This handler removes all indexed data from the vector database,
+     * effectively resetting the index to an empty state.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handleClearIndex(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling clear index request');
+
+            // Clear the index using the indexing service
+            const success = await this.indexingService.clearIndex();
+
+            if (success) {
+                await webview.postMessage({
+                    command: 'clearIndexResponse',
+                    success: true,
+                    message: 'Index cleared successfully'
+                });
+            } else {
+                await webview.postMessage({
+                    command: 'clearIndexResponse',
+                    success: false,
+                    error: 'Failed to clear index'
+                });
+            }
+
+        } catch (error) {
+            console.error('MessageRouter: Error clearing index:', error);
+            await this.sendErrorResponse(webview, `Failed to clear index: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**

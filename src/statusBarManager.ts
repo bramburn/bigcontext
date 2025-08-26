@@ -76,12 +76,23 @@ export class StatusBarManager {
 
     /**
      * Initializes a new StatusBarManager instance
-     * 
+     *
      * The constructor sets up the initial state of the manager and
      * registers event listeners for automatic updates when VS Code
      * configuration changes occur.
+     *
+     * @param context - VS Code extension context (optional for backward compatibility)
+     * @param stateManager - StateManager instance (optional for backward compatibility)
      */
-    constructor() {
+    constructor(context?: vscode.ExtensionContext, stateManager?: any) {
+        // Store references for potential future use
+        if (context) {
+            // Could be used for persistence or other context-dependent features
+        }
+        if (stateManager) {
+            // Could be used for state-driven status bar updates
+        }
+
         this.setupEventListeners();
     }
 

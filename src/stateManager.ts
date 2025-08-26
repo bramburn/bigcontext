@@ -489,7 +489,7 @@ export class StateManager {
 
     /**
      * Disposes of the StateManager and cleans up resources
-     * 
+     *
      * This method should be called when the StateManager is no longer needed
      * to prevent memory leaks. It clears all pending persistence timers,
      * removes all listeners, and performs any other necessary cleanup.
@@ -498,11 +498,95 @@ export class StateManager {
         // Clear all pending persistence timers to prevent memory leaks
         this.persistenceTimers.forEach(timer => clearTimeout(timer));
         this.persistenceTimers.clear();
-        
+
         // Clear all listener references to prevent memory leaks
         this.listeners.clear();
         this.globalListeners.clear();
-        
+
         console.log('StateManager: Disposed');
+    }
+
+    // Legacy compatibility methods for IndexingService
+    // These methods provide backward compatibility with the expected interface
+
+    /**
+     * Checks if indexing is currently in progress
+     * @returns True if indexing is active, false otherwise
+     */
+    isIndexing(): boolean {
+        return this.get('isIndexing', false) as boolean;
+    }
+
+    /**
+     * Sets the indexing state
+     * @param isIndexing - True if indexing is starting, false if stopping
+     * @param message - Optional message describing the indexing state
+     */
+    setIndexing(isIndexing: boolean, message?: string): void {
+        this.set('isIndexing', isIndexing);
+        if (message) {
+            this.set('indexingMessage', message);
+        }
+    }
+
+    /**
+     * Sets an error message
+     * @param error - Error message to store
+     */
+    setError(error: string): void {
+        this.set('lastError', error);
+    }
+
+    /**
+     * Gets the last error message
+     * @returns The last error message or null if no error
+     */
+    getLastError(): string | null {
+        return this.get('lastError', null) as string | null;
+    }
+
+    /**
+     * Clears the last error
+     */
+    clearError(): void {
+        this.set('lastError', null);
+    }
+
+    /**
+     * Checks if indexing is currently paused
+     * @returns True if indexing is paused, false otherwise
+     */
+    isPaused(): boolean {
+        return this.get('isPaused', false) as boolean;
+    }
+
+    /**
+     * Sets the paused state for indexing
+     * @param isPaused - True if indexing should be paused, false otherwise
+     */
+    setPaused(isPaused: boolean): void {
+        this.set('isPaused', isPaused);
+        // When pausing, we're still technically indexing, just paused
+        // When resuming, we continue indexing
+        if (!isPaused && this.isPaused()) {
+            // Resuming from pause - ensure indexing state is maintained
+            this.set('isIndexing', true);
+        }
+    }
+
+    /**
+     * Gets the current indexing message
+     * @returns The current indexing status message
+     */
+    getIndexingMessage(): string | null {
+        return this.get('indexingMessage', null) as string | null;
+    }
+
+    /**
+     * Sets the indexing message
+     * @param message - Status message for indexing operations
+     */
+    setIndexingMessage(message: string | null): void {
+        this.set('indexingMessage', message);
     }
 }
