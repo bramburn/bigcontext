@@ -134,6 +134,14 @@ export class ExtensionManager {
             this.webviewManager = new WebviewManager(this.context, this, this.stateManager);
             console.log('ExtensionManager: WebviewManager initialized');
 
+            // Step 10.1: Register WebviewViewProvider for sidebar integration
+            const webviewViewProviderDisposable = vscode.window.registerWebviewViewProvider(
+                WebviewManager.viewType,
+                this.webviewManager
+            );
+            this.disposables.push(webviewViewProviderDisposable);
+            console.log('ExtensionManager: WebviewViewProvider registered for sidebar');
+
             // Step 11: Initialize CommandManager and register commands
             this.commandManager = new CommandManager(this.indexingService, this.webviewManager);
             const commandDisposables = this.commandManager.registerCommands();

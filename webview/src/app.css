@@ -130,3 +130,41 @@ pre {
 .mt-2 { margin-top: 8px; }
 .mt-3 { margin-top: 12px; }
 .mt-4 { margin-top: 16px; }
+
+/* Responsive design for sidebar view */
+@media (max-width: 400px) {
+    /* Adjust typography for narrow sidebar */
+    h1 { font-size: 20px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 16px; }
+    h4 { font-size: 14px; }
+
+    /* Reduce padding and margins for compact view */
+    .mb-4 { margin-bottom: 12px; }
+    .mt-4 { margin-top: 12px; }
+
+    /* Adjust code blocks for narrow view */
+    pre {
+        padding: 8px;
+        font-size: 0.85em;
+        overflow-x: auto;
+    }
+
+    code {
+        font-size: 0.85em;
+        padding: 1px 3px;
+    }
+}
+
+/* Container queries for sidebar-specific styling */
+@container (max-width: 350px) {
+    /* Ultra-compact styling for very narrow sidebars */
+    h1 { font-size: 18px; margin-bottom: 12px; }
+    h2 { font-size: 16px; margin-bottom: 10px; }
+    h3 { font-size: 14px; margin-bottom: 8px; }
+
+    p { margin-bottom: 8px; }
+
+    .mb-4 { margin-bottom: 8px; }
+    .mt-4 { margin-top: 8px; }
+}

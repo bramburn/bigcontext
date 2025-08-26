@@ -6,7 +6,7 @@ import { StateManager } from './stateManager';
 
 /**
  * WebviewManager class responsible for managing all webview panels and their lifecycle.
- * 
+ *
  * This class centralizes webview creation, content management, and message handling,
  * providing a clean separation between webview logic and command handlers.
  * It handles:
@@ -14,8 +14,10 @@ import { StateManager } from './stateManager';
  * - Webview content loading with proper resource URIs
  * - Panel state management (showing, hiding, disposing)
  * - Integration with ExtensionManager for service access
+ * - Sidebar view provider for Activity Bar integration
  */
-export class WebviewManager {
+export class WebviewManager implements vscode.WebviewViewProvider {
+    public static readonly viewType = 'code-context-engine-view';
     private context: vscode.ExtensionContext;
     private extensionManager: any; // Will be properly typed when we integrate
     private stateManager: StateManager;
@@ -79,6 +81,35 @@ export class WebviewManager {
         } catch (error) {
             console.error('WebviewManager: Failed to initialize MessageRouter:', error);
         }
+    }
+
+    /**
+     * Resolves the webview view for the sidebar integration
+     * This method is called by VS Code when the sidebar view needs to be rendered
+     * @param webviewView - The webview view to resolve
+     * @param context - The webview view resolve context
+     * @param _token - Cancellation token
+     */
+    public resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken,
+    ): void {
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [
+                this.context.extensionUri,
+                vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'build'))
+            ],
+        };
+
+        // Set the webview content using our existing helper
+        webviewView.webview.html = this.getWebviewContent(webviewView.webview, 'main');
+
+        // Set up message handling for the sidebar view
+        this.setupMessageHandling(webviewView.webview);
+
+        console.log('WebviewManager: Sidebar view resolved successfully');
     }
 
     /**

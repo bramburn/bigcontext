@@ -183,7 +183,26 @@
         "mac": "cmd+alt+i",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "code-context-engine-sidebar",
+          "title": "Code Context Engine",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "code-context-engine-sidebar": [
+        {
+          "id": "code-context-engine-view",
+          "name": "Code Context",
+          "type": "webview",
+          "contextualTitle": "Code Context Engine"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build-webview",
@@ -197,6 +216,7 @@
     "package": "npm run build:all && vsce package --no-dependencies",
     "publish": "vsce publish --no-dependencies",
     "publish:vsce": "vsce publish --pat $VSCE_PAT",
+    "release": "node scripts/release.js",
     "clean": "rimraf out *.vsix",
     "dev": "npm run watch"
   },

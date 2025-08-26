@@ -202,7 +202,35 @@ npm run package
 npm run clean
 ```
 
-## 🚀 Local Publishing
+## 🚀 Publishing
+
+### Automated Release Process
+
+The extension includes an automated release script that handles version bumping, building, testing, and publishing:
+
+```bash
+# Ensure you're on the main branch with a clean working directory
+git checkout main
+git pull
+
+# Set your VS Code Marketplace Personal Access Token
+export VSCE_PAT='your-personal-access-token-here'
+
+# Run the automated release script
+npm run release -- patch   # For bug fixes
+npm run release -- minor   # For new features
+npm run release -- major   # For breaking changes
+```
+
+The release script will:
+1. Validate the git working directory is clean
+2. Check for the required `VSCE_PAT` environment variable
+3. Run the build and test suite
+4. Bump the version in `package.json` and create a git tag
+5. Publish to the VS Code Marketplace
+6. Push the changes and tags to the remote repository
+
+### Manual Publishing
 
 To publish the extension to the VS Code Marketplace manually:
 

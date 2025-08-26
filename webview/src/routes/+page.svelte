@@ -212,6 +212,22 @@
         min-height: 100vh;
         background-color: var(--vscode-editor-background);
         color: var(--vscode-foreground);
+        container-type: inline-size;
+        padding: 8px;
+    }
+
+    /* Responsive adjustments for sidebar view */
+    @media (max-width: 400px) {
+        .app-container {
+            padding: 4px;
+            min-height: auto;
+        }
+    }
+
+    @container (max-width: 350px) {
+        .app-container {
+            padding: 2px;
+        }
     }
 
     .component-container {

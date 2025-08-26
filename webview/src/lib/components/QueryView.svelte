@@ -747,6 +747,58 @@
         }
     }
 
+    /* Sidebar-specific responsive styles */
+    @media (max-width: 400px) {
+        .query-container {
+            padding: 8px;
+        }
+
+        .search-section {
+            padding: 12px;
+        }
+
+        .advanced-controls {
+            padding: 12px;
+        }
+
+        .control-group {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .number-input {
+            width: 100%;
+            max-width: 120px;
+        }
+
+        .xml-actions {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .xml-content {
+            padding: 10px;
+            max-height: 300px;
+        }
+    }
+
+    @container (max-width: 350px) {
+        .query-container {
+            padding: 4px;
+        }
+
+        .search-section,
+        .advanced-controls {
+            padding: 8px;
+        }
+
+        .xml-content {
+            padding: 8px;
+            max-height: 250px;
+        }
+    }
+
     /* XML Results Styles */
     .xml-results {
         margin-bottom: 20px;
