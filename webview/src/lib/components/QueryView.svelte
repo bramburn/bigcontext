@@ -172,6 +172,14 @@
         if (content.length <= maxLength) return content;
         return content.substring(0, maxLength) + '...';
     }
+
+    // Helper function for keyboard event handling
+    function handleKeyboardClick(event: KeyboardEvent, callback: () => void) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            callback();
+        }
+    }
 </script>
 
 <div class="query-view">
@@ -228,8 +236,9 @@
             </div>
 
             <div class="control-group">
-                <label class="checkbox-label">
+                <label for="include-content" class="checkbox-label">
                     <input
+                        id="include-content"
                         type="checkbox"
                         bind:checked={includeContent}
                         class="checkbox-input"
@@ -251,7 +260,13 @@
     {#if errorMessage}
         <div class="notification error">
             {errorMessage}
-            <button class="notification-close" on:click={clearMessages}>×</button>
+            <button
+                class="notification-close"
+                on:click={clearMessages}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, clearMessages)}
+                role="button"
+                tabindex="0"
+            >×</button>
         </div>
     {/if}
 
@@ -261,9 +276,12 @@
             <h3>Recent Searches</h3>
             <div class="history-items">
                 {#each searchHistory.slice(0, 5) as historyItem}
-                    <button 
+                    <button
                         class="history-item"
                         on:click={() => selectHistoryItem(historyItem)}
+                        on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => selectHistoryItem(historyItem))}
+                        role="button"
+                        tabindex="0"
                     >
                         {historyItem}
                     </button>
@@ -282,6 +300,9 @@
                             <button
                                 class="file-link"
                                 on:click={() => openFile(result.file, result.lineNumber)}
+                                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => openFile(result.file, result.lineNumber))}
+                                role="button"
+                                tabindex="0"
                             >
                                 📄 {result.file}
                                 {#if result.lineNumber}
@@ -317,6 +338,9 @@
                                             <button
                                                 class="file-link"
                                                 on:click={() => openFile(relatedFile.file)}
+                                                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => openFile(relatedFile.file))}
+                                                role="button"
+                                                tabindex="0"
                                             >
                                                 📄 {relatedFile.file}
                                             </button>
@@ -345,6 +369,9 @@
                         <fluent-button
                             appearance="outline"
                             on:click={() => navigator.clipboard.writeText(xmlResults)}
+                            on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => navigator.clipboard.writeText(xmlResults))}
+                            role="button"
+                            tabindex="0"
                         >
                             📋 Copy XML
                         </fluent-button>

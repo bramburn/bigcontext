@@ -132,6 +132,14 @@
         if (!date) return 'Never';
         return date.toLocaleString();
     }
+
+    // Helper function for keyboard event handling
+    function handleKeyboardClick(event: KeyboardEvent, callback: () => void) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            callback();
+        }
+    }
 </script>
 
 <div class="diagnostics-view">
@@ -140,10 +148,21 @@
         <p>Monitor system status, test connections, and access configuration settings.</p>
         
         <div class="header-actions">
-            <fluent-button appearance="accent" on:click={openSettings}>
+            <fluent-button
+                appearance="accent"
+                on:click={openSettings}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, openSettings)}
+                role="button"
+                tabindex="0"
+            >
                 ⚙️ Edit Configuration
             </fluent-button>
-            <fluent-button on:click={refreshStatus}>
+            <fluent-button
+                on:click={refreshStatus}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, refreshStatus)}
+                role="button"
+                tabindex="0"
+            >
                 🔄 Refresh Status
             </fluent-button>
         </div>
@@ -155,7 +174,13 @@
             <div class="error-content">
                 <strong>⚠️ Error:</strong> {systemStatus.lastError}
             </div>
-            <fluent-button appearance="stealth" on:click={clearError}>×</fluent-button>
+            <fluent-button
+                appearance="stealth"
+                on:click={clearError}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, clearError)}
+                role="button"
+                tabindex="0"
+            >×</fluent-button>
         </div>
     {/if}
 
@@ -164,9 +189,9 @@
         <h3>Current Configuration</h3>
         <div class="config-grid">
             <div class="config-item">
-                <label>Database:</label>
+                <label for="database-value">Database:</label>
                 <div class="config-value">
-                    <span>{$setupState.selectedDatabase || 'Not configured'}</span>
+                    <span id="database-value">{$setupState.selectedDatabase || 'Not configured'}</span>
                     <fluent-badge appearance={getStatusBadgeAppearance($setupState.databaseStatus)}>
                         {$setupState.databaseStatus}
                     </fluent-badge>
@@ -174,9 +199,9 @@
             </div>
             
             <div class="config-item">
-                <label>Embedding Provider:</label>
+                <label for="provider-value">Embedding Provider:</label>
                 <div class="config-value">
-                    <span>{$setupState.selectedProvider || 'Not configured'}</span>
+                    <span id="provider-value">{$setupState.selectedProvider || 'Not configured'}</span>
                     <fluent-badge appearance={getStatusBadgeAppearance($setupState.providerStatus)}>
                         {$setupState.providerStatus}
                     </fluent-badge>
@@ -184,16 +209,16 @@
             </div>
             
             <div class="config-item">
-                <label>Last Indexed:</label>
+                <label for="last-indexed-value">Last Indexed:</label>
                 <div class="config-value">
-                    <span>{formatDate(systemStatus.lastIndexed)}</span>
+                    <span id="last-indexed-value">{formatDate(systemStatus.lastIndexed)}</span>
                 </div>
             </div>
             
             <div class="config-item">
-                <label>Total Chunks:</label>
+                <label for="total-chunks-value">Total Chunks:</label>
                 <div class="config-value">
-                    <span>{systemStatus.totalChunks.toLocaleString()}</span>
+                    <span id="total-chunks-value">{systemStatus.totalChunks.toLocaleString()}</span>
                 </div>
             </div>
         </div>
@@ -209,10 +234,13 @@
             <div class="test-item">
                 <h4>Database Connection</h4>
                 <div class="test-actions">
-                    <fluent-button 
-                        appearance="outline" 
+                    <fluent-button
+                        appearance="outline"
                         disabled={isTestingConnections || !$setupState.selectedDatabase}
                         on:click={testDatabaseConnection}
+                        on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, testDatabaseConnection)}
+                        role="button"
+                        tabindex="0"
                     >
                         {#if isTestingConnections && testResults.database === null}
                             <fluent-progress-ring></fluent-progress-ring>
@@ -238,10 +266,13 @@
             <div class="test-item">
                 <h4>Embedding Provider</h4>
                 <div class="test-actions">
-                    <fluent-button 
-                        appearance="outline" 
+                    <fluent-button
+                        appearance="outline"
                         disabled={isTestingConnections || !$setupState.selectedProvider}
                         on:click={testProviderConnection}
+                        on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, testProviderConnection)}
+                        role="button"
+                        tabindex="0"
                     >
                         {#if isTestingConnections && testResults.provider === null}
                             <fluent-progress-ring></fluent-progress-ring>
@@ -269,13 +300,30 @@
     <fluent-card class="actions-section">
         <h3>Quick Actions</h3>
         <div class="action-buttons">
-            <fluent-button appearance="accent" on:click={openSettings}>
+            <fluent-button
+                appearance="accent"
+                on:click={openSettings}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, openSettings)}
+                role="button"
+                tabindex="0"
+            >
                 ⚙️ Open Settings
             </fluent-button>
-            <fluent-button on:click={() => postMessage('openMainPanel')}>
+            <fluent-button
+                on:click={() => postMessage('openMainPanel')}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => postMessage('openMainPanel'))}
+                role="button"
+                tabindex="0"
+            >
                 🏠 Main Panel
             </fluent-button>
-            <fluent-button on:click={() => postMessage('startIndexing')} disabled={!$setupState.isSetupComplete}>
+            <fluent-button
+                on:click={() => postMessage('startIndexing')}
+                disabled={!$setupState.isSetupComplete}
+                on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => postMessage('startIndexing'))}
+                role="button"
+                tabindex="0"
+            >
                 🚀 Start Indexing
             </fluent-button>
         </div>
