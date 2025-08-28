@@ -239,6 +239,9 @@ export class MessageRouter {
                 case 'checkFirstRunAndStartTour':
                     await this.handleCheckFirstRunAndStartTour(webview);
                     break;
+                case 'requestOpenFolder':
+                    await this.handleRequestOpenFolder(message, webview);
+                    break;
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
@@ -1336,16 +1339,46 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for opening troubleshooting guides
-     * 
+     *
      * This method is not yet implemented. When completed, it should open
      * specific troubleshooting guides in the webview or external browser.
-     * 
+     *
      * @param message - The open troubleshooting guide message
      * @param webview - The webview to send the response to
      */
     private async handleOpenTroubleshootingGuide(message: any, webview: vscode.Webview): Promise<void> {
         // Implementation would open troubleshooting guide
         await this.sendErrorResponse(webview, 'Not implemented yet');
+    }
+
+    /**
+     * Handle request to open folder dialog
+     *
+     * This method triggers the VS Code "Open Folder" dialog to allow users
+     * to select a workspace folder when none is currently open.
+     *
+     * @param message - The request open folder message
+     * @param webview - The webview to send the response to
+     */
+    private async handleRequestOpenFolder(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling request to open folder');
+
+            // Execute the VS Code command to open folder dialog
+            await vscode.commands.executeCommand('vscode.openFolder');
+
+            // Send success response
+            await webview.postMessage({
+                command: 'response',
+                requestId: message.requestId,
+                data: { success: true }
+            });
+
+            console.log('MessageRouter: Open folder dialog triggered successfully');
+        } catch (error) {
+            console.error('MessageRouter: Failed to open folder dialog:', error);
+            await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error));
+        }
     }
 
     /**
