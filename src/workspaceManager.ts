@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 
 /**
  * Interface representing a workspace folder with additional metadata
@@ -33,24 +34,30 @@ export interface WorkspaceInfo {
 export class WorkspaceManager {
     /** Currently active workspace */
     private currentWorkspace: WorkspaceInfo | null = null;
-    
+
     /** List of all available workspaces */
     private workspaces: WorkspaceInfo[] = [];
-    
+
     /** Event listeners for workspace changes */
     private changeListeners: Array<(workspace: WorkspaceInfo | null) => void> = [];
-    
+
     /** Disposables for cleanup */
     private disposables: vscode.Disposable[] = [];
 
+    /** Centralized logging service for unified logging */
+    private loggingService: CentralizedLoggingService;
+
     /**
      * Creates a new WorkspaceManager instance
-     * 
+     *
      * Initializes the manager and sets up event listeners for workspace changes.
      * The manager will automatically detect the current workspace and any
      * workspace folder changes.
+     *
+     * @param loggingService - The CentralizedLoggingService instance for logging
      */
-    constructor() {
+    constructor(loggingService: CentralizedLoggingService) {
+        this.loggingService = loggingService;
         this.setupEventListeners();
         this.refreshWorkspaces();
     }
@@ -106,7 +113,7 @@ export class WorkspaceManager {
             }
         }
 
-        console.log(`WorkspaceManager: Refreshed workspaces, found ${this.workspaces.length} workspace(s)`);
+        this.loggingService.info(`Refreshed workspaces, found ${this.workspaces.length} workspace(s)`, {}, 'WorkspaceManager');
     }
 
     /**
@@ -164,11 +171,11 @@ export class WorkspaceManager {
             try {
                 listener(workspace);
             } catch (error) {
-                console.error('WorkspaceManager: Error in change listener:', error);
+                this.loggingService.error('Error in change listener', { error: error instanceof Error ? error.message : String(error) }, 'WorkspaceManager');
             }
         });
 
-        console.log(`WorkspaceManager: Active workspace changed to: ${workspace?.name || 'none'}`);
+        this.loggingService.info(`Active workspace changed to: ${workspace?.name || 'none'}`, {}, 'WorkspaceManager');
     }
 
     /**

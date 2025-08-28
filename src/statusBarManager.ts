@@ -75,6 +75,10 @@ export class StatusBarManager {
     private updateTimer: NodeJS.Timeout | null = null;
     /** Debounce delay in milliseconds for status bar updates */
     private readonly updateDebounceMs = 100;
+    /** Centralized logging service for unified logging */
+    private loggingService: CentralizedLoggingService;
+    /** Notification service for user notifications */
+    private notificationService: NotificationService;
 
     /**
      * Initializes a new StatusBarManager instance
@@ -83,10 +87,20 @@ export class StatusBarManager {
      * registers event listeners for automatic updates when VS Code
      * configuration changes occur.
      *
+     * @param loggingService - The CentralizedLoggingService instance for logging
+     * @param notificationService - The NotificationService instance for user notifications
      * @param context - VS Code extension context (optional for backward compatibility)
      * @param stateManager - StateManager instance (optional for backward compatibility)
      */
-    constructor(context?: vscode.ExtensionContext, stateManager?: any) {
+    constructor(
+        loggingService: CentralizedLoggingService,
+        notificationService: NotificationService,
+        context?: vscode.ExtensionContext,
+        stateManager?: any
+    ) {
+        this.loggingService = loggingService;
+        this.notificationService = notificationService;
+
         // Store references for potential future use
         if (context) {
             // Could be used for persistence or other context-dependent features
@@ -111,11 +125,11 @@ export class StatusBarManager {
      */
     createItem(config: StatusBarConfig): string {
         try {
-            console.log('StatusBarManager: Creating status bar item:', config.id);
+            this.loggingService.info('Creating status bar item', { configId: config.id }, 'StatusBarManager');
 
             // Check if item already exists to prevent duplicates
             if (this.items.has(config.id)) {
-                console.warn(`StatusBarManager: Item with ID '${config.id}' already exists`);
+                this.loggingService.warn(`Item with ID '${config.id}' already exists`, {}, 'StatusBarManager');
                 return config.id;
             }
 
@@ -152,11 +166,11 @@ export class StatusBarManager {
 
             this.items.set(config.id, statusBarItem);
             
-            console.log(`StatusBarManager: Created status bar item '${config.id}'`);
+            this.loggingService.info(`Created status bar item '${config.id}'`, {}, 'StatusBarManager');
             return config.id;
 
         } catch (error) {
-            console.error('StatusBarManager: Failed to create status bar item:', error);
+            this.loggingService.error('Failed to create status bar item', { error: error instanceof Error ? error.message : String(error) }, 'StatusBarManager');
             throw error;
         }
     }

@@ -104,7 +104,7 @@ export class ExtensionManager {
 
             // Step 1.1: Initialize WorkspaceManager (no dependencies)
             // WorkspaceManager handles multi-workspace support and workspace switching
-            this.workspaceManager = new WorkspaceManager();
+            this.workspaceManager = new WorkspaceManager(this.loggingService);
 
             // Set up workspace change listener to handle workspace switching
             const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged((workspace) => {
@@ -224,9 +224,9 @@ export class ExtensionManager {
 
             // Step 10: Initialize WebviewManager
             // WebviewManager handles the UI webview and user interactions
-            // Pass the extension context for proper webview URI resolution and ExtensionManager for service access
-            this.webviewManager = new WebviewManager(this.context, this);
-            console.log('ExtensionManager: WebviewManager initialized');
+            // Pass the extension context, ExtensionManager, and required services
+            this.webviewManager = new WebviewManager(this.context, this, this.loggingService, this.notificationService);
+            this.loggingService.info('WebviewManager initialized', {}, 'ExtensionManager');
 
             // Step 11: Initialize CommandManager and register commands
             // CommandManager handles all extension commands and their execution
@@ -238,10 +238,10 @@ export class ExtensionManager {
 
             // Step 12: Initialize StatusBarManager
             // StatusBarManager manages the status bar items and their visibility
-            // Requires the extension context and StateManager for state tracking
-            this.statusBarManager = new StatusBarManager(this.context, this.stateManager);
+            // Requires logging and notification services, with optional context and StateManager
+            this.statusBarManager = new StatusBarManager(this.loggingService, this.notificationService, this.context, this.stateManager);
             this.disposables.push(this.statusBarManager);
-            console.log('ExtensionManager: StatusBarManager initialized');
+            this.loggingService.info('StatusBarManager initialized', {}, 'ExtensionManager');
 
             // Step 13: Initialize HistoryManager
             // HistoryManager tracks user search history and interactions

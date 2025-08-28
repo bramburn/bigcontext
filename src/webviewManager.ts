@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { MessageRouter } from './messageRouter';
 import { ExtensionManager } from './extensionManager';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
+import { NotificationService } from './notifications/notificationService';
 
 /**
  * Webview panel configuration interface
@@ -90,6 +92,10 @@ export class WebviewManager {
     private context: vscode.ExtensionContext;
     /** Extension manager for accessing all services */
     private extensionManager: ExtensionManager;
+    /** Centralized logging service for unified logging */
+    private loggingService: CentralizedLoggingService;
+    /** Notification service for user notifications */
+    private notificationService: NotificationService;
     /** Map storing all managed webview panels by their unique IDs */
     private panels: Map<string, WebviewPanel> = new Map();
     /** Array of disposable resources for cleanup */
@@ -114,10 +120,19 @@ export class WebviewManager {
      *
      * @param context - The VS Code extension context for resolving webview URIs
      * @param extensionManager - The extension manager for accessing all services
+     * @param loggingService - The CentralizedLoggingService instance for logging
+     * @param notificationService - The NotificationService instance for user notifications
      */
-    constructor(context: vscode.ExtensionContext, extensionManager: ExtensionManager) {
+    constructor(
+        context: vscode.ExtensionContext,
+        extensionManager: ExtensionManager,
+        loggingService: CentralizedLoggingService,
+        notificationService: NotificationService
+    ) {
         this.context = context;
         this.extensionManager = extensionManager;
+        this.loggingService = loggingService;
+        this.notificationService = notificationService;
         this.setupEventListeners();
     }
 
@@ -134,11 +149,11 @@ export class WebviewManager {
      */
     createPanel(config: WebviewConfig): string {
         try {
-            console.log('WebviewManager: Creating webview panel:', config.id);
+            this.loggingService.info('Creating webview panel', { configId: config.id }, 'WebviewManager');
 
             // Check if panel already exists to prevent duplicates
             if (this.panels.has(config.id)) {
-                console.warn(`WebviewManager: Panel with ID '${config.id}' already exists`);
+                this.loggingService.warn(`Panel with ID '${config.id}' already exists`, {}, 'WebviewManager');
                 return config.id;
             }
 
@@ -201,11 +216,11 @@ export class WebviewManager {
             // Store the panel in our management system
             this.panels.set(config.id, webviewPanel);
             
-            console.log(`WebviewManager: Created webview panel '${config.id}'`);
+            this.loggingService.info(`Created webview panel '${config.id}'`, {}, 'WebviewManager');
             return config.id;
 
         } catch (error) {
-            console.error('WebviewManager: Failed to create webview panel:', error);
+            this.loggingService.error('Failed to create webview panel', { error: error instanceof Error ? error.message : String(error) }, 'WebviewManager');
             throw error;
         }
     }
