@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { postMessage, onMessage } from '../utils/vscodeApi';
+    import { postMessage, onMessage } from '../vscodeApi';
     import { appActions } from '../stores/appStore';
 
     // Component props

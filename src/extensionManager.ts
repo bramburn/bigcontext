@@ -102,25 +102,6 @@ export class ExtensionManager {
             this.stateManager = new StateManager();
             console.log('ExtensionManager: StateManager initialized');
 
-            // Step 1.1: Initialize WorkspaceManager (no dependencies)
-            // WorkspaceManager handles multi-workspace support and workspace switching
-            this.workspaceManager = new WorkspaceManager(this.loggingService);
-
-            // Set up workspace change listener to handle workspace switching
-            const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged((workspace) => {
-                console.log(`ExtensionManager: Workspace changed to: ${workspace?.name || 'none'}`);
-                // Notify other services about workspace change if needed
-                // The IndexingService will automatically use the new workspace for collection naming
-                
-                // Notify webview about workspace change
-                if (this.webviewManager) {
-                    this.webviewManager.updateWorkspaceState(!!workspace);
-                }
-            });
-            this.disposables.push(workspaceChangeDisposable);
-
-            console.log('ExtensionManager: WorkspaceManager initialized');
-
             // Step 2: Initialize ConfigService (no dependencies)
             // ConfigService provides configuration settings needed by other services
             this.configService = new ConfigService();
@@ -132,7 +113,26 @@ export class ExtensionManager {
             this.disposables.push(this.loggingService);
             this.loggingService.info('CentralizedLoggingService initialized', {}, 'ExtensionManager');
 
-            // Step 2.2: Initialize NotificationService (depends on CentralizedLoggingService)
+            // Step 2.2: Initialize WorkspaceManager (depends on CentralizedLoggingService)
+            // WorkspaceManager handles multi-workspace support and workspace switching
+            this.workspaceManager = new WorkspaceManager(this.loggingService);
+
+            // Set up workspace change listener to handle workspace switching
+            const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged((workspace) => {
+                console.log(`ExtensionManager: Workspace changed to: ${workspace?.name || 'none'}`);
+                // Notify other services about workspace change if needed
+                // The IndexingService will automatically use the new workspace for collection naming
+
+                // Notify webview about workspace change
+                if (this.webviewManager) {
+                    this.webviewManager.updateWorkspaceState(!!workspace);
+                }
+            });
+            this.disposables.push(workspaceChangeDisposable);
+
+            console.log('ExtensionManager: WorkspaceManager initialized');
+
+            // Step 2.3: Initialize NotificationService (depends on CentralizedLoggingService)
             // NotificationService provides standardized user notifications with logging integration
             this.notificationService = new NotificationService(this.loggingService);
             this.loggingService.info('NotificationService initialized', {}, 'ExtensionManager');
@@ -227,6 +227,15 @@ export class ExtensionManager {
             // Pass the extension context, ExtensionManager, and required services
             this.webviewManager = new WebviewManager(this.context, this, this.loggingService, this.notificationService);
             this.loggingService.info('WebviewManager initialized', {}, 'ExtensionManager');
+
+            // Step 10.1: Register WebviewViewProvider for sidebar
+            // Register the WebviewManager as the provider for the sidebar view
+            const webviewViewProviderDisposable = vscode.window.registerWebviewViewProvider(
+                'code-context-engine-view',
+                this.webviewManager
+            );
+            this.disposables.push(webviewViewProviderDisposable);
+            this.loggingService.info('WebviewViewProvider registered for sidebar', {}, 'ExtensionManager');
 
             // Step 11: Initialize CommandManager and register commands
             // CommandManager handles all extension commands and their execution

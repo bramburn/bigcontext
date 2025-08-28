@@ -50,16 +50,17 @@ suite('Parallel Indexing Tests', () => {
         // This mirrors the real initialization process in the extension
         configService = new ConfigService();
         stateManager = new StateManager();
-        workspaceManager = new WorkspaceManager();
+        const mockLoggingService = {} as any;
+        workspaceManager = new WorkspaceManager(mockLoggingService);
 
         // Initialize IndexingService with all its dependencies
         // This creates a complete indexing pipeline for testing
         const fileWalker = new FileWalker(tempWorkspaceDir);
         const astParser = new AstParser();
         const chunker = new Chunker();
-        const qdrantService = new QdrantService(configService.getQdrantConnectionString());
+        const qdrantService = new QdrantService(configService.getQdrantConnectionString(), mockLoggingService);
         const embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(configService);
-        const lspService = new LSPService(tempWorkspaceDir);
+        const lspService = new LSPService(tempWorkspaceDir, mockLoggingService);
 
         indexingService = new IndexingService(
             tempWorkspaceDir,
@@ -71,7 +72,8 @@ suite('Parallel Indexing Tests', () => {
             lspService,
             stateManager,
             workspaceManager,
-            configService
+            configService,
+            mockLoggingService
         );
     });
 
@@ -153,9 +155,9 @@ suite('Parallel Indexing Tests', () => {
         const fileWalker = new FileWalker(invalidWorkspaceDir);
         const astParser = new AstParser();
         const chunker = new Chunker();
-        const qdrantService = new QdrantService(configService.getQdrantConnectionString());
+        const qdrantService = new QdrantService(configService.getQdrantConnectionString(), {} as any);
         const embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(configService);
-        const lspService = new LSPService(invalidWorkspaceDir);
+        const lspService = new LSPService(invalidWorkspaceDir, {} as any);
 
         // Create an IndexingService with the invalid directory
         const testIndexingService = new IndexingService(
@@ -168,7 +170,8 @@ suite('Parallel Indexing Tests', () => {
             lspService,
             stateManager,
             workspaceManager,
-            configService
+            configService,
+            {} as any
         );
 
         try {

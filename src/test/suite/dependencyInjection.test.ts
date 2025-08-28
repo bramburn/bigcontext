@@ -41,7 +41,7 @@ suite('Dependency Injection Tests', () => {
         // Test that QdrantService can be instantiated with a connection string
         // This verifies the basic dependency injection pattern for database services
         const connectionString = 'http://test:6333';
-        const qdrantService = new QdrantService(connectionString);
+        const qdrantService = new QdrantService(connectionString, {} as any);
         
         assert.ok(qdrantService);
         // QdrantService should be created without throwing
@@ -72,7 +72,8 @@ suite('Dependency Injection Tests', () => {
             mockLspService as any,
             mockStateManager,
             {} as any, // mockWorkspaceManager
-            {} as any  // mockConfigService
+            {} as any, // mockConfigService
+            {} as any  // mockLoggingService
         );
 
         // Create ContextService with its dependencies
@@ -82,7 +83,8 @@ suite('Dependency Injection Tests', () => {
             mockQdrantService as any,
             mockEmbeddingProvider,
             mockIndexingService,
-            {} as any  // mockConfigService
+            {} as any, // mockConfigService
+            {} as any  // mockLoggingService
         );
 
         assert.ok(contextService);
@@ -114,7 +116,8 @@ suite('Dependency Injection Tests', () => {
             mockLspService as any,
             mockStateManager,
             {} as any, // mockWorkspaceManager
-            {} as any  // mockConfigService
+            {} as any, // mockConfigService
+            {} as any  // mockLoggingService
         );
 
         assert.ok(indexingService);

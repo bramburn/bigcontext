@@ -45,7 +45,7 @@ suite('WebviewManager Tests', () => {
         };
 
         // Create the WebviewManager with mocked dependencies
-        webviewManager = new WebviewManager(mockContext, mockExtensionManager);
+        webviewManager = new WebviewManager(mockContext, mockExtensionManager, {} as any, {} as any);
     });
 
     teardown(() => {
@@ -127,7 +127,7 @@ suite('WebviewManager Tests', () => {
         try {
             // Note: In a real VS Code environment, these would create panels
             // In the test environment, they should handle gracefully
-            webviewManager.showMainPanel();
+            webviewManager.showMainPanel({ isWorkspaceOpen: true });
             webviewManager.showSettingsPanel();
             assert.ok(true, 'Panel methods execute without throwing errors');
         } catch (error) {
@@ -140,7 +140,7 @@ suite('WebviewManager Tests', () => {
         // Test that the constructor properly accepts and uses the context and extension manager
         // This verifies that the WebviewManager can be properly integrated with the extension
         try {
-            const testManager = new WebviewManager(mockContext, mockExtensionManager);
+            const testManager = new WebviewManager(mockContext, mockExtensionManager, {} as any, {} as any);
             assert.ok(testManager, 'WebviewManager should accept context and extension manager parameters');
             testManager.dispose();
         } catch (error) {

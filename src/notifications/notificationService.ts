@@ -344,7 +344,7 @@ export class NotificationService {
             title: 'View Logs',
             callback: () => {
                 if (this.loggingService) {
-                    this.loggingService.show();
+                    this.loggingService.showOutputChannel();
                 }
             },
             isCloseAfterClick: false

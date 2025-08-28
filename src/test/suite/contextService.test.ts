@@ -103,7 +103,8 @@ suite('ContextService Tests', () => {
             mockQdrantService as any,
             mockEmbeddingProvider as any,
             mockIndexingService as IndexingService,
-            mockConfigService as any
+            mockConfigService as any,
+            {} as any // mockLoggingService
         );
     });
 

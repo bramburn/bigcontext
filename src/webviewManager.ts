@@ -87,7 +87,7 @@ export interface WebviewMessage {
  * - Event-driven updates and notifications with debouncing for performance
  * - Centralized error handling and logging throughout all operations
  */
-export class WebviewManager {
+export class WebviewManager implements vscode.WebviewViewProvider {
     /** Extension context for resolving webview URIs */
     private context: vscode.ExtensionContext;
     /** Extension manager for accessing all services */
@@ -134,6 +134,81 @@ export class WebviewManager {
         this.loggingService = loggingService;
         this.notificationService = notificationService;
         this.setupEventListeners();
+    }
+
+    /**
+     * Resolves the webview view for the sidebar
+     *
+     * This method is called by VS Code when the sidebar view needs to be rendered.
+     * It implements the WebviewViewProvider interface to provide content for the
+     * sidebar webview.
+     *
+     * @param webviewView - The webview view to resolve
+     * @param context - The webview view resolve context
+     * @param token - Cancellation token
+     */
+    public resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        context: vscode.WebviewViewResolveContext,
+        token: vscode.CancellationToken
+    ): void | Thenable<void> {
+        try {
+            // Configure webview options
+            webviewView.webview.options = {
+                enableScripts: true,
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
+            };
+
+            // Set HTML content using the helper method
+            webviewView.webview.html = this.getWebviewContent(webviewView.webview, this.context.extensionUri);
+
+            // Set up message handling
+            webviewView.webview.onDidReceiveMessage(
+                message => {
+                    this.handleSidebarMessage(message);
+                },
+                undefined,
+                this.disposables
+            );
+
+            // Send initial state message to the webview
+            webviewView.webview.postMessage({
+                type: 'initialState',
+                data: {
+                    isWorkspaceOpen: !!vscode.workspace.workspaceFolders?.length,
+                    isSidebar: true
+                }
+            });
+
+            this.loggingService.info('Sidebar webview resolved successfully', {}, 'WebviewManager');
+        } catch (error) {
+            this.loggingService.error('Failed to resolve sidebar webview', { error: error instanceof Error ? error.message : String(error) }, 'WebviewManager');
+        }
+    }
+
+    /**
+     * Handles messages from the sidebar webview
+     *
+     * @param message - The message received from the sidebar webview
+     */
+    private handleSidebarMessage(message: any): void {
+        try {
+            this.loggingService.debug('Received sidebar message', { type: message.type }, 'WebviewManager');
+
+            // Handle sidebar-specific messages here
+            switch (message.type) {
+                case 'openMainPanel':
+                    // Open the main panel when requested from sidebar
+                    this.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders?.length });
+                    break;
+                default:
+                    // For other messages, you might want to delegate to a general message handler
+                    this.loggingService.debug('Unhandled sidebar message type', { type: message.type }, 'WebviewManager');
+                    break;
+            }
+        } catch (error) {
+            this.loggingService.error('Error handling sidebar message', { error: error instanceof Error ? error.message : String(error) }, 'WebviewManager');
+        }
     }
 
     /**
@@ -720,7 +795,7 @@ export class WebviewManager {
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'dist')]
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
             }
         );
 
@@ -802,7 +877,7 @@ export class WebviewManager {
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'dist')]
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
             }
         );
 
@@ -911,7 +986,7 @@ export class WebviewManager {
     /**
      * Loads and prepares webview HTML content with proper asset URI resolution
      *
-     * This helper method reads the index.html file from the webview/dist directory
+     * This helper method reads the index.html file from the webview/build directory
      * and replaces relative asset paths with webview-compatible URIs using
      * webview.asWebviewUri. This ensures that CSS, JavaScript, and other assets
      * load correctly within the webview context.
@@ -922,7 +997,7 @@ export class WebviewManager {
      */
     private getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
         try {
-            const htmlPath = path.join(extensionUri.fsPath, 'webview', 'dist', 'index.html');
+            const htmlPath = path.join(extensionUri.fsPath, 'webview', 'build', 'index.html');
 
             // Check if the HTML file exists
             if (!fs.existsSync(htmlPath)) {
@@ -932,18 +1007,42 @@ export class WebviewManager {
 
             let html = fs.readFileSync(htmlPath, 'utf8');
 
+            // Generate a nonce for inline scripts
+            const nonce = this.generateNonce();
+
+            // Add Content Security Policy for VS Code webview with nonce
+            const cspSource = webview.cspSource;
+            const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}'; font-src ${cspSource}; img-src ${cspSource} https: data:; connect-src ${cspSource};">`;
+
+            // Insert CSP after the charset meta tag
+            html = html.replace(
+                /<meta charset="utf-8" \/>/,
+                `<meta charset="utf-8" />\n\t\t\t${csp}`
+            );
+
             // Replace relative paths with webview-compatible URIs
             // This handles SvelteKit's typical asset patterns
             html = html.replace(/(src|href)="(\/_app\/[^"]+)"/g, (match, attr, src) => {
-                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'dist', src));
+                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'build', src));
+                console.log(`WebviewManager: Replacing ${src} with ${resourceUri}`);
                 return `${attr}="${resourceUri}"`;
             });
 
             // Also handle any other relative paths that might exist
-            html = html.replace(/(src|href)="(\/[^"]+\.(js|css|png|jpg|jpeg|gif|svg|ico))"/g, (match, attr, src) => {
-                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'dist', src));
+            html = html.replace(/(src|href)="(\/[^"]+\.(js|css|png|jpg|jpeg|gif|svg|ico|json))"/g, (match, attr, src) => {
+                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'build', src));
+                console.log(`WebviewManager: Replacing ${src} with ${resourceUri}`);
                 return `${attr}="${resourceUri}"`;
             });
+
+            // Replace import() calls in inline scripts to use webview URIs
+            html = html.replace(/import\("(\/_app\/[^"]+)"\)/g, (match, src) => {
+                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'build', src));
+                return `import("${resourceUri}")`;
+            });
+
+            // Add nonce to inline scripts
+            html = html.replace(/<script>/g, `<script nonce="${nonce}">`);
 
             return html;
         } catch (error) {
@@ -998,8 +1097,18 @@ export class WebviewManager {
     }
 
     /**
+     * Generates a cryptographically secure nonce for Content Security Policy
+     *
+     * @returns A base64-encoded nonce string
+     */
+    private generateNonce(): string {
+        const crypto = require('crypto');
+        return crypto.randomBytes(16).toString('base64');
+    }
+
+    /**
      * Disposes of the WebviewManager and all associated resources
-     * 
+     *
      * This method performs a complete cleanup of all resources managed
      * by the WebviewManager, including all webview panels, timers,
      * message queues, and event listeners. This should be called when
