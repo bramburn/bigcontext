@@ -688,7 +688,7 @@ export class WebviewManager {
      * exists at a time. If the panel already exists, it brings it into focus.
      * Otherwise, it creates a new panel with proper HTML content loading.
      */
-    showMainPanel(): void {
+    showMainPanel(options: { isWorkspaceOpen: boolean }): void {
         const panelId = 'codeContextMain';
         const panelTitle = 'Code Context';
 
@@ -711,6 +711,12 @@ export class WebviewManager {
 
         // Set HTML content using the helper method
         this.mainPanel.webview.html = this.getWebviewContent(this.mainPanel.webview, this.context.extensionUri);
+
+        // Send initial state message to the webview
+        this.mainPanel.webview.postMessage({
+            type: 'initialState',
+            data: { isWorkspaceOpen: options.isWorkspaceOpen }
+        });
 
         // Set up MessageRouter for message handling
         const messageRouter = new MessageRouter(
@@ -855,6 +861,31 @@ export class WebviewManager {
             viewColumn: vscode.ViewColumn.Two,
             enableScripts: true
         });
+    }
+
+    /**
+     * Updates the workspace state in all webview panels
+     *
+     * This method sends a message to all webview panels to update their
+     * workspace state, which will trigger UI updates as needed.
+     *
+     * @param isWorkspaceOpen - Whether a workspace is currently open
+     */
+    updateWorkspaceState(isWorkspaceOpen: boolean): void {
+        try {
+            // Send workspace state update to all visible panels
+            this.panels.forEach((webviewPanel, id) => {
+                if (webviewPanel.visible) {
+                    webviewPanel.panel.webview.postMessage({
+                        type: 'workspaceStateChanged',
+                        data: { isWorkspaceOpen }
+                    });
+                    console.log(`WebviewManager: Sent workspace state update to panel '${id}'`);
+                }
+            });
+        } catch (error) {
+            console.error('WebviewManager: Failed to update workspace state:', error);
+        }
     }
 
     /**

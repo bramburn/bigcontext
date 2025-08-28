@@ -125,6 +125,7 @@ export enum WebviewToExtensionMessageType {
     // File operations
     OPEN_FILE = 'open_file',
     SHOW_FILE_IN_EXPLORER = 'show_file_in_explorer',
+    REQUEST_OPEN_FOLDER = 'request_open_folder',
     
     // State requests
     GET_STATE = 'get_state',

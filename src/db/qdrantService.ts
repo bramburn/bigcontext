@@ -1,5 +1,6 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { CodeChunk } from '../parsing/chunker';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 export interface QdrantPoint {
     id: string | number;
@@ -27,13 +28,15 @@ export interface SearchResult {
 export class QdrantService {
     private client: QdrantClient;
     private connectionString: string;
+    private loggingService: CentralizedLoggingService;
 
     /**
-     * Constructor now accepts connectionString as a required parameter
+     * Constructor now accepts connectionString and loggingService as required parameters
      * This enables dependency injection and removes direct VS Code configuration access
      */
-    constructor(connectionString: string) {
+    constructor(connectionString: string, loggingService: CentralizedLoggingService) {
         this.connectionString = connectionString;
+        this.loggingService = loggingService;
         this.client = new QdrantClient({
             host: this.extractHost(connectionString),
             port: this.extractPort(connectionString)
@@ -66,7 +69,7 @@ export class QdrantService {
             await this.client.getCollections();
             return true;
         } catch (error) {
-            console.error('Qdrant health check failed:', error);
+            this.loggingService.error('Qdrant health check failed', { error: error instanceof Error ? error.message : String(error) }, 'QdrantService');
             return false;
         }
     }
@@ -87,7 +90,7 @@ export class QdrantService {
             );
 
             if (existingCollection) {
-                console.log(`Collection '${collectionName}' already exists`);
+                this.loggingService.info(`Collection '${collectionName}' already exists`, {}, 'QdrantService');
                 return true;
             }
 
@@ -99,10 +102,10 @@ export class QdrantService {
                 }
             });
 
-            console.log(`Collection '${collectionName}' created successfully`);
+            this.loggingService.info(`Collection '${collectionName}' created successfully`, {}, 'QdrantService');
             return true;
         } catch (error) {
-            console.error(`Failed to create collection '${collectionName}':`, error);
+            this.loggingService.error(`Failed to create collection '${collectionName}'`, { error: error instanceof Error ? error.message : String(error) }, 'QdrantService');
             return false;
         }
     }

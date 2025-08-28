@@ -111,6 +111,11 @@ export class ExtensionManager {
                 console.log(`ExtensionManager: Workspace changed to: ${workspace?.name || 'none'}`);
                 // Notify other services about workspace change if needed
                 // The IndexingService will automatically use the new workspace for collection naming
+                
+                // Notify webview about workspace change
+                if (this.webviewManager) {
+                    this.webviewManager.updateWorkspaceState(!!workspace);
+                }
             });
             this.disposables.push(workspaceChangeDisposable);
 
@@ -133,15 +138,15 @@ export class ExtensionManager {
             this.loggingService.info('NotificationService initialized', {}, 'ExtensionManager');
 
             // Step 3: Initialize QdrantService with configuration
-            // QdrantService requires the database connection string from ConfigService
-            this.qdrantService = new QdrantService(this.configService.getQdrantConnectionString());
-            console.log('ExtensionManager: QdrantService initialized');
+            // QdrantService requires the database connection string from ConfigService and logging service
+            this.qdrantService = new QdrantService(this.configService.getQdrantConnectionString(), this.loggingService);
+            this.loggingService.info('QdrantService initialized', {}, 'ExtensionManager');
 
             // Step 4: Initialize EmbeddingProvider using factory and configuration
             // EmbeddingProvider is created asynchronously using the factory pattern
             // and depends on configuration settings from ConfigService
             this.embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(this.configService);
-            console.log('ExtensionManager: EmbeddingProvider initialized');
+            this.loggingService.info('EmbeddingProvider initialized', {}, 'ExtensionManager');
 
             // Step 5: Initialize workspace-dependent services
             // These services require a workspace folder to function properly
@@ -154,7 +159,7 @@ export class ExtensionManager {
                 const fileWalker = new FileWalker(workspaceRoot);
                 const astParser = new AstParser();
                 const chunker = new Chunker();
-                const lspService = new LSPService(workspaceRoot);
+                const lspService = new LSPService(workspaceRoot, this.loggingService);
 
                 // Initialize IndexingService with all dependencies including StateManager, WorkspaceManager, ConfigService, and LoggingService
                 // IndexingService coordinates file indexing, parsing, and storage in the vector database
@@ -191,9 +196,9 @@ export class ExtensionManager {
                 this.fileSystemWatcherManager = new FileSystemWatcherManager(this.indexingService);
                 await this.fileSystemWatcherManager.initialize();
                 this.disposables.push(this.fileSystemWatcherManager);
-                console.log('ExtensionManager: FileSystemWatcherManager initialized');
+                this.loggingService.info('FileSystemWatcherManager initialized', {}, 'ExtensionManager');
             } else {
-                console.warn('ExtensionManager: No workspace folder found, some services not initialized');
+                this.loggingService.warn('No workspace folder found, some services not initialized', {}, 'ExtensionManager');
             }
 
             // Step 6: Initialize PerformanceManager
@@ -213,9 +218,9 @@ export class ExtensionManager {
 
             // Step 9: Initialize SearchManager
             // SearchManager coordinates search operations across the codebase
-            // Depends on ContextService for context-aware search functionality
-            this.searchManager = new SearchManager(this.contextService, this.configService);
-            console.log('ExtensionManager: SearchManager initialized');
+            // Depends on ContextService, ConfigService, LoggingService, and NotificationService
+            this.searchManager = new SearchManager(this.contextService, this.configService, this.loggingService, this.notificationService);
+            this.loggingService.info('SearchManager initialized', {}, 'ExtensionManager');
 
             // Step 10: Initialize WebviewManager
             // WebviewManager handles the UI webview and user interactions
@@ -225,11 +230,11 @@ export class ExtensionManager {
 
             // Step 11: Initialize CommandManager and register commands
             // CommandManager handles all extension commands and their execution
-            // Depends on IndexingService and WebviewManager for command functionality
-            this.commandManager = new CommandManager(this.indexingService, this.webviewManager);
+            // Depends on IndexingService, WebviewManager, and NotificationService for command functionality
+            this.commandManager = new CommandManager(this.indexingService, this.webviewManager, this.notificationService);
             const commandDisposables = this.commandManager.registerCommands();
             this.disposables.push(...commandDisposables);
-            console.log('ExtensionManager: CommandManager initialized and commands registered');
+            this.loggingService.info('CommandManager initialized and commands registered', {}, 'ExtensionManager');
 
             // Step 12: Initialize StatusBarManager
             // StatusBarManager manages the status bar items and their visibility
@@ -245,9 +250,10 @@ export class ExtensionManager {
             this.disposables.push(this.historyManager);
             console.log('ExtensionManager: HistoryManager initialized');
 
-            console.log('ExtensionManager: All services initialized successfully');
+            this.loggingService.info('All services initialized successfully', {}, 'ExtensionManager');
 
         } catch (error) {
+            // Use console.error here since logging service might not be available if initialization failed
             console.error('ExtensionManager: Failed to initialize services:', error);
             throw error;
         }

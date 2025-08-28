@@ -9,6 +9,7 @@
 
 import * as vscode from 'vscode';
 import { SupportedLanguage } from '../parsing/astParser';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 /**
  * Represents a symbol definition from the LSP
@@ -89,9 +90,11 @@ export interface LSPMetadata {
  */
 export class LSPService {
     private workspaceRoot: string;
+    private loggingService: CentralizedLoggingService;
 
-    constructor(workspaceRoot: string) {
+    constructor(workspaceRoot: string, loggingService: CentralizedLoggingService) {
         this.workspaceRoot = workspaceRoot;
+        this.loggingService = loggingService;
     }
 
     /**
@@ -155,7 +158,7 @@ export class LSPService {
                 hasLSPData: true
             };
         } catch (error) {
-            console.warn(`Failed to get LSP metadata for ${filePath}:`, error);
+            this.loggingService.warn(`Failed to get LSP metadata for ${filePath}`, { error: error instanceof Error ? error.message : String(error) }, 'LSPService');
             return {
                 definitions: [],
                 references: [],
@@ -179,7 +182,7 @@ export class LSPService {
 
             return symbols ? this.convertDocumentSymbols(symbols) : [];
         } catch (error) {
-            console.warn('Failed to get document symbols:', error);
+            this.loggingService.warn('Failed to get document symbols', { error: error instanceof Error ? error.message : String(error) }, 'LSPService');
             return [];
         }
     }
@@ -238,7 +241,7 @@ export class LSPService {
                 detail: undefined
             }));
         } catch (error) {
-            console.warn('Failed to get definitions:', error);
+            this.loggingService.warn('Failed to get definitions', { error: error instanceof Error ? error.message : String(error) }, 'LSPService');
             return [];
         }
     }
@@ -262,7 +265,7 @@ export class LSPService {
                 isDefinition: false // This would need more sophisticated logic to determine
             }));
         } catch (error) {
-            console.warn('Failed to get references:', error);
+            this.loggingService.warn('Failed to get references', { error: error instanceof Error ? error.message : String(error) }, 'LSPService');
             return [];
         }
     }
@@ -285,7 +288,7 @@ export class LSPService {
                 range: hover.range
             };
         } catch (error) {
-            console.warn('Failed to get hover info:', error);
+            this.loggingService.warn('Failed to get hover info', { error: error instanceof Error ? error.message : String(error) }, 'LSPService');
             return null;
         }
     }
@@ -310,7 +313,7 @@ export class LSPService {
 
             return symbols !== undefined;
         } catch (error) {
-            console.warn(`LSP not available for ${language}:`, error);
+            this.loggingService.warn(`LSP not available for ${language}`, { error: error instanceof Error ? error.message : String(error) }, 'LSPService');
             return false;
         }
     }

@@ -136,6 +136,11 @@ export class MessageRouter {
             WebviewToExtensionMessageType.SHOW_FILE_IN_EXPLORER,
             this.handleShowFileInExplorer.bind(this)
         );
+        
+        this.communicationService.registerMessageHandler(
+            WebviewToExtensionMessageType.REQUEST_OPEN_FOLDER,
+            this.handleRequestOpenFolder.bind(this)
+        );
 
         // State handlers
         this.communicationService.registerMessageHandler(
@@ -469,6 +474,22 @@ export class MessageRouter {
             this.loggingService?.error('Failed to show file in explorer', {
                 error: error instanceof Error ? error.message : String(error),
                 filePath: payload.filePath
+            }, 'MessageRouter');
+            throw error;
+        }
+    }
+
+    /**
+     * Handle request open folder request
+     */
+    private async handleRequestOpenFolder(): Promise<void> {
+        try {
+            await vscode.commands.executeCommand('vscode.openFolder');
+            
+            this.loggingService?.info('Open folder dialog triggered', {}, 'MessageRouter');
+        } catch (error) {
+            this.loggingService?.error('Failed to open folder dialog', {
+                error: error instanceof Error ? error.message : String(error)
             }, 'MessageRouter');
             throw error;
         }

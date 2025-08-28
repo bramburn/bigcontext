@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
+import { NotificationService } from './notifications/notificationService';
 
 /**
  * Status bar item configuration interface

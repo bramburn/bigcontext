@@ -3,6 +3,8 @@ import { ContextService, ContextQuery } from './context/contextService';
 import { QueryExpansionService, ExpandedQuery } from './search/queryExpansionService';
 import { LLMReRankingService, ReRankingResult } from './search/llmReRankingService';
 import { ConfigService } from './configService';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
+import { NotificationService } from './notifications/notificationService';
 
 /**
  * Search filters and options for advanced search functionality
@@ -77,6 +79,8 @@ export class SearchManager {
     private queryExpansionService: QueryExpansionService;
     private llmReRankingService: LLMReRankingService;
     private configService: ConfigService;
+    private loggingService: CentralizedLoggingService;
+    private notificationService: NotificationService;
     private searchHistory: SearchHistoryEntry[] = [];
     private resultCache: Map<string, EnhancedSearchResult[]> = new Map();
     private readonly maxHistoryEntries = 50;
@@ -86,17 +90,23 @@ export class SearchManager {
      * Creates a new SearchManager instance
      * @param contextService - The ContextService instance for performing searches
      * @param configService - The ConfigService instance for configuration
+     * @param loggingService - The CentralizedLoggingService instance for logging
+     * @param notificationService - The NotificationService instance for user notifications
      * @param queryExpansionService - Optional QueryExpansionService instance
      * @param llmReRankingService - Optional LLMReRankingService instance
      */
     constructor(
         contextService: ContextService,
         configService: ConfigService,
+        loggingService: CentralizedLoggingService,
+        notificationService: NotificationService,
         queryExpansionService?: QueryExpansionService,
         llmReRankingService?: LLMReRankingService
     ) {
         this.contextService = contextService;
         this.configService = configService;
+        this.loggingService = loggingService;
+        this.notificationService = notificationService;
         this.queryExpansionService = queryExpansionService || new QueryExpansionService(configService);
         this.llmReRankingService = llmReRankingService || new LLMReRankingService(configService);
         this.loadSearchHistory();
@@ -110,13 +120,13 @@ export class SearchManager {
      */
     async search(query: string, filters: SearchFilters = {}): Promise<EnhancedSearchResult[]> {
         try {
-            console.log('SearchManager: Performing advanced search:', { query, filters });
+            this.loggingService.info('Performing advanced search', { query, filters }, 'SearchManager');
 
             // Check cache first
             const cacheKey = this.generateCacheKey(query, filters);
             const cachedResults = this.resultCache.get(cacheKey);
             if (cachedResults) {
-                console.log('SearchManager: Returning cached results');
+                this.loggingService.debug('Returning cached results', {}, 'SearchManager');
                 return cachedResults;
             }
 
@@ -125,11 +135,11 @@ export class SearchManager {
             let searchQuery = query;
 
             if (this.queryExpansionService.isEnabled()) {
-                console.log('SearchManager: Expanding query...');
+                this.loggingService.debug('Expanding query...', {}, 'SearchManager');
                 expandedQuery = await this.queryExpansionService.expandQuery(query);
                 searchQuery = expandedQuery.combinedQuery;
-                console.log(`SearchManager: Query expanded from "${query}" to "${searchQuery}"`);
-                console.log(`SearchManager: Expanded terms: ${expandedQuery.expandedTerms.join(', ')}`);
+                this.loggingService.debug(`Query expanded from "${query}" to "${searchQuery}"`, {}, 'SearchManager');
+                this.loggingService.debug(`Expanded terms: ${expandedQuery.expandedTerms.join(', ')}`, {}, 'SearchManager');
             }
 
             // Build context query from search parameters
@@ -208,11 +218,11 @@ export class SearchManager {
                 reRankingResult?.success || false
             );
 
-            console.log(`SearchManager: Found ${sortedResults.length} results`);
+            this.loggingService.info(`Found ${sortedResults.length} results`, {}, 'SearchManager');
             return sortedResults;
 
         } catch (error) {
-            console.error('SearchManager: Search failed:', error);
+            this.loggingService.error('Search failed', { error: error instanceof Error ? error.message : String(error) }, 'SearchManager');
             throw error;
         }
     }

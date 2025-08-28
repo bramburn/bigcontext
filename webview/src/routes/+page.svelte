@@ -2,9 +2,10 @@
     import { onMount } from 'svelte';
     import { currentView, type ViewType } from '$lib/stores/viewStore';
     import { initializePersistence } from '$lib/stores/persistence';
-    import { appActions } from '$lib/stores/appStore';
+    import { appActions, appState } from '$lib/stores/appStore';
     import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
     import GuidedTour from '$lib/components/GuidedTour.svelte';
+    import NoWorkspaceView from '$lib/components/NoWorkspaceView.svelte';
     import { performanceTracker, measureComponentLoad } from '$lib/utils/performance';
     import { registerCoreComponents } from '$lib/utils/fluentUI';
     import { fadeIn, slideInFromBottom } from '$lib/utils/animations';
@@ -137,7 +138,16 @@
         // Listen for view change messages from extension
         window.addEventListener('message', (event) => {
             const message = event.data;
-            if (message.command === 'setView') {
+            if (message.type === 'initialState') {
+                // Handle initial state message from extension
+                appState.update((state: any) => ({
+                    ...state,
+                    isWorkspaceOpen: message.data.isWorkspaceOpen
+                }));
+            } else if (message.type === 'workspaceStateChanged') {
+                // Handle workspace state change message from extension
+                appActions.setWorkspaceOpen(message.data.isWorkspaceOpen);
+            } else if (message.command === 'setView') {
                 currentView.set(message.view);
             } else if (message.command === 'globalStateResponse') {
                 // Handle global state response for first-run check
@@ -174,53 +184,57 @@
         showDetails={true}
         onError={(error) => console.error('Application error:', error)}
     >
-        {#if view === 'setup'}
-            {#if SetupView}
-                <div bind:this={componentContainer} class="component-container">
-                    <svelte:component this={SetupView} />
-                </div>
-            {:else}
-                <div class="loading-component">
-                    <div class="loading-spinner"></div>
-                    <p>Loading Setup...</p>
-                </div>
-            {/if}
-        {:else if view === 'indexing'}
-            {#if IndexingView}
-                <svelte:component this={IndexingView} />
-            {:else}
-                <div class="loading-component">
-                    <div class="loading-spinner"></div>
-                    <p>Loading Indexing...</p>
-                </div>
-            {/if}
-        {:else if view === 'query'}
-            {#if QueryView}
-                <svelte:component this={QueryView} />
-            {:else}
-                <div class="loading-component">
-                    <div class="loading-spinner"></div>
-                    <p>Loading Query...</p>
-                </div>
-            {/if}
-        {:else if view === 'diagnostics'}
-            {#if DiagnosticsView}
-                <svelte:component this={DiagnosticsView} />
-            {:else}
-                <div class="loading-component">
-                    <div class="loading-spinner"></div>
-                    <p>Loading Diagnostics...</p>
-                </div>
-            {/if}
+        {#if !$appState.isWorkspaceOpen}
+            <NoWorkspaceView />
         {:else}
-            <!-- Fallback to setup view -->
-            {#if SetupView}
-                <svelte:component this={SetupView} />
+            {#if view === 'setup'}
+                {#if SetupView}
+                    <div bind:this={componentContainer} class="component-container">
+                        <svelte:component this={SetupView} />
+                    </div>
+                {:else}
+                    <div class="loading-component">
+                        <div class="loading-spinner"></div>
+                        <p>Loading Setup...</p>
+                    </div>
+                {/if}
+            {:else if view === 'indexing'}
+                {#if IndexingView}
+                    <svelte:component this={IndexingView} />
+                {:else}
+                    <div class="loading-component">
+                        <div class="loading-spinner"></div>
+                        <p>Loading Indexing...</p>
+                    </div>
+                {/if}
+            {:else if view === 'query'}
+                {#if QueryView}
+                    <svelte:component this={QueryView} />
+                {:else}
+                    <div class="loading-component">
+                        <div class="loading-spinner"></div>
+                        <p>Loading Query...</p>
+                    </div>
+                {/if}
+            {:else if view === 'diagnostics'}
+                {#if DiagnosticsView}
+                    <svelte:component this={DiagnosticsView} />
+                {:else}
+                    <div class="loading-component">
+                        <div class="loading-spinner"></div>
+                        <p>Loading Diagnostics...</p>
+                    </div>
+                {/if}
             {:else}
-                <div class="loading-component">
-                    <div class="loading-spinner"></div>
-                    <p>Loading...</p>
-                </div>
+                <!-- Fallback to setup view -->
+                {#if SetupView}
+                    <svelte:component this={SetupView} />
+                {:else}
+                    <div class="loading-component">
+                        <div class="loading-spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                {/if}
             {/if}
         {/if}
     </ErrorBoundary>

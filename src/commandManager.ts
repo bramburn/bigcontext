@@ -21,6 +21,7 @@
 import * as vscode from 'vscode';
 import { IndexingService } from './indexing/indexingService';
 import { WebviewManager } from './webviewManager';
+import { NotificationService } from './notifications/notificationService';
 
 /**
  * CommandManager class responsible for registering and managing all VS Code commands
@@ -39,21 +40,24 @@ export class CommandManager {
     // Service dependencies injected via constructor
     private indexingService: IndexingService;
     private webviewManager: WebviewManager;
+    private notificationService: NotificationService;
 
     /**
      * Creates a new CommandManager instance
-     * 
+     *
      * The constructor follows dependency injection pattern, receiving instances of
      * required services. This approach promotes loose coupling and testability.
-     * 
+     *
      * @param indexingService - The IndexingService instance for handling indexing commands
      *                         and file processing operations
      * @param webviewManager - The WebviewManager instance for handling webview operations
      *                        and UI panel management
+     * @param notificationService - The NotificationService instance for user notifications
      */
-    constructor(indexingService: IndexingService, webviewManager: WebviewManager) {
+    constructor(indexingService: IndexingService, webviewManager: WebviewManager, notificationService: NotificationService) {
         this.indexingService = indexingService;
         this.webviewManager = webviewManager;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -134,15 +138,20 @@ export class CommandManager {
         try {
             console.log('CommandManager: Opening main panel...');
 
+            // Check if workspace folders are available
+            const folders = vscode.workspace.workspaceFolders;
+            const isWorkspaceOpen = !!folders && folders.length > 0;
+
             // Delegate to WebviewManager to handle the actual panel creation and display
-            this.webviewManager.showMainPanel();
+            // Pass the workspace state to the WebviewManager
+            this.webviewManager.showMainPanel({ isWorkspaceOpen });
 
             console.log('CommandManager: Main panel opened successfully');
         } catch (error) {
             // Log detailed error for debugging purposes
             console.error('CommandManager: Failed to open main panel:', error);
             // Show user-friendly error message
-            vscode.window.showErrorMessage('Failed to open Code Context Engine panel');
+            this.notificationService.error('Failed to open Code Context Engine panel');
         }
     }
 
@@ -179,7 +188,7 @@ export class CommandManager {
             // Check if workspace is available - indexing requires a workspace folder
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
-                vscode.window.showWarningMessage('No workspace folder is open. Please open a folder to index.');
+                this.notificationService.warning('No workspace folder is open. Please open a folder to index.');
                 return;
             }
 
@@ -212,7 +221,7 @@ export class CommandManager {
                     progress.report({ message: 'Indexing completed successfully!' });
                     
                     // Show detailed completion statistics in an information message
-                    vscode.window.showInformationMessage(
+                    this.notificationService.success(
                         `Indexing completed! Processed ${result.processedFiles} files with ${result.chunks.length} code chunks.`
                     );
                 } else {

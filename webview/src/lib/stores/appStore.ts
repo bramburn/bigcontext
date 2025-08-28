@@ -14,6 +14,7 @@ export interface AppState {
     isLoading: boolean;
     error: string | null;
     lastActivity: Date | null;
+    isWorkspaceOpen: boolean;
 }
 
 export interface SetupState {
@@ -74,7 +75,8 @@ export const appState = writable<AppState>({
     isInitialized: false,
     isLoading: false,
     error: null,
-    lastActivity: null
+    lastActivity: null,
+    isWorkspaceOpen: false
 });
 
 export const setupState = writable<SetupState>({
@@ -182,6 +184,14 @@ export const appActions = {
     updateActivity: () => {
         appState.update(state => ({
             ...state,
+            lastActivity: new Date()
+        }));
+    },
+
+    setWorkspaceOpen: (isOpen: boolean) => {
+        appState.update(state => ({
+            ...state,
+            isWorkspaceOpen: isOpen,
             lastActivity: new Date()
         }));
     }
@@ -328,7 +338,8 @@ export const resetAllState = () => {
         isInitialized: false,
         isLoading: false,
         error: null,
-        lastActivity: null
+        lastActivity: null,
+        isWorkspaceOpen: false
     });
 
     setupState.set({
