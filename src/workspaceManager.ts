@@ -291,6 +291,6 @@ export class WorkspaceManager {
         // Clear listeners
         this.changeListeners = [];
         
-        console.log('WorkspaceManager: Disposed successfully');
+        this.loggingService.info('Disposed successfully', {}, 'WorkspaceManager');
     }
 }
