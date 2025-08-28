@@ -81,8 +81,15 @@ export class CentralizedLoggingService {
         this.outputChannel = vscode.window.createOutputChannel('Code Context Engine');
         this.logDirectory = this.config.logDirectory;
         this.currentLogFile = this.generateLogFileName();
-        
+
         this.initializeLogging();
+
+        // Listen for configuration changes to update log level dynamically
+        vscode.workspace.onDidChangeConfiguration(event => {
+            if (event.affectsConfiguration('code-context-engine.logging.level')) {
+                this.updateLogLevel();
+            }
+        });
     }
 
     /**
@@ -108,7 +115,7 @@ export class CentralizedLoggingService {
      */
     private parseLogLevel(level?: string): LogLevel | undefined {
         if (!level) return undefined;
-        
+
         switch (level.toLowerCase()) {
             case 'error': return LogLevel.ERROR;
             case 'warn': return LogLevel.WARN;
@@ -116,6 +123,20 @@ export class CentralizedLoggingService {
             case 'debug': return LogLevel.DEBUG;
             case 'trace': return LogLevel.TRACE;
             default: return undefined;
+        }
+    }
+
+    /**
+     * Update log level from current configuration
+     */
+    private updateLogLevel(): void {
+        this.configService.refresh();
+        const newConfig = this.loadConfig();
+        const oldLevel = this.config.level;
+        this.config.level = newConfig.level;
+
+        if (oldLevel !== this.config.level) {
+            this.info(`Log level changed from ${LogLevel[oldLevel]} to ${LogLevel[this.config.level]}`);
         }
     }
 

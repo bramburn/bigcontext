@@ -211,7 +211,7 @@ export class Chunker {
             language,
             metadata: {
                 nodeType: node.type,
-                hasError: node.hasError(),
+                hasError: node.hasError,
                 byteLength: node.endIndex - node.startIndex
             }
         };

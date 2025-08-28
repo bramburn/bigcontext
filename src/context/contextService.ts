@@ -17,6 +17,7 @@ import { IndexingService } from '../indexing/indexingService';
 import { QdrantService, SearchResult } from '../db/qdrantService';
 import { IEmbeddingProvider } from '../embeddings/embeddingProvider';
 import { ConfigService } from '../configService';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 /**
  * Represents the result of a file content retrieval operation
@@ -119,6 +120,7 @@ export class ContextService {
     private qdrantService: QdrantService;
     private embeddingProvider: IEmbeddingProvider;
     private configService: ConfigService;
+    private loggingService: CentralizedLoggingService;
     
     // Configuration constants
     private readonly DEFAULT_CHUNK_LIMIT = 50;
@@ -156,19 +158,22 @@ export class ContextService {
      * @param embeddingProvider - Injected embedding provider instance
      * @param indexingService - Injected IndexingService instance
      * @param configService - Injected ConfigService instance
+     * @param loggingService - Injected CentralizedLoggingService instance
      */
     constructor(
         workspaceRoot: string,
         qdrantService: QdrantService,
         embeddingProvider: IEmbeddingProvider,
         indexingService: IndexingService,
-        configService: ConfigService
+        configService: ConfigService,
+        loggingService: CentralizedLoggingService
     ) {
         this.workspaceRoot = workspaceRoot;
         this.qdrantService = qdrantService;
         this.embeddingProvider = embeddingProvider;
         this.indexingService = indexingService;
         this.configService = configService;
+        this.loggingService = loggingService;
     }
 
     /**

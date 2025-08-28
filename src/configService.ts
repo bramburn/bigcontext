@@ -365,7 +365,7 @@ export class ConfigService {
      */
     public getLoggingConfig(): LoggingConfig {
         return {
-            level: this.config.get<string>('logging.level') ?? 'info',
+            level: this.config.get<string>('logging.level') ?? 'Info',
             enableFileLogging: this.config.get<boolean>('logging.enableFileLogging') ?? true,
             logDirectory: this.config.get<string>('logging.logDirectory'),
             maxFileSize: this.config.get<number>('logging.maxFileSize') ?? 10 * 1024 * 1024,

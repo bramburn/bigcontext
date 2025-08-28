@@ -1,5 +1,5 @@
 .codersinflow
-.vscode
+
 node_modules
 .env
 .venv
@@ -19,6 +19,7 @@ __pycache__
 .next
 .github
 .vscode-test/
+
 
 .repomix-output.xml
 

@@ -98,7 +98,7 @@ export class AstParser {
         try {
             const tree = this.parse(language, code);
             
-            if (tree && tree.rootNode.hasError()) {
+            if (tree && tree.rootNode.hasError) {
                 // Walk the tree to find error nodes
                 const cursor = tree.walk();
                 
@@ -107,7 +107,7 @@ export class AstParser {
                  * @param node - The current syntax node being examined
                  */
                 const findErrors = (node: Parser.SyntaxNode) => {
-                    if (node.hasError()) {
+                    if (node.hasError) {
                         if (node.type === 'ERROR') {
                             // Convert to 1-based line and column numbers for human readability
                             errors.push(`Syntax error at line ${node.startPosition.row + 1}, column ${node.startPosition.column + 1}`);

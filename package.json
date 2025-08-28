@@ -254,8 +254,8 @@
         "code-context-engine.queryExpansion.confidenceThreshold": {
           "type": "number",
           "default": 0.7,
-          "minimum": 0.0,
-          "maximum": 1.0,
+          "minimum": 0,
+          "maximum": 1,
           "description": "Minimum confidence threshold for including expanded terms (0.0 to 1.0)"
         },
         "code-context-engine.queryExpansion.llmProvider": {
@@ -298,15 +298,15 @@
         "code-context-engine.llmReRanking.vectorScoreWeight": {
           "type": "number",
           "default": 0.3,
-          "minimum": 0.0,
-          "maximum": 1.0,
+          "minimum": 0,
+          "maximum": 1,
           "description": "Weight for original vector similarity score in final ranking (0.0 to 1.0)"
         },
         "code-context-engine.llmReRanking.llmScoreWeight": {
           "type": "number",
           "default": 0.7,
-          "minimum": 0.0,
-          "maximum": 1.0,
+          "minimum": 0,
+          "maximum": 1,
           "description": "Weight for LLM relevance score in final ranking (0.0 to 1.0)"
         },
         "code-context-engine.llmReRanking.llmProvider": {
@@ -338,6 +338,23 @@
           "type": "boolean",
           "default": false,
           "description": "Include explanations for why results were ranked as they were (may increase response time)"
+        },
+        "code-context-engine.logging.level": {
+          "type": "string",
+          "enum": [
+            "Error",
+            "Warn",
+            "Info",
+            "Debug"
+          ],
+          "default": "Info",
+          "description": "Controls the verbosity of logs shown in the 'Code Context Engine' output channel",
+          "enumDescriptions": [
+            "Only show error messages",
+            "Show warnings and errors",
+            "Show informational messages, warnings, and errors (recommended)",
+            "Show all messages including debug information"
+          ]
         }
       }
     },
@@ -410,10 +427,10 @@
     "axios": "^1.6.0",
     "glob": "^8.0.3",
     "ignore": "^5.2.4",
-    "tree-sitter": "^0.20.4",
-    "tree-sitter-c-sharp": "^0.20.0",
-    "tree-sitter-python": "^0.20.4",
-    "tree-sitter-typescript": "^0.20.3",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-c-sharp": "^0.21.3",
+    "tree-sitter-python": "^0.21.0",
+    "tree-sitter-typescript": "^0.21.2",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "xmlbuilder2": "^3.1.1"

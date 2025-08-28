@@ -30,6 +30,7 @@ import { LSPService } from '../lsp/lspService';
 import { StateManager } from '../stateManager';
 import { WorkspaceManager } from '../workspaceManager';
 import { ConfigService } from '../configService';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 /**
  * Progress tracking interface for the indexing process.
@@ -133,6 +134,8 @@ export class IndexingService {
     private workspaceManager: WorkspaceManager;
     /** Configuration service for accessing extension settings */
     private configService: ConfigService;
+    /** Centralized logging service for unified logging */
+    private loggingService: CentralizedLoggingService;
     /** Flag to track if indexing is currently paused */
     private isPaused: boolean = false;
     /** Queue of remaining files to process (used for pause/resume functionality) */
@@ -195,7 +198,8 @@ export class IndexingService {
         lspService: LSPService,
         stateManager: StateManager,
         workspaceManager: WorkspaceManager,
-        configService: ConfigService
+        configService: ConfigService,
+        loggingService: CentralizedLoggingService
     ) {
         this.workspaceRoot = workspaceRoot;
         this.fileWalker = fileWalker;
@@ -207,6 +211,7 @@ export class IndexingService {
         this.stateManager = stateManager;
         this.workspaceManager = workspaceManager;
         this.configService = configService;
+        this.loggingService = loggingService;
 
         // Initialize worker pool if we're in the main thread
         if (isMainThread) {
@@ -232,7 +237,7 @@ export class IndexingService {
             const numCpus = os.cpus().length;
             const numWorkers = Math.max(1, numCpus - 1); // Use at least 1 worker, leave one CPU for main thread
 
-            console.log(`IndexingService: Initializing worker pool with ${numWorkers} workers (${numCpus} CPUs available)`);
+            this.loggingService.info(`Initializing worker pool with ${numWorkers} workers (${numCpus} CPUs available)`, {}, 'IndexingService');
 
             for (let i = 0; i < numWorkers; i++) {
                 const workerPath = path.join(__dirname, 'indexingWorker.js');
@@ -267,12 +272,12 @@ export class IndexingService {
                 this.workerPool.push(worker);
             }
 
-            console.log(`IndexingService: Worker pool initialized with ${this.workerPool.length} workers`);
+            this.loggingService.info(`Worker pool initialized with ${this.workerPool.length} workers`, {}, 'IndexingService');
 
         } catch (error) {
-            console.error('IndexingService: Failed to initialize worker pool:', error);
+            this.loggingService.error('Failed to initialize worker pool', { error: error instanceof Error ? error.message : String(error) }, 'IndexingService');
             this.useParallelProcessing = false;
-            console.log('IndexingService: Falling back to sequential processing');
+            this.loggingService.info('Falling back to sequential processing', {}, 'IndexingService');
         }
     }
 
@@ -292,13 +297,13 @@ export class IndexingService {
         });
 
         worker.on('error', (error) => {
-            console.error('IndexingService: Worker error:', error);
+            this.loggingService.error('Worker error', { error: error.message }, 'IndexingService');
             this.handleWorkerError(worker, error);
         });
 
         worker.on('exit', (code) => {
             if (code !== 0) {
-                console.error(`IndexingService: Worker exited with code ${code}`);
+                this.loggingService.error(`Worker exited with code ${code}`, { exitCode: code }, 'IndexingService');
             }
             this.handleWorkerExit(worker, code);
         });
@@ -324,7 +329,7 @@ export class IndexingService {
 
         switch (message.type) {
             case 'ready':
-                console.log('IndexingService: Worker ready');
+                this.loggingService.debug('Worker ready', {}, 'IndexingService');
                 break;
 
             case 'processed':
@@ -332,14 +337,14 @@ export class IndexingService {
                 break;
 
             case 'error':
-                console.error('IndexingService: Worker processing error:', message.error);
+                this.loggingService.error('Worker processing error', { error: message.error }, 'IndexingService');
                 this.aggregatedResults.errors.push(message.error);
                 this.markWorkerIdle(worker);
                 this.processNextFile();
                 break;
 
             default:
-                console.warn('IndexingService: Unknown worker message type:', message.type);
+                this.loggingService.warn('Unknown worker message type', { messageType: message.type }, 'IndexingService');
         }
     }
 
@@ -580,7 +585,7 @@ export class IndexingService {
     ): Promise<IndexingResult> {
         // Check if indexing is already in progress
         if (this.stateManager.isIndexing()) {
-            console.warn('IndexingService: Indexing already in progress, skipping new request');
+            this.loggingService.warn('Indexing already in progress, skipping new request', {}, 'IndexingService');
             throw new Error('Indexing is already in progress');
         }
 

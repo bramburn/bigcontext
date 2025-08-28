@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 // Core service imports
 import { ConfigService } from './configService';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
+import { NotificationService } from './notifications/notificationService';
 import { QdrantService } from './db/qdrantService';
 import { EmbeddingProviderFactory, IEmbeddingProvider } from './embeddings/embeddingProvider';
 import { ContextService } from './context/contextService';
@@ -47,6 +49,8 @@ export class ExtensionManager {
 
     // Core services - fundamental services that provide core functionality
     private configService!: ConfigService;
+    private loggingService!: CentralizedLoggingService;
+    private notificationService!: NotificationService;
     private qdrantService!: QdrantService;
     private embeddingProvider!: IEmbeddingProvider;
     private contextService!: ContextService;
@@ -117,6 +121,17 @@ export class ExtensionManager {
             this.configService = new ConfigService();
             console.log('ExtensionManager: ConfigService initialized');
 
+            // Step 2.1: Initialize CentralizedLoggingService (depends on ConfigService)
+            // CentralizedLoggingService provides unified logging for all other services
+            this.loggingService = new CentralizedLoggingService(this.configService);
+            this.disposables.push(this.loggingService);
+            this.loggingService.info('CentralizedLoggingService initialized', {}, 'ExtensionManager');
+
+            // Step 2.2: Initialize NotificationService (depends on CentralizedLoggingService)
+            // NotificationService provides standardized user notifications with logging integration
+            this.notificationService = new NotificationService(this.loggingService);
+            this.loggingService.info('NotificationService initialized', {}, 'ExtensionManager');
+
             // Step 3: Initialize QdrantService with configuration
             // QdrantService requires the database connection string from ConfigService
             this.qdrantService = new QdrantService(this.configService.getQdrantConnectionString());
@@ -141,7 +156,7 @@ export class ExtensionManager {
                 const chunker = new Chunker();
                 const lspService = new LSPService(workspaceRoot);
 
-                // Initialize IndexingService with all dependencies including StateManager, WorkspaceManager, and ConfigService
+                // Initialize IndexingService with all dependencies including StateManager, WorkspaceManager, ConfigService, and LoggingService
                 // IndexingService coordinates file indexing, parsing, and storage in the vector database
                 this.indexingService = new IndexingService(
                     workspaceRoot,
@@ -153,20 +168,22 @@ export class ExtensionManager {
                     lspService,
                     this.stateManager,
                     this.workspaceManager,
-                    this.configService
+                    this.configService,
+                    this.loggingService
                 );
-                console.log('ExtensionManager: IndexingService initialized');
+                this.loggingService.info('ExtensionManager: IndexingService initialized');
 
-                // Initialize ContextService with dependencies
+                // Initialize ContextService with dependencies including LoggingService
                 // ContextService provides context-aware functionality and search capabilities
                 this.contextService = new ContextService(
                     workspaceRoot,
                     this.qdrantService,
                     this.embeddingProvider,
                     this.indexingService,
-                    this.configService
+                    this.configService,
+                    this.loggingService
                 );
-                console.log('ExtensionManager: ContextService initialized');
+                this.loggingService.info('ExtensionManager: ContextService initialized');
 
                 // Initialize FileSystemWatcherManager for automatic indexing
                 // FileSystemWatcherManager monitors file changes and keeps the index up-to-date

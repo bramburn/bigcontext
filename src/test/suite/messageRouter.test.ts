@@ -3,6 +3,14 @@ import * as vscode from 'vscode';
 import { MessageRouter } from '../../messageRouter';
 import { StateManager } from '../../stateManager';
 
+/**
+ * Test suite for MessageRouter
+ *
+ * These tests verify that the MessageRouter correctly handles communication
+ * between the webview UI and the extension backend. The MessageRouter is
+ * responsible for processing messages from the UI, routing them to the
+ * appropriate services, and returning responses to the UI.
+ */
 suite('MessageRouter Tests', () => {
     let messageRouter: MessageRouter;
     let mockContext: vscode.ExtensionContext;
@@ -13,15 +21,18 @@ suite('MessageRouter Tests', () => {
     let receivedMessages: any[];
 
     setup(() => {
-        // Create mock services
+        // Create mock services for testing
+        // This isolates tests from real dependencies and ensures consistent behavior
         mockContext = {
             extensionUri: vscode.Uri.file('/mock/extension/path'),
             extensionPath: '/mock/extension/path',
-            subscriptions: []
+            subscriptions: [] // Array for disposable resources
         } as any;
 
+        // Create a real StateManager instance for testing state management
         mockStateManager = new StateManager();
 
+        // Mock ContextService for search-related functionality
         mockContextService = {
             queryContext: (query: any) => Promise.resolve([
                 { file: 'test.ts', content: 'test content', similarity: 0.8 }
@@ -31,6 +42,7 @@ suite('MessageRouter Tests', () => {
             ])
         };
 
+        // Mock IndexingService for indexing operations
         mockIndexingService = {
             startIndexing: () => Promise.resolve({
                 success: true,
@@ -42,7 +54,8 @@ suite('MessageRouter Tests', () => {
             })
         };
 
-        // Mock webview that captures posted messages
+        // Create a mock webview that captures posted messages for verification
+        // This allows us to test that messages are correctly sent back to the UI
         receivedMessages = [];
         mockWebview = {
             postMessage: (message: any) => {
@@ -51,6 +64,7 @@ suite('MessageRouter Tests', () => {
             }
         };
 
+        // Create the MessageRouter with all mocked dependencies
         messageRouter = new MessageRouter(
             mockContextService,
             mockIndexingService,
@@ -60,6 +74,7 @@ suite('MessageRouter Tests', () => {
     });
 
     teardown(() => {
+        // Clean up resources after each test
         if (mockStateManager) {
             mockStateManager.dispose();
         }
@@ -67,10 +82,14 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should create MessageRouter with required services', () => {
+        // Test that MessageRouter can be instantiated with all required dependencies
+        // This verifies that the constructor properly accepts and stores dependencies
         assert.ok(messageRouter, 'MessageRouter should be created successfully');
     });
 
     test('should handle startIndexing message when not already indexing', async () => {
+        // Test that the router correctly processes startIndexing commands
+        // when indexing is not already in progress
         // Ensure indexing is not in progress
         mockStateManager.setIndexing(false);
 
@@ -82,6 +101,7 @@ suite('MessageRouter Tests', () => {
         await messageRouter.handleMessage(message, mockWebview);
 
         // Check that a response was sent
+        // This verifies that the router correctly calls the service and sends a response
         assert.strictEqual(receivedMessages.length, 1, 'Should send one response message');
         const response = receivedMessages[0];
         assert.strictEqual(response.command, 'startIndexing', 'Response should have correct command');
@@ -90,7 +110,9 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should reject startIndexing message when already indexing', async () => {
-        // Set indexing state to true
+        // Test that the router correctly rejects startIndexing commands
+        // when indexing is already in progress
+        // Set indexing state to true to simulate an ongoing indexing operation
         mockStateManager.setIndexing(true, 'Test indexing in progress');
 
         const message = {
@@ -101,6 +123,7 @@ suite('MessageRouter Tests', () => {
         await messageRouter.handleMessage(message, mockWebview);
 
         // Check that an error response was sent
+        // This verifies that the router checks the state and prevents duplicate operations
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
         assert.strictEqual(response.command, 'startIndexing', 'Response should have correct command');
@@ -110,6 +133,8 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should handle search message correctly', async () => {
+        // Test that the router correctly processes search commands
+        // and returns search results to the UI
         const message = {
             command: 'search',
             requestId: 'search-123',
@@ -119,6 +144,7 @@ suite('MessageRouter Tests', () => {
         await messageRouter.handleMessage(message, mockWebview);
 
         // Check that a response was sent
+        // This verifies that the router correctly routes search queries to the ContextService
         assert.strictEqual(receivedMessages.length, 1, 'Should send one response message');
         const response = receivedMessages[0];
         assert.strictEqual(response.command, 'searchResponse', 'Response should have correct command');
@@ -127,6 +153,8 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should handle unknown command gracefully', async () => {
+        // Test that the router gracefully handles unknown commands
+        // This ensures the UI doesn't break when sending unsupported commands
         const message = {
             command: 'unknownCommand',
             requestId: 'unknown-123'
@@ -135,6 +163,7 @@ suite('MessageRouter Tests', () => {
         await messageRouter.handleMessage(message, mockWebview);
 
         // Check that an error response was sent
+        // This verifies that the router provides meaningful error messages for unknown commands
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
         assert.strictEqual(response.command, 'unknownCommand', 'Response should have correct command');
@@ -144,6 +173,8 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should handle message with missing query parameter', async () => {
+        // Test that the router validates required parameters
+        // This ensures that messages with missing required parameters are rejected
         const message = {
             command: 'search',
             requestId: 'search-no-query'
@@ -153,6 +184,7 @@ suite('MessageRouter Tests', () => {
         await messageRouter.handleMessage(message, mockWebview);
 
         // Check that an error response was sent
+        // This verifies that the router validates message structure before processing
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
         assert.ok(response.error, 'Response should contain error message');
@@ -161,6 +193,7 @@ suite('MessageRouter Tests', () => {
 
     test('should verify StateManager integration', () => {
         // Test that StateManager methods work correctly
+        // This verifies that the router correctly integrates with state management
         assert.strictEqual(mockStateManager.isIndexing(), false, 'Initial indexing state should be false');
         
         mockStateManager.setIndexing(true, 'Test message');
@@ -172,6 +205,8 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should handle error during message processing', async () => {
+        // Test that the router gracefully handles errors from services
+        // This ensures that service errors don't crash the message handling system
         // Create a mock service that throws an error
         const errorIndexingService = {
             ...mockIndexingService,
@@ -193,6 +228,7 @@ suite('MessageRouter Tests', () => {
         await errorMessageRouter.handleMessage(message, mockWebview);
 
         // Check that an error response was sent
+        // This verifies that the router catches service errors and returns meaningful error messages
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
         assert.strictEqual(response.command, 'startIndexing', 'Response should have correct command');
@@ -201,10 +237,12 @@ suite('MessageRouter Tests', () => {
     });
 
     test('should verify message routing architecture', () => {
-        // This test verifies that the MessageRouter follows the expected architecture
+        // Test that the MessageRouter follows the expected architecture
+        // This verifies the overall design and structure of the message routing system
         assert.strictEqual(typeof messageRouter.handleMessage, 'function', 'handleMessage should be a function');
 
         // Verify that the router can be used with different webview instances
+        // This ensures the router is flexible and can work with multiple UI panels
         const anotherMockWebview = {
             ...mockWebview,
             postMessage: () => Promise.resolve()

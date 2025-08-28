@@ -1,8 +1,10 @@
 /**
  * Test suite for Query Expansion and LLM Re-ranking functionality
- * 
+ *
  * This test suite verifies that the QueryExpansionService and LLMReRankingService
- * work correctly and integrate properly with the SearchManager.
+ * work correctly and integrate properly with the SearchManager. These services
+ * enhance search quality by expanding user queries with related terms and
+ * re-ranking results using large language models for better relevance.
  */
 
 import * as assert from 'assert';
@@ -18,6 +20,8 @@ suite('Query Expansion and Re-ranking Tests', () => {
     let llmReRankingService: LLMReRankingService;
 
     suiteSetup(() => {
+        // Initialize services for testing
+        // This creates real instances with configuration for comprehensive testing
         configService = new ConfigService();
         queryExpansionService = new QueryExpansionService(configService);
         llmReRankingService = new LLMReRankingService(configService);
@@ -25,8 +29,11 @@ suite('Query Expansion and Re-ranking Tests', () => {
 
     suite('QueryExpansionService', () => {
         test('should initialize with correct default configuration', () => {
+            // Test that the QueryExpansionService initializes with proper configuration
+            // This verifies that all required configuration properties are present and valid
             const config = queryExpansionService.getConfig();
             
+            // Verify all configuration properties exist and have correct types
             assert.strictEqual(typeof config.enabled, 'boolean');
             assert.strictEqual(typeof config.maxExpandedTerms, 'number');
             assert.strictEqual(typeof config.confidenceThreshold, 'number');
@@ -38,14 +45,17 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should return original query when expansion is disabled', async function() {
+            // Test that the service returns the original query when expansion is disabled
+            // This verifies the basic functionality when the feature is turned off
             this.timeout(5000);
             
-            // Temporarily disable expansion
+            // Temporarily disable expansion to test disabled behavior
             queryExpansionService.updateConfig({ enabled: false });
             
             const query = 'authentication middleware';
             const result = await queryExpansionService.expandQuery(query);
             
+            // When disabled, the service should return the original query unchanged
             assert.strictEqual(result.originalQuery, query);
             assert.strictEqual(result.combinedQuery, query);
             assert.strictEqual(result.expandedTerms.length, 0);
@@ -55,10 +65,12 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should handle expansion gracefully when enabled but LLM unavailable', async function() {
+            // Test that the service handles LLM unavailability gracefully
+            // This verifies error handling when the LLM service is not accessible
             this.timeout(10000);
             
-            // Enable expansion but use invalid configuration
-            queryExpansionService.updateConfig({ 
+            // Enable expansion but use invalid configuration to simulate LLM unavailability
+            queryExpansionService.updateConfig({
                 enabled: true,
                 apiUrl: 'http://invalid-url:1234',
                 timeout: 2000
@@ -67,7 +79,7 @@ suite('Query Expansion and Re-ranking Tests', () => {
             const query = 'database connection';
             const result = await queryExpansionService.expandQuery(query);
             
-            // Should fallback gracefully
+            // Should fallback gracefully to original query when LLM is unavailable
             assert.strictEqual(result.originalQuery, query);
             assert.strictEqual(result.combinedQuery, query);
             assert.strictEqual(result.expandedTerms.length, 0);
@@ -77,13 +89,17 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should validate configuration updates', () => {
+            // Test that configuration updates are applied correctly
+            // This verifies that the service can be reconfigured at runtime
             const originalConfig = queryExpansionService.getConfig();
             
+            // Update specific configuration properties
             queryExpansionService.updateConfig({
                 maxExpandedTerms: 3,
                 confidenceThreshold: 0.8
             });
             
+            // Verify that the updated properties have the new values
             const updatedConfig = queryExpansionService.getConfig();
             assert.strictEqual(updatedConfig.maxExpandedTerms, 3);
             assert.strictEqual(updatedConfig.confidenceThreshold, 0.8);
@@ -96,8 +112,11 @@ suite('Query Expansion and Re-ranking Tests', () => {
 
     suite('LLMReRankingService', () => {
         test('should initialize with correct default configuration', () => {
+            // Test that the LLMReRankingService initializes with proper configuration
+            // This verifies that all required configuration properties are present and valid
             const config = llmReRankingService.getConfig();
             
+            // Verify all configuration properties exist and have correct types
             assert.strictEqual(typeof config.enabled, 'boolean');
             assert.strictEqual(typeof config.maxResultsToReRank, 'number');
             assert.strictEqual(typeof config.vectorScoreWeight, 'number');
@@ -111,9 +130,11 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should return original results when re-ranking is disabled', async function() {
+            // Test that the service returns original results when re-ranking is disabled
+            // This verifies the basic functionality when the feature is turned off
             this.timeout(5000);
             
-            // Temporarily disable re-ranking
+            // Temporarily disable re-ranking to test disabled behavior
             llmReRankingService.updateConfig({ enabled: false });
             
             const query = 'user authentication';
@@ -121,12 +142,13 @@ suite('Query Expansion and Re-ranking Tests', () => {
             
             const result = await llmReRankingService.reRankResults(query, mockResults);
             
+            // When disabled, the service should return results unchanged
             assert.strictEqual(result.success, true);
             assert.strictEqual(result.query, query);
             assert.strictEqual(result.rankedResults.length, mockResults.length);
             assert.strictEqual(result.processedCount, mockResults.length);
             
-            // Scores should remain unchanged
+            // Scores should remain unchanged when re-ranking is disabled
             result.rankedResults.forEach((rankedResult, index) => {
                 assert.strictEqual(rankedResult.originalScore, mockResults[index].score);
                 assert.strictEqual(rankedResult.llmScore, mockResults[index].score);
@@ -137,10 +159,12 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should handle re-ranking gracefully when enabled but LLM unavailable', async function() {
+            // Test that the service handles LLM unavailability gracefully
+            // This verifies error handling when the LLM service is not accessible
             this.timeout(10000);
             
-            // Enable re-ranking but use invalid configuration
-            llmReRankingService.updateConfig({ 
+            // Enable re-ranking but use invalid configuration to simulate LLM unavailability
+            llmReRankingService.updateConfig({
                 enabled: true,
                 apiUrl: 'http://invalid-url:1234',
                 timeout: 2000
@@ -151,7 +175,7 @@ suite('Query Expansion and Re-ranking Tests', () => {
             
             const result = await llmReRankingService.reRankResults(query, mockResults);
             
-            // Should fallback gracefully
+            // Should fallback gracefully when LLM is unavailable
             assert.strictEqual(result.success, false);
             assert.strictEqual(result.query, query);
             assert.strictEqual(result.rankedResults.length, mockResults.length);
@@ -161,6 +185,8 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should validate score weight configuration', () => {
+            // Test that score weight configuration is applied correctly
+            // This verifies that the service can balance vector and LLM scores
             llmReRankingService.updateConfig({
                 vectorScoreWeight: 0.4,
                 llmScoreWeight: 0.6
@@ -170,16 +196,19 @@ suite('Query Expansion and Re-ranking Tests', () => {
             assert.strictEqual(config.vectorScoreWeight, 0.4);
             assert.strictEqual(config.llmScoreWeight, 0.6);
             
-            // Weights should sum to 1.0 for proper scoring
+            // Weights should sum to 1.0 for proper scoring normalization
             assert.strictEqual(config.vectorScoreWeight + config.llmScoreWeight, 1.0);
         });
     });
 
     suite('Integration Tests', () => {
         test('should work together in search pipeline', async function() {
+            // Test that both services work together in a complete search pipeline
+            // This verifies the integration between query expansion and re-ranking
             this.timeout(15000);
             
             // Test the complete pipeline with both services disabled
+            // This establishes a baseline for the integration test
             queryExpansionService.updateConfig({ enabled: false });
             llmReRankingService.updateConfig({ enabled: false });
             
@@ -187,15 +216,18 @@ suite('Query Expansion and Re-ranking Tests', () => {
             const mockResults = createMockSearchResults();
             
             // Step 1: Query expansion
+            // In a real scenario, this would expand the query with related terms
             const expandedQuery = await queryExpansionService.expandQuery(originalQuery);
             assert.strictEqual(expandedQuery.combinedQuery, originalQuery);
             
             // Step 2: Re-ranking
+            // In a real scenario, this would re-rank results based on relevance
             const reRankedResults = await llmReRankingService.reRankResults(
-                originalQuery, 
+                originalQuery,
                 mockResults
             );
             
+            // Verify that the pipeline completes successfully
             assert.strictEqual(reRankedResults.success, true);
             assert.strictEqual(reRankedResults.rankedResults.length, mockResults.length);
             
@@ -203,25 +235,26 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
 
         test('should handle configuration changes dynamically', () => {
-            // Test that services respond to configuration updates
+            // Test that services respond to configuration changes at runtime
+            // This verifies that the services can be reconfigured without restarting
             const initialExpansionConfig = queryExpansionService.getConfig();
             const initialReRankingConfig = llmReRankingService.getConfig();
             
-            // Update configurations
+            // Update configurations to toggle enabled state
             queryExpansionService.updateConfig({ enabled: !initialExpansionConfig.enabled });
             llmReRankingService.updateConfig({ enabled: !initialReRankingConfig.enabled });
             
-            // Verify changes
+            // Verify that the changes were applied correctly
             assert.strictEqual(
-                queryExpansionService.isEnabled(), 
+                queryExpansionService.isEnabled(),
                 !initialExpansionConfig.enabled
             );
             assert.strictEqual(
-                llmReRankingService.isEnabled(), 
+                llmReRankingService.isEnabled(),
                 !initialReRankingConfig.enabled
             );
             
-            // Restore original configurations
+            // Restore original configurations to avoid affecting other tests
             queryExpansionService.updateConfig({ enabled: initialExpansionConfig.enabled });
             llmReRankingService.updateConfig({ enabled: initialReRankingConfig.enabled });
         });
@@ -230,6 +263,12 @@ suite('Query Expansion and Re-ranking Tests', () => {
 
 /**
  * Create mock search results for testing
+ *
+ * This helper function creates realistic mock search results that can be used
+ * to test the query expansion and re-ranking services. The results include
+ * various code patterns and file types that would be found in a real codebase.
+ *
+ * @returns {Array<{ chunk: CodeChunk; score: number }>} An array of mock search results
  */
 function createMockSearchResults(): Array<{ chunk: CodeChunk; score: number }> {
     return [

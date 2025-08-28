@@ -16,7 +16,8 @@ import { readFileSync } from 'fs';
 import { AstParser, SupportedLanguage } from '../parsing/astParser';
 import { Chunker, CodeChunk } from '../parsing/chunker';
 import { IEmbeddingProvider, EmbeddingProviderFactory } from '../embeddings/embeddingProvider';
-import { LSPService } from '../lsp/lspService';
+// LSPService is not available in worker threads due to vscode API dependency
+// import { LSPService } from '../lsp/lspService';
 import * as path from 'path';
 
 // Ensure this file is run as a worker thread
@@ -60,7 +61,8 @@ interface WorkerResponse {
 let astParser: AstParser;
 let chunker: Chunker;
 let embeddingProvider: IEmbeddingProvider;
-let lspService: LSPService;
+// LSP service not available in worker threads
+// let lspService: LSPService;
 let isInitialized = false;
 
 /**
@@ -83,12 +85,8 @@ async function initializeWorker(): Promise<void> {
             throw new Error('No embedding configuration provided to worker');
         }
         
-        // Initialize LSP service (optional, may not be available in worker context)
-        try {
-            lspService = new LSPService(workerData?.workspaceRoot || '');
-        } catch (error) {
-            console.warn('IndexingWorker: LSP service not available in worker context');
-        }
+        // LSP service is not available in worker threads due to vscode API dependency
+        // Workers will process files without LSP semantic information
         
         isInitialized = true;
         console.log('IndexingWorker: Worker services initialized successfully');

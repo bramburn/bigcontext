@@ -336,12 +336,26 @@ export class NotificationService {
     }
 
     /**
-     * Show error notification
+     * Show error notification with automatic "View Logs" action
      */
     public async error(message: string, actions?: NotificationAction[]): Promise<string> {
-        return this.notify(NotificationType.ERROR, message, { 
+        // Always add "View Logs" action for error notifications
+        const viewLogsAction: NotificationAction = {
+            title: 'View Logs',
+            callback: () => {
+                if (this.loggingService) {
+                    this.loggingService.show();
+                }
+            },
+            isCloseAfterClick: false
+        };
+
+        // Combine provided actions with the View Logs action
+        const allActions = actions ? [...actions, viewLogsAction] : [viewLogsAction];
+
+        return this.notify(NotificationType.ERROR, message, {
             priority: NotificationPriority.CRITICAL,
-            actions 
+            actions: allActions
         });
     }
 

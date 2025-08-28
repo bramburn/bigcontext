@@ -8,9 +8,11 @@ import { MockQdrantService, MockEmbeddingProvider, MockConfigService } from '../
 
 /**
  * Test suite for ContextService
- * 
+ *
  * These tests verify the deduplication logic and advanced search functionality
- * of the ContextService, particularly the new maxResults and includeContent features.
+ * of the ContextService, particularly the maxResults and includeContent features.
+ * The ContextService is responsible for querying the vector database and processing
+ * results to provide relevant code context to users.
  */
 suite('ContextService Tests', () => {
     let contextService: ContextService;
@@ -21,11 +23,13 @@ suite('ContextService Tests', () => {
 
     setup(() => {
         // Create mock services using proper mock classes
+        // This isolates tests from external dependencies and ensures consistent behavior
         mockQdrantService = new MockQdrantService();
         mockEmbeddingProvider = new MockEmbeddingProvider();
         mockConfigService = new MockConfigService();
 
         // Set up mock data for testing deduplication
+        // We create multiple chunks from the same file to test deduplication logic
         mockQdrantService.createCollectionIfNotExists('code_context_test');
         mockQdrantService.upsertPoints('code_context_test', [
             {
@@ -93,6 +97,7 @@ suite('ContextService Tests', () => {
         mockIndexingService = {};
 
         // Create ContextService with mocked dependencies including ConfigService
+        // This allows us to test the service in isolation without real dependencies
         contextService = new ContextService(
             '/test/workspace',
             mockQdrantService as any,
@@ -103,6 +108,8 @@ suite('ContextService Tests', () => {
     });
 
     test('should deduplicate results by file path and keep highest score', async () => {
+        // Test the deduplication logic that ensures only the highest-scoring
+        // chunk from each file is returned in the results
         const contextQuery: ContextQuery = {
             query: 'test query',
             maxResults: 5,
@@ -112,14 +119,17 @@ suite('ContextService Tests', () => {
         const result = await contextService.queryContext(contextQuery);
 
         // Should have 3 unique files (file1.ts, file2.ts, file3.ts)
+        // Even though file1.ts has 3 chunks, only the highest-scoring one should be returned
         assert.strictEqual(result.results.length, 3, 'Should return 3 unique files');
 
         // Check that file1.ts has the highest score (0.9) from the first chunk
+        // This verifies that the deduplication logic correctly selects the highest score
         const file1Result = result.results.find(r => r.payload.filePath === 'src/file1.ts');
         assert.ok(file1Result, 'Should include file1.ts');
         assert.strictEqual(file1Result.score, 0.9, 'Should keep the highest score for file1.ts');
 
         // Check that results are sorted by score (descending)
+        // This ensures users see the most relevant results first
         for (let i = 0; i < result.results.length - 1; i++) {
             assert.ok(
                 result.results[i].score >= result.results[i + 1].score,
@@ -128,12 +138,15 @@ suite('ContextService Tests', () => {
         }
 
         // Verify the order: file1.ts (0.9), file2.ts (0.7), file3.ts (0.6)
+        // This confirms the sorting and deduplication are working correctly together
         assert.strictEqual(result.results[0].payload.filePath, 'src/file1.ts');
         assert.strictEqual(result.results[1].payload.filePath, 'src/file2.ts');
         assert.strictEqual(result.results[2].payload.filePath, 'src/file3.ts');
     });
 
     test('should respect maxResults limit', async () => {
+        // Test that the service correctly limits the number of results returned
+        // This is important for performance and to avoid overwhelming users
         const contextQuery: ContextQuery = {
             query: 'test query',
             maxResults: 2,
@@ -143,12 +156,15 @@ suite('ContextService Tests', () => {
         const result = await contextService.queryContext(contextQuery);
 
         // Should only return 2 results even though 3 unique files are available
+        // This verifies the pagination/limiting functionality works correctly
         assert.strictEqual(result.results.length, 2, 'Should respect maxResults limit');
         assert.strictEqual(result.totalResults, 2, 'totalResults should match actual results');
     });
 
     test('should include content when includeContent is true', async () => {
-        // Mock vscode.workspace.fs.readFile
+        // Test that the service can optionally include full file content in results
+        // This is useful when users need to see more context around the matched code
+        // Mock vscode.workspace.fs.readFile to simulate reading files from disk
         const originalReadFile = vscode.workspace.fs.readFile;
         vscode.workspace.fs.readFile = async (uri: vscode.Uri) => {
             const fileName = uri.path.split('/').pop();
@@ -165,6 +181,7 @@ suite('ContextService Tests', () => {
             const result = await contextService.queryContext(contextQuery);
 
             // Check that content is included in the results
+            // When includeContent is true, the service should read the full file content
             for (const searchResult of result.results) {
                 assert.ok(
                     searchResult.payload.content,
@@ -176,12 +193,14 @@ suite('ContextService Tests', () => {
                 );
             }
         } finally {
-            // Restore original function
+            // Restore original function to avoid affecting other tests
             vscode.workspace.fs.readFile = originalReadFile;
         }
     });
 
     test('should not include content when includeContent is false', async () => {
+        // Test that the service respects the includeContent flag when set to false
+        // This improves performance by avoiding unnecessary file I/O operations
         const contextQuery: ContextQuery = {
             query: 'test query',
             maxResults: 2,
@@ -191,6 +210,8 @@ suite('ContextService Tests', () => {
         const result = await contextService.queryContext(contextQuery);
 
         // Check that content is not included in the results (should only have original chunk content)
+        // When includeContent is false, only the original chunk content from the vector database
+        // should be returned, without reading the full file from disk
         for (const searchResult of result.results) {
             // When includeContent is false, the content should be the original chunk content
             // and not additional file content that was read from disk
@@ -204,7 +225,9 @@ suite('ContextService Tests', () => {
     });
 
     test('should handle empty search results gracefully', async () => {
-        // Mock empty results
+        // Test that the service handles cases where no results are found
+        // This ensures the UI doesn't break when queries return no matches
+        // Mock empty results to simulate a query with no matches
         mockQdrantService.search = async () => [];
 
         const contextQuery: ContextQuery = {
@@ -215,6 +238,7 @@ suite('ContextService Tests', () => {
 
         const result = await contextService.queryContext(contextQuery);
 
+        // Verify that the result structure is correct even with no matches
         assert.strictEqual(result.results.length, 0, 'Should return empty results');
         assert.strictEqual(result.totalResults, 0, 'totalResults should be 0');
         assert.strictEqual(result.query, 'no results query', 'Should preserve original query');
