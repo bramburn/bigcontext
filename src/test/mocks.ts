@@ -9,6 +9,7 @@ import { QdrantPoint, SearchResult } from '../db/qdrantService';
 import { IEmbeddingProvider } from '../embeddings/embeddingProvider';
 import { CodeChunk, ChunkType } from '../parsing/chunker';
 import { SupportedLanguage } from '../parsing/astParser';
+import { ConfigService, DatabaseConfig, OllamaConfig, OpenAIConfig, IndexingConfig, ExtensionConfig } from '../configService';
 
 /**
  * Mock implementation of QdrantService for testing
@@ -298,5 +299,140 @@ export class MockLspService {
     // Test helper methods
     setInitialized(initialized: boolean): void {
         this.isInitialized = initialized;
+    }
+}
+
+/**
+ * Mock implementation of ConfigService for testing
+ */
+export class MockConfigService {
+    private mockConfig: any = {};
+
+    constructor(initialConfig?: any) {
+        this.mockConfig = initialConfig || {
+            databaseConnectionString: 'mock-qdrant-connection',
+            embeddingProvider: 'ollama',
+            ollamaModel: 'mock-ollama-model',
+            ollamaApiUrl: 'http://mock-ollama:11434',
+            ollamaMaxBatchSize: 10,
+            ollamaTimeout: 30000,
+            openaiApiKey: 'mock-openai-key',
+            openaiModel: 'mock-openai-model',
+            openaiMaxBatchSize: 100,
+            openaiTimeout: 60000,
+            excludePatterns: ['**/mock_exclude/**'],
+            supportedLanguages: ['typescript', 'python'],
+            maxFileSize: 10 * 1024 * 1024,
+            indexingChunkSize: 500,
+            indexingChunkOverlap: 100,
+            autoIndexOnStartup: false,
+            indexingBatchSize: 100,
+            enableDebugLogging: false,
+            maxSearchResults: 20,
+            minSimilarityThreshold: 0.5,
+            indexingIntensity: 'High'
+        };
+    }
+
+    public refresh(): void {
+        // No-op for mock
+    }
+
+    public getQdrantConnectionString(): string {
+        return this.mockConfig.databaseConnectionString;
+    }
+
+    public getDatabaseConfig(): DatabaseConfig {
+        return {
+            type: 'qdrant',
+            connectionString: this.getQdrantConnectionString()
+        };
+    }
+
+    public getEmbeddingProvider(): 'ollama' | 'openai' {
+        return this.mockConfig.embeddingProvider;
+    }
+
+    public getOllamaConfig(): OllamaConfig {
+        return {
+            model: this.mockConfig.ollamaModel,
+            apiUrl: this.mockConfig.ollamaApiUrl,
+            maxBatchSize: this.mockConfig.ollamaMaxBatchSize,
+            timeout: this.mockConfig.ollamaTimeout
+        };
+    }
+
+    public getOpenAIConfig(): OpenAIConfig {
+        return {
+            apiKey: this.mockConfig.openaiApiKey,
+            model: this.mockConfig.openaiModel,
+            maxBatchSize: this.mockConfig.openaiMaxBatchSize,
+            timeout: this.mockConfig.openaiTimeout
+        };
+    }
+
+    public getIndexingConfig(): IndexingConfig {
+        return {
+            excludePatterns: this.mockConfig.excludePatterns,
+            supportedLanguages: this.mockConfig.supportedLanguages,
+            maxFileSize: this.mockConfig.maxFileSize,
+            chunkSize: this.mockConfig.indexingChunkSize,
+            chunkOverlap: this.mockConfig.indexingChunkOverlap
+        };
+    }
+
+    public getFullConfig(): ExtensionConfig {
+        return {
+            database: this.getDatabaseConfig(),
+            embeddingProvider: this.getEmbeddingProvider(),
+            ollama: this.getOllamaConfig(),
+            openai: this.getOpenAIConfig(),
+            indexing: this.getIndexingConfig()
+        };
+    }
+
+    public getMaxSearchResults(): number {
+        return this.mockConfig.maxSearchResults;
+    }
+
+    public getMinSimilarityThreshold(): number {
+        return this.mockConfig.minSimilarityThreshold;
+    }
+
+    public getAutoIndexOnStartup(): boolean {
+        return this.mockConfig.autoIndexOnStartup;
+    }
+
+    public getIndexingBatchSize(): number {
+        return this.mockConfig.indexingBatchSize;
+    }
+
+    public getEnableDebugLogging(): boolean {
+        return this.mockConfig.enableDebugLogging;
+    }
+
+    public getIndexingIntensity(): 'High' | 'Medium' | 'Low' {
+        return this.mockConfig.indexingIntensity;
+    }
+
+    public isProviderConfigured(provider: 'ollama' | 'openai'): boolean {
+        if (provider === 'ollama') {
+            return !!this.getOllamaConfig().apiUrl;
+        } else if (provider === 'openai') {
+            return !!this.getOpenAIConfig().apiKey;
+        }
+        return false;
+    }
+
+    public getCurrentProviderConfig(): OllamaConfig | OpenAIConfig {
+        const providerType = this.getEmbeddingProvider();
+        if (providerType === 'ollama') {
+            return this.getOllamaConfig();
+        }
+        return this.getOpenAIConfig();
+    }
+
+    public setConfig(key: string, value: any): void {
+        this.mockConfig[key] = value;
     }
 }

@@ -233,34 +233,34 @@ export class CommandManager {
 
     /**
      * Handles the 'code-context-engine.openSettings' command
-     * 
-     * This command provides access to the extension's configuration settings.
-     * It uses VS Code's native settings UI with a filter to show only settings
-     * relevant to this extension, providing a consistent user experience.
-     * 
-     * The command executes VS Code's built-in 'workbench.action.openSettings' command
-     * with a query parameter that filters for this extension's settings.
-     * 
+     *
+     * This command provides access to the extension's configuration settings
+     * through a dedicated webview panel. It uses the WebviewManager to create
+     * and manage a settings panel with a custom interface.
+     *
+     * The command uses WebviewManager.showSettingsPanel() to create a custom
+     * webview-based settings interface with single-instance management.
+     *
      * Error Handling:
-     * - Catches and logs any exceptions during settings opening
+     * - Catches and logs any exceptions during settings panel creation
      * - Shows user-friendly error message via VS Code notification system
-     * 
-     * @returns Promise that resolves when settings are opened or rejects on error
+     *
+     * @returns Promise that resolves when settings panel is opened or rejects on error
      */
     private async handleOpenSettings(): Promise<void> {
         try {
-            console.log('CommandManager: Opening native settings...');
+            console.log('CommandManager: Opening settings panel...');
 
-            // Execute VS Code's built-in settings command with extension filter
-            // The '@ext:' prefix filters settings to show only those from this extension
-            await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bramburn.code-context-engine');
+            // Use WebviewManager to show the settings panel
+            // This creates a custom webview-based settings interface
+            this.webviewManager.showSettingsPanel();
 
-            console.log('CommandManager: Native settings opened successfully');
+            console.log('CommandManager: Settings panel opened successfully');
         } catch (error) {
             // Log detailed error for debugging
-            console.error('CommandManager: Failed to open settings:', error);
+            console.error('CommandManager: Failed to open settings panel:', error);
             // Show user-friendly error message
-            vscode.window.showErrorMessage('Failed to open Code Context Engine settings');
+            vscode.window.showErrorMessage('Failed to open Code Context Engine settings panel');
         }
     }
 

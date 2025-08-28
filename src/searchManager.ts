@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import { ContextService, ContextQuery } from './context/contextService';
+import { QueryExpansionService, ExpandedQuery } from './search/queryExpansionService';
+import { LLMReRankingService, ReRankingResult } from './search/llmReRankingService';
+import { ConfigService } from './configService';
 
 /**
  * Search filters and options for advanced search functionality
@@ -33,6 +36,14 @@ export interface EnhancedSearchResult {
     lastModified: Date;
     fileSize: number;
     chunkType: string;
+    /** LLM relevance score (if re-ranking was used) */
+    llmScore?: number;
+    /** Final combined score */
+    finalScore?: number;
+    /** Explanation of relevance (if available) */
+    explanation?: string;
+    /** Whether this result was re-ranked */
+    wasReRanked?: boolean;
 }
 
 /**
@@ -43,6 +54,12 @@ export interface SearchHistoryEntry {
     filters: SearchFilters;
     timestamp: Date;
     resultCount: number;
+    /** Whether query expansion was used */
+    usedExpansion?: boolean;
+    /** Whether re-ranking was used */
+    usedReRanking?: boolean;
+    /** Expanded query terms (if expansion was used) */
+    expandedTerms?: string[];
 }
 
 /**
@@ -57,6 +74,9 @@ export interface SearchHistoryEntry {
  */
 export class SearchManager {
     private contextService: ContextService;
+    private queryExpansionService: QueryExpansionService;
+    private llmReRankingService: LLMReRankingService;
+    private configService: ConfigService;
     private searchHistory: SearchHistoryEntry[] = [];
     private resultCache: Map<string, EnhancedSearchResult[]> = new Map();
     private readonly maxHistoryEntries = 50;
@@ -65,9 +85,20 @@ export class SearchManager {
     /**
      * Creates a new SearchManager instance
      * @param contextService - The ContextService instance for performing searches
+     * @param configService - The ConfigService instance for configuration
+     * @param queryExpansionService - Optional QueryExpansionService instance
+     * @param llmReRankingService - Optional LLMReRankingService instance
      */
-    constructor(contextService: ContextService) {
+    constructor(
+        contextService: ContextService,
+        configService: ConfigService,
+        queryExpansionService?: QueryExpansionService,
+        llmReRankingService?: LLMReRankingService
+    ) {
         this.contextService = contextService;
+        this.configService = configService;
+        this.queryExpansionService = queryExpansionService || new QueryExpansionService(configService);
+        this.llmReRankingService = llmReRankingService || new LLMReRankingService(configService);
         this.loadSearchHistory();
     }
 
@@ -89,9 +120,21 @@ export class SearchManager {
                 return cachedResults;
             }
 
+            // Step 1: Query Expansion
+            let expandedQuery: ExpandedQuery | null = null;
+            let searchQuery = query;
+
+            if (this.queryExpansionService.isEnabled()) {
+                console.log('SearchManager: Expanding query...');
+                expandedQuery = await this.queryExpansionService.expandQuery(query);
+                searchQuery = expandedQuery.combinedQuery;
+                console.log(`SearchManager: Query expanded from "${query}" to "${searchQuery}"`);
+                console.log(`SearchManager: Expanded terms: ${expandedQuery.expandedTerms.join(', ')}`);
+            }
+
             // Build context query from search parameters
             const contextQuery: ContextQuery = {
-                query,
+                query: searchQuery, // Use expanded query
                 maxResults: filters.maxResults || 20,
                 minSimilarity: filters.minSimilarity || 0.5,
                 fileTypes: filters.fileTypes
@@ -101,19 +144,69 @@ export class SearchManager {
             const contextResults = await this.contextService.queryContext(contextQuery);
 
             // Transform results to enhanced format
-            const enhancedResults = await this.transformResults(contextResults.relatedFiles || []);
+            let enhancedResults = await this.transformResults(contextResults.relatedFiles || []);
+
+            // Step 2: LLM Re-ranking (if enabled and we have results)
+            let reRankingResult: ReRankingResult | null = null;
+
+            if (this.llmReRankingService.isEnabled() && enhancedResults.length > 0) {
+                console.log('SearchManager: Re-ranking results with LLM...');
+
+                // Convert enhanced results to format expected by re-ranking service
+                const resultsForReRanking = enhancedResults.map(result => ({
+                    chunk: {
+                        id: result.id,
+                        content: result.preview,
+                        filePath: result.filePath,
+                        type: result.chunkType as any,
+                        startLine: result.lineNumber,
+                        endLine: result.lineNumber + 10, // Estimate
+                        language: 'typescript' as any // Default language, will be improved later
+                    },
+                    score: result.similarity
+                }));
+
+                reRankingResult = await this.llmReRankingService.reRankResults(query, resultsForReRanking);
+
+                if (reRankingResult.success) {
+                    // Update enhanced results with re-ranking scores
+                    enhancedResults = enhancedResults.map((result, index) => {
+                        const rankedResult = reRankingResult!.rankedResults[index];
+                        if (rankedResult) {
+                            return {
+                                ...result,
+                                llmScore: rankedResult.llmScore,
+                                finalScore: rankedResult.finalScore,
+                                explanation: rankedResult.explanation,
+                                wasReRanked: true,
+                                similarity: rankedResult.finalScore // Update main similarity score
+                            };
+                        }
+                        return result;
+                    });
+
+                    console.log(`SearchManager: Re-ranked ${reRankingResult.processedCount} results`);
+                }
+            }
 
             // Apply additional filtering
             const filteredResults = this.applyAdvancedFilters(enhancedResults, filters);
 
-            // Sort results by relevance and similarity
+            // Sort results by relevance and similarity (now potentially including LLM scores)
             const sortedResults = this.sortResults(filteredResults);
 
             // Cache the results
             this.cacheResults(cacheKey, sortedResults);
 
-            // Add to search history
-            this.addToHistory(query, filters, sortedResults.length);
+            // Add to search history with expansion/re-ranking info
+            this.addToHistory(
+                query,
+                filters,
+                sortedResults.length,
+                expandedQuery?.expandedTerms,
+                expandedQuery !== null,
+                reRankingResult?.success || false
+            );
 
             console.log(`SearchManager: Found ${sortedResults.length} results`);
             return sortedResults;
@@ -328,17 +421,27 @@ export class SearchManager {
     /**
      * Adds search to history
      */
-    private addToHistory(query: string, filters: SearchFilters, resultCount: number): void {
+    private addToHistory(
+        query: string,
+        filters: SearchFilters,
+        resultCount: number,
+        expandedTerms?: string[],
+        usedExpansion?: boolean,
+        usedReRanking?: boolean
+    ): void {
         const entry: SearchHistoryEntry = {
             query,
             filters,
             timestamp: new Date(),
-            resultCount
+            resultCount,
+            expandedTerms,
+            usedExpansion,
+            usedReRanking
         };
 
         // Remove duplicate queries
         this.searchHistory = this.searchHistory.filter(h => h.query !== query);
-        
+
         // Add new entry at the beginning
         this.searchHistory.unshift(entry);
 

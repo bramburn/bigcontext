@@ -1,3 +1,5 @@
+import { ConfigService } from '../configService';
+
 /**
  * Core interface for embedding providers that can generate vector embeddings from text
  *
@@ -66,8 +68,8 @@ export interface EmbeddingConfig {
     /** API key for authentication (required for OpenAI, not needed for Ollama) */
     apiKey?: string;
     
-    /** Base URL for the embedding service (optional, uses default if not specified) */
-    baseUrl?: string;
+    /** API URL for the embedding service (optional, uses default if not specified) */
+    apiUrl?: string;
     
     /** Maximum number of chunks to process in a single batch (optional, uses provider defaults) */
     maxBatchSize?: number;
@@ -143,7 +145,7 @@ export class EmbeddingProviderFactory {
      * @returns Promise resolving to a configured embedding provider instance
      * @throws Error if the provider type is not supported or configuration is invalid
      */
-    static async createProviderFromConfigService(configService: any): Promise<IEmbeddingProvider> {
+    static async createProviderFromConfigService(configService: ConfigService): Promise<IEmbeddingProvider> {
         // Get the configured provider type from the central configuration
         const providerType = configService.getEmbeddingProvider();
 
@@ -155,7 +157,7 @@ export class EmbeddingProviderFactory {
             config = {
                 provider: 'ollama',
                 model: ollamaConfig.model,
-                baseUrl: ollamaConfig.apiUrl,
+                apiUrl: ollamaConfig.apiUrl,
                 maxBatchSize: ollamaConfig.maxBatchSize,
                 timeout: ollamaConfig.timeout
             };

@@ -90,4 +90,37 @@ suite('ConfigService Tests', () => {
             configService.refresh();
         });
     });
+
+    test('should provide max search results', () => {
+        const maxResults = configService.getMaxSearchResults();
+        assert.strictEqual(typeof maxResults, 'number');
+        assert.ok(maxResults > 0);
+    });
+
+    test('should provide min similarity threshold', () => {
+        const threshold = configService.getMinSimilarityThreshold();
+        assert.strictEqual(typeof threshold, 'number');
+        assert.ok(threshold >= 0 && threshold <= 1);
+    });
+
+    test('should provide auto index on startup setting', () => {
+        const autoIndex = configService.getAutoIndexOnStartup();
+        assert.strictEqual(typeof autoIndex, 'boolean');
+    });
+
+    test('should provide indexing batch size', () => {
+        const batchSize = configService.getIndexingBatchSize();
+        assert.strictEqual(typeof batchSize, 'number');
+        assert.ok(batchSize > 0);
+    });
+
+    test('should provide debug logging setting', () => {
+        const debugLogging = configService.getEnableDebugLogging();
+        assert.strictEqual(typeof debugLogging, 'boolean');
+    });
+
+    test('should provide indexing intensity', () => {
+        const intensity = configService.getIndexingIntensity();
+        assert.ok(['High', 'Medium', 'Low'].includes(intensity));
+    });
 });

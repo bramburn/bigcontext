@@ -54,14 +54,17 @@ suite('Dependency Injection Tests', () => {
             mockQdrantService as any,
             mockEmbeddingProvider,
             mockLspService as any,
-            mockStateManager
+            mockStateManager,
+            {} as any, // mockWorkspaceManager
+            {} as any  // mockConfigService
         );
 
         const contextService = new ContextService(
             workspaceRoot,
             mockQdrantService as any,
             mockEmbeddingProvider,
-            mockIndexingService
+            mockIndexingService,
+            {} as any  // mockConfigService
         );
 
         assert.ok(contextService);
@@ -84,7 +87,9 @@ suite('Dependency Injection Tests', () => {
             mockQdrantService as any,
             mockEmbeddingProvider,
             mockLspService as any,
-            mockStateManager
+            mockStateManager,
+            {} as any, // mockWorkspaceManager
+            {} as any  // mockConfigService
         );
 
         assert.ok(indexingService);

@@ -89,6 +89,27 @@
             "MxBai Embed Large (1024 dimensions, more accurate)"
           ]
         },
+        "code-context-engine.ollamaApiUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API URL",
+          "pattern": "^https?://.*:\\d+$",
+          "patternErrorMessage": "Must be a valid HTTP/HTTPS URL with port (e.g., http://localhost:11434)"
+        },
+        "code-context-engine.ollamaMaxBatchSize": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum batch size for Ollama embeddings"
+        },
+        "code-context-engine.ollamaTimeout": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 5000,
+          "maximum": 120000,
+          "description": "Timeout for Ollama API requests in milliseconds"
+        },
         "code-context-engine.openaiModel": {
           "type": "string",
           "default": "text-embedding-ada-002",
@@ -103,6 +124,20 @@
             "Embedding-3-Small (1536 dimensions, improved performance)",
             "Embedding-3-Large (3072 dimensions, highest quality)"
           ]
+        },
+        "code-context-engine.openaiMaxBatchSize": {
+          "type": "number",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum batch size for OpenAI embeddings"
+        },
+        "code-context-engine.openaiTimeout": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 5000,
+          "maximum": 300000,
+          "description": "Timeout for OpenAI API requests in milliseconds"
         },
         "code-context-engine.maxSearchResults": {
           "type": "number",
@@ -167,6 +202,142 @@
             ]
           },
           "description": "Programming languages to include in indexing"
+        },
+        "code-context-engine.maxFileSize": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 1024,
+          "maximum": 10485760,
+          "description": "Maximum file size in bytes to process during indexing (1MB default)"
+        },
+        "code-context-engine.indexingChunkSize": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Size of text chunks for embedding (in characters)"
+        },
+        "code-context-engine.indexingChunkOverlap": {
+          "type": "number",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Overlap between consecutive chunks (in characters)"
+        },
+        "code-context-engine.indexingIntensity": {
+          "type": "string",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "default": "High",
+          "description": "Controls the CPU intensity of the indexing process. 'Low' is recommended for battery-powered devices.",
+          "enumDescriptions": [
+            "Maximum speed indexing with no artificial delays",
+            "Moderate speed with small delays between files (100ms)",
+            "Slow speed with significant delays between files (500ms) - battery friendly"
+          ]
+        },
+        "code-context-engine.queryExpansion.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable AI-powered query expansion to find more relevant results by generating related terms and synonyms"
+        },
+        "code-context-engine.queryExpansion.maxExpandedTerms": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of expanded terms to generate for each query"
+        },
+        "code-context-engine.queryExpansion.confidenceThreshold": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Minimum confidence threshold for including expanded terms (0.0 to 1.0)"
+        },
+        "code-context-engine.queryExpansion.llmProvider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "ollama"
+          ],
+          "default": "ollama",
+          "description": "LLM provider to use for query expansion",
+          "enumDescriptions": [
+            "OpenAI GPT models (requires API key)",
+            "Local Ollama models (free, private)"
+          ]
+        },
+        "code-context-engine.queryExpansion.model": {
+          "type": "string",
+          "default": "gpt-3.5-turbo",
+          "description": "Model to use for query expansion (e.g., 'gpt-3.5-turbo' for OpenAI, 'llama2' for Ollama)"
+        },
+        "code-context-engine.queryExpansion.timeout": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Timeout for query expansion requests in milliseconds"
+        },
+        "code-context-engine.llmReRanking.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable LLM-powered re-ranking of search results for improved relevance"
+        },
+        "code-context-engine.llmReRanking.maxResultsToReRank": {
+          "type": "number",
+          "default": 10,
+          "minimum": 5,
+          "maximum": 50,
+          "description": "Maximum number of search results to re-rank using LLM"
+        },
+        "code-context-engine.llmReRanking.vectorScoreWeight": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Weight for original vector similarity score in final ranking (0.0 to 1.0)"
+        },
+        "code-context-engine.llmReRanking.llmScoreWeight": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Weight for LLM relevance score in final ranking (0.0 to 1.0)"
+        },
+        "code-context-engine.llmReRanking.llmProvider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "ollama"
+          ],
+          "default": "ollama",
+          "description": "LLM provider to use for re-ranking",
+          "enumDescriptions": [
+            "OpenAI GPT models (requires API key)",
+            "Local Ollama models (free, private)"
+          ]
+        },
+        "code-context-engine.llmReRanking.model": {
+          "type": "string",
+          "default": "gpt-3.5-turbo",
+          "description": "Model to use for re-ranking (e.g., 'gpt-3.5-turbo' for OpenAI, 'llama2' for Ollama)"
+        },
+        "code-context-engine.llmReRanking.timeout": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "maximum": 60000,
+          "description": "Timeout for re-ranking requests in milliseconds"
+        },
+        "code-context-engine.llmReRanking.includeExplanations": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include explanations for why results were ranked as they were (may increase response time)"
         }
       }
     },

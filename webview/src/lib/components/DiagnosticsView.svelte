@@ -10,6 +10,7 @@
     import { postMessage, onMessage } from '$lib/vscodeApi';
     import { setupState, appActions } from '$lib/stores/appStore';
     import ConnectionTester from './ConnectionTester.svelte';
+    import WorkspaceSelector from './WorkspaceSelector.svelte';
     
     // Register Fluent UI components
     provideFluentDesignSystem().register(
@@ -33,6 +34,13 @@
         fileCount: 0,
         vectorCount: 0,
         collectionName: 'No collection found'
+    };
+
+    // Workspace management state
+    let workspaceInfo = {
+        current: null as string | null,
+        total: 0,
+        hasMultiple: false
     };
 
     let isTestingConnections = false;
@@ -79,6 +87,23 @@
                     appActions.setError(message.error || 'Failed to clear index');
                 }
             }),
+            onMessage('workspaceStatsResponse', (message) => {
+                if (message.success) {
+                    workspaceInfo = {
+                        current: message.data.current,
+                        total: message.data.total,
+                        hasMultiple: message.data.total > 1
+                    };
+                }
+            }),
+            onMessage('workspaceChanged', (message) => {
+                // Refresh workspace and index info when workspace changes
+                if (message.data.workspace) {
+                    workspaceInfo.current = message.data.workspace.name;
+                    // Refresh index info for the new workspace
+                    postMessage('getIndexInfo');
+                }
+            }),
             onMessage('error', (message) => {
                 systemStatus.lastError = message.message;
                 appActions.setError(message.message);
@@ -87,9 +112,10 @@
             })
         );
 
-        // Request initial system status and index info
+        // Request initial system status, index info, and workspace stats
         postMessage('getSystemStatus');
         postMessage('getIndexInfo');
+        postMessage('getWorkspaceStats');
     });
 
     onDestroy(() => {
@@ -190,7 +216,12 @@
     <div class="diagnostics-header">
         <h1>Status & Diagnostics</h1>
         <p>Monitor system status, test connections, and access configuration settings.</p>
-        
+
+        <!-- Workspace Selection -->
+        {#if workspaceInfo.hasMultiple}
+            <WorkspaceSelector showLabel={true} compact={false} />
+        {/if}
+
         <div class="header-actions">
             <fluent-button
                 appearance="accent"
@@ -272,6 +303,16 @@
     <fluent-card class="index-section">
         <h3>Index Management</h3>
         <p>Monitor and manage your workspace index.</p>
+
+        {#if workspaceInfo.current}
+            <div class="workspace-context">
+                <span class="workspace-label">Current Workspace:</span>
+                <span class="workspace-name">{workspaceInfo.current}</span>
+                {#if workspaceInfo.hasMultiple}
+                    <span class="workspace-count">({workspaceInfo.total} total)</span>
+                {/if}
+            </div>
+        {/if}
 
         <div class="index-grid">
             <div class="index-item">
@@ -554,6 +595,35 @@
         gap: 10px;
         flex-wrap: wrap;
         justify-content: flex-start;
+    }
+
+    .workspace-context {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 15px;
+        padding: 8px 12px;
+        background-color: var(--vscode-editor-inactiveSelectionBackground);
+        border-radius: 4px;
+        border-left: 3px solid var(--vscode-textLink-foreground);
+    }
+
+    .workspace-label {
+        font-weight: 600;
+        color: var(--vscode-foreground);
+        font-size: 13px;
+    }
+
+    .workspace-name {
+        color: var(--vscode-textLink-foreground);
+        font-weight: 500;
+        font-size: 13px;
+    }
+
+    .workspace-count {
+        color: var(--vscode-descriptionForeground);
+        font-size: 12px;
+        font-style: italic;
     }
 
     .test-grid {

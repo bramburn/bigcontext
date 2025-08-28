@@ -4,6 +4,7 @@ import { ContextService, ContextQuery } from '../../context/contextService';
 import { QdrantService } from '../../db/qdrantService';
 import { IEmbeddingProvider } from '../../embeddings/embeddingProvider';
 import { IndexingService } from '../../indexing/indexingService';
+import { MockQdrantService, MockEmbeddingProvider, MockConfigService } from '../mocks';
 
 /**
  * Test suite for ContextService
@@ -13,98 +14,91 @@ import { IndexingService } from '../../indexing/indexingService';
  */
 suite('ContextService Tests', () => {
     let contextService: ContextService;
-    let mockQdrantService: any;
-    let mockEmbeddingProvider: any;
+    let mockQdrantService: MockQdrantService;
+    let mockEmbeddingProvider: MockEmbeddingProvider;
     let mockIndexingService: any;
+    let mockConfigService: MockConfigService;
 
     setup(() => {
-        // Create mock services
-        mockQdrantService = {
-            search: async (collectionName: string, vector: number[], limit: number, filter?: any) => {
-                // Return mock results with duplicate file paths
-                return [
-                    {
-                        id: '1',
-                        score: 0.9,
-                        payload: {
-                            filePath: 'src/file1.ts',
-                            text: 'First chunk from file1',
-                            chunkIndex: 0,
-                            startLine: 1,
-                            endLine: 10,
-                            language: 'typescript'
-                        }
-                    },
-                    {
-                        id: '2',
-                        score: 0.8,
-                        payload: {
-                            filePath: 'src/file1.ts',
-                            text: 'Second chunk from file1',
-                            chunkIndex: 1,
-                            startLine: 11,
-                            endLine: 20,
-                            language: 'typescript'
-                        }
-                    },
-                    {
-                        id: '3',
-                        score: 0.85,
-                        payload: {
-                            filePath: 'src/file1.ts',
-                            text: 'Third chunk from file1 with higher score',
-                            chunkIndex: 2,
-                            startLine: 21,
-                            endLine: 30,
-                            language: 'typescript'
-                        }
-                    },
-                    {
-                        id: '4',
-                        score: 0.7,
-                        payload: {
-                            filePath: 'src/file2.ts',
-                            text: 'Chunk from file2',
-                            chunkIndex: 0,
-                            startLine: 1,
-                            endLine: 10,
-                            language: 'typescript'
-                        }
-                    },
-                    {
-                        id: '5',
-                        score: 0.6,
-                        payload: {
-                            filePath: 'src/file3.ts',
-                            text: 'Chunk from file3',
-                            chunkIndex: 0,
-                            startLine: 1,
-                            endLine: 10,
-                            language: 'typescript'
-                        }
-                    }
-                ];
-            },
-            healthCheck: async () => true,
-            getCollectionInfo: async () => ({ status: 'green' })
-        };
+        // Create mock services using proper mock classes
+        mockQdrantService = new MockQdrantService();
+        mockEmbeddingProvider = new MockEmbeddingProvider();
+        mockConfigService = new MockConfigService();
 
-        mockEmbeddingProvider = {
-            generateEmbeddings: async (texts: string[]) => {
-                // Return mock embeddings
-                return texts.map(() => new Array(384).fill(0.1));
+        // Set up mock data for testing deduplication
+        mockQdrantService.createCollectionIfNotExists('code_context_test');
+        mockQdrantService.upsertPoints('code_context_test', [
+            {
+                id: '1',
+                vector: [0.1, 0.2],
+                payload: {
+                    filePath: 'src/file1.ts',
+                    content: 'First chunk from file1',
+                    startLine: 1,
+                    endLine: 10,
+                    type: 'function',
+                    language: 'typescript'
+                }
             },
-            getProviderName: () => 'mock-provider'
-        };
+            {
+                id: '2',
+                vector: [0.15, 0.25],
+                payload: {
+                    filePath: 'src/file1.ts',
+                    content: 'Second chunk from file1',
+                    startLine: 11,
+                    endLine: 20,
+                    type: 'function',
+                    language: 'typescript'
+                }
+            },
+            {
+                id: '3',
+                vector: [0.2, 0.3],
+                payload: {
+                    filePath: 'src/file1.ts',
+                    content: 'Third chunk from file1 with higher score',
+                    startLine: 21,
+                    endLine: 30,
+                    type: 'function',
+                    language: 'typescript'
+                }
+            },
+            {
+                id: '4',
+                vector: [0.1, 0.15],
+                payload: {
+                    filePath: 'src/file2.ts',
+                    content: 'Chunk from file2',
+                    startLine: 1,
+                    endLine: 10,
+                    type: 'function',
+                    language: 'typescript'
+                }
+            },
+            {
+                id: '5',
+                vector: [0.05, 0.1],
+                payload: {
+                    filePath: 'src/file3.ts',
+                    content: 'Chunk from file3',
+                    startLine: 1,
+                    endLine: 10,
+                    type: 'function',
+                    language: 'typescript'
+                }
+            }
+        ]);
 
         mockIndexingService = {};
 
-        // Create ContextService with mocked dependencies
+        // Create ContextService with mocked dependencies including ConfigService
         contextService = new ContextService(
             '/test/workspace',
-            mockQdrantService as QdrantService,
-            mockEmbeddingProvider as IEmbeddingProvider,
-            mockIndexingService as IndexingService
+            mockQdrantService as any,
+            mockEmbeddingProvider as any,
+            mockIndexingService as IndexingService,
+            mockConfigService as any
         );
     });
 

@@ -14,6 +14,7 @@ import { AstParser } from './parsing/astParser';
 import { Chunker } from './parsing/chunker';
 import { LSPService } from './lsp/lspService';
 import { FileSystemWatcherManager } from './fileSystemWatcherManager';
+import { WorkspaceManager } from './workspaceManager';
 
 // Manager imports
 import { CommandManager } from './commandManager';
@@ -51,6 +52,7 @@ export class ExtensionManager {
     private contextService!: ContextService;
     private indexingService!: IndexingService;
     private fileSystemWatcherManager!: FileSystemWatcherManager;
+    private workspaceManager!: WorkspaceManager;
 
     // Managers - services that manage specific aspects of the extension
     private commandManager!: CommandManager;
@@ -96,6 +98,20 @@ export class ExtensionManager {
             this.stateManager = new StateManager();
             console.log('ExtensionManager: StateManager initialized');
 
+            // Step 1.1: Initialize WorkspaceManager (no dependencies)
+            // WorkspaceManager handles multi-workspace support and workspace switching
+            this.workspaceManager = new WorkspaceManager();
+
+            // Set up workspace change listener to handle workspace switching
+            const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged((workspace) => {
+                console.log(`ExtensionManager: Workspace changed to: ${workspace?.name || 'none'}`);
+                // Notify other services about workspace change if needed
+                // The IndexingService will automatically use the new workspace for collection naming
+            });
+            this.disposables.push(workspaceChangeDisposable);
+
+            console.log('ExtensionManager: WorkspaceManager initialized');
+
             // Step 2: Initialize ConfigService (no dependencies)
             // ConfigService provides configuration settings needed by other services
             this.configService = new ConfigService();
@@ -125,7 +141,7 @@ export class ExtensionManager {
                 const chunker = new Chunker();
                 const lspService = new LSPService(workspaceRoot);
 
-                // Initialize IndexingService with all dependencies including StateManager
+                // Initialize IndexingService with all dependencies including StateManager, WorkspaceManager, and ConfigService
                 // IndexingService coordinates file indexing, parsing, and storage in the vector database
                 this.indexingService = new IndexingService(
                     workspaceRoot,
@@ -135,7 +151,9 @@ export class ExtensionManager {
                     this.qdrantService,
                     this.embeddingProvider,
                     lspService,
-                    this.stateManager
+                    this.stateManager,
+                    this.workspaceManager,
+                    this.configService
                 );
                 console.log('ExtensionManager: IndexingService initialized');
 
@@ -145,7 +163,8 @@ export class ExtensionManager {
                     workspaceRoot,
                     this.qdrantService,
                     this.embeddingProvider,
-                    this.indexingService
+                    this.indexingService,
+                    this.configService
                 );
                 console.log('ExtensionManager: ContextService initialized');
 
@@ -178,12 +197,13 @@ export class ExtensionManager {
             // Step 9: Initialize SearchManager
             // SearchManager coordinates search operations across the codebase
             // Depends on ContextService for context-aware search functionality
-            this.searchManager = new SearchManager(this.contextService);
+            this.searchManager = new SearchManager(this.contextService, this.configService);
             console.log('ExtensionManager: SearchManager initialized');
 
             // Step 10: Initialize WebviewManager
             // WebviewManager handles the UI webview and user interactions
-            this.webviewManager = new WebviewManager();
+            // Pass the extension context for proper webview URI resolution and ExtensionManager for service access
+            this.webviewManager = new WebviewManager(this.context, this);
             console.log('ExtensionManager: WebviewManager initialized');
 
             // Step 11: Initialize CommandManager and register commands
@@ -219,7 +239,7 @@ export class ExtensionManager {
     /**
      * Disposes of all resources and cleans up services
      * This method should be called when the extension is deactivated
-     * 
+     *
      * The disposal follows the reverse order of initialization to ensure
      * that services are properly cleaned up and no dangling references remain.
      * Each service is checked for existence before disposal to handle cases
@@ -230,7 +250,7 @@ export class ExtensionManager {
 
         // Dispose of managers in reverse order of initialization
         // This ensures that services with dependencies are disposed first
-        
+
         if (this.statusBarManager) {
             this.statusBarManager.dispose();
         }
@@ -249,6 +269,13 @@ export class ExtensionManager {
 
         if (this.performanceManager) {
             this.performanceManager.dispose();
+        }
+
+        // Cleanup IndexingService worker threads before disposing StateManager
+        if (this.indexingService) {
+            this.indexingService.cleanup().catch(error => {
+                console.error('ExtensionManager: Error cleaning up IndexingService:', error);
+            });
         }
 
         if (this.stateManager) {
@@ -387,5 +414,13 @@ export class ExtensionManager {
      */
     getContext(): vscode.ExtensionContext {
         return this.context;
+    }
+
+    /**
+     * Gets the WorkspaceManager instance
+     * @returns The WorkspaceManager instance that handles multi-workspace support
+     */
+    getWorkspaceManager(): WorkspaceManager {
+        return this.workspaceManager;
     }
 }

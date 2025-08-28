@@ -71,6 +71,76 @@ export interface IndexingConfig {
 }
 
 /**
+ * Configuration interface for query expansion settings
+ */
+export interface QueryExpansionConfig {
+    /** Whether query expansion is enabled */
+    enabled: boolean;
+    /** Maximum number of expanded terms to generate */
+    maxExpandedTerms: number;
+    /** Minimum confidence threshold for including expanded terms */
+    confidenceThreshold: number;
+    /** LLM provider to use for expansion */
+    llmProvider: 'openai' | 'ollama';
+    /** Model to use for expansion */
+    model: string;
+    /** API key for LLM provider (if required) */
+    apiKey?: string;
+    /** API URL for LLM provider */
+    apiUrl?: string;
+    /** Timeout for LLM requests in milliseconds */
+    timeout: number;
+}
+
+/**
+ * Configuration interface for LLM re-ranking settings
+ */
+export interface LLMReRankingConfig {
+    /** Whether re-ranking is enabled */
+    enabled: boolean;
+    /** Maximum number of results to re-rank */
+    maxResultsToReRank: number;
+    /** Weight for original vector score (0-1) */
+    vectorScoreWeight: number;
+    /** Weight for LLM score (0-1) */
+    llmScoreWeight: number;
+    /** LLM provider to use for re-ranking */
+    llmProvider: 'openai' | 'ollama';
+    /** Model to use for re-ranking */
+    model: string;
+    /** API key for LLM provider (if required) */
+    apiKey?: string;
+    /** API URL for LLM provider */
+    apiUrl?: string;
+    /** Timeout for LLM requests in milliseconds */
+    timeout: number;
+    /** Whether to include explanations in results */
+    includeExplanations: boolean;
+}
+
+/**
+ * Configuration interface for logging settings
+ */
+export interface LoggingConfig {
+    /** Current log level */
+    level?: string;
+    /** Whether to enable file logging */
+    enableFileLogging?: boolean;
+    /** Directory for log files */
+    logDirectory?: string;
+    /** Maximum log file size in bytes */
+    maxFileSize?: number;
+    /** Number of log files to keep */
+    maxFiles?: number;
+    /** Whether to enable console logging */
+    enableConsoleLogging?: boolean;
+    /** Whether to enable VS Code output channel */
+    enableOutputChannel?: boolean;
+    /** Log format template */
+    logFormat?: string;
+}
+
+/**
  * Main extension configuration interface
  *
  * Aggregates all configuration sections into a single type that represents
@@ -87,6 +157,12 @@ export interface ExtensionConfig {
     openai: OpenAIConfig;
     /** Code indexing configuration */
     indexing: IndexingConfig;
+    /** Query expansion configuration */
+    queryExpansion?: QueryExpansionConfig;
+    /** LLM re-ranking configuration */
+    llmReRanking?: LLMReRankingConfig;
+    /** Logging configuration */
+    logging?: LoggingConfig;
 }
 
 /**
@@ -176,10 +252,10 @@ export class ConfigService {
      */
     public getOllamaConfig(): OllamaConfig {
         return {
-            apiUrl: this.config.get<string>('ollama.apiUrl') || 'http://localhost:11434',
-            model: this.config.get<string>('ollama.model') || 'nomic-embed-text',
-            timeout: this.config.get<number>('ollama.timeout') || 30000,
-            maxBatchSize: this.config.get<number>('ollama.maxBatchSize') || 10
+            apiUrl: this.config.get<string>('ollamaApiUrl') || 'http://localhost:11434',
+            model: this.config.get<string>('ollamaModel') || 'nomic-embed-text',
+            timeout: this.config.get<number>('ollamaTimeout') || 30000,
+            maxBatchSize: this.config.get<number>('ollamaMaxBatchSize') || 10
         };
     }
 
@@ -193,10 +269,10 @@ export class ConfigService {
      */
     public getOpenAIConfig(): OpenAIConfig {
         return {
-            apiKey: this.config.get<string>('openai.apiKey') || '',
-            model: this.config.get<string>('openai.model') || 'text-embedding-ada-002',
-            timeout: this.config.get<number>('openai.timeout') || 30000,
-            maxBatchSize: this.config.get<number>('openai.maxBatchSize') || 100
+            apiKey: this.config.get<string>('openaiApiKey') || '',
+            model: this.config.get<string>('openaiModel') || 'text-embedding-ada-002',
+            timeout: this.config.get<number>('openaiTimeout') || 30000,
+            maxBatchSize: this.config.get<number>('openaiMaxBatchSize') || 100
         };
     }
 
@@ -211,25 +287,92 @@ export class ConfigService {
      */
     public getIndexingConfig(): IndexingConfig {
         return {
-            excludePatterns: this.config.get<string[]>('indexing.excludePatterns') || [
+            excludePatterns: this.config.get<string[]>('excludePatterns') || [
                 '**/node_modules/**',
                 '**/dist/**',
                 '**/build/**',
                 '**/.git/**',
                 '**/coverage/**'
             ],
-            supportedLanguages: this.config.get<string[]>('indexing.supportedLanguages') || [
+            supportedLanguages: this.config.get<string[]>('supportedLanguages') || [
                 'typescript',
                 'javascript',
                 'python',
-                'csharp',
-                'java',
-                'cpp',
-                'rust'
+                'csharp'
             ],
-            maxFileSize: this.config.get<number>('indexing.maxFileSize') || 1024 * 1024, // 1MB
-            chunkSize: this.config.get<number>('indexing.chunkSize') || 1000,
-            chunkOverlap: this.config.get<number>('indexing.chunkOverlap') || 200
+            maxFileSize: this.config.get<number>('maxFileSize') || 1024 * 1024, // 1MB
+            chunkSize: this.config.get<number>('indexingChunkSize') || 1000,
+            chunkOverlap: this.config.get<number>('indexingChunkOverlap') || 200
+        };
+    }
+
+    /**
+     * Get query expansion configuration
+     *
+     * @returns QueryExpansionConfig object with all query expansion settings
+     */
+    public getQueryExpansionConfig(): QueryExpansionConfig {
+        const embeddingProvider = this.getEmbeddingProvider();
+        return {
+            enabled: this.config.get<boolean>('queryExpansion.enabled') ?? false,
+            maxExpandedTerms: this.config.get<number>('queryExpansion.maxExpandedTerms') ?? 5,
+            confidenceThreshold: this.config.get<number>('queryExpansion.confidenceThreshold') ?? 0.7,
+            llmProvider: this.config.get<'openai' | 'ollama'>('queryExpansion.llmProvider') ?? embeddingProvider,
+            model: this.config.get<string>('queryExpansion.model') ?? (
+                embeddingProvider === 'openai' ? 'gpt-3.5-turbo' : 'llama2'
+            ),
+            apiKey: this.config.get<string>('queryExpansion.apiKey') ?? this.getOpenAIConfig().apiKey,
+            apiUrl: this.config.get<string>('queryExpansion.apiUrl') ?? (
+                embeddingProvider === 'ollama'
+                    ? this.getOllamaConfig().apiUrl
+                    : 'https://api.openai.com/v1'
+            ),
+            timeout: this.config.get<number>('queryExpansion.timeout') ?? 5000
+        };
+    }
+
+    /**
+     * Get LLM re-ranking configuration
+     *
+     * @returns LLMReRankingConfig object with all re-ranking settings
+     */
+    public getLLMReRankingConfig(): LLMReRankingConfig {
+        const embeddingProvider = this.getEmbeddingProvider();
+        return {
+            enabled: this.config.get<boolean>('llmReRanking.enabled') ?? false,
+            maxResultsToReRank: this.config.get<number>('llmReRanking.maxResultsToReRank') ?? 10,
+            vectorScoreWeight: this.config.get<number>('llmReRanking.vectorScoreWeight') ?? 0.3,
+            llmScoreWeight: this.config.get<number>('llmReRanking.llmScoreWeight') ?? 0.7,
+            llmProvider: this.config.get<'openai' | 'ollama'>('llmReRanking.llmProvider') ?? embeddingProvider,
+            model: this.config.get<string>('llmReRanking.model') ?? (
+                embeddingProvider === 'openai' ? 'gpt-3.5-turbo' : 'llama2'
+            ),
+            apiKey: this.config.get<string>('llmReRanking.apiKey') ?? this.getOpenAIConfig().apiKey,
+            apiUrl: this.config.get<string>('llmReRanking.apiUrl') ?? (
+                embeddingProvider === 'ollama'
+                    ? this.getOllamaConfig().apiUrl
+                    : 'https://api.openai.com/v1'
+            ),
+            timeout: this.config.get<number>('llmReRanking.timeout') ?? 10000,
+            includeExplanations: this.config.get<boolean>('llmReRanking.includeExplanations') ?? false
+        };
+    }
+
+    /**
+     * Get logging configuration
+     *
+     * @returns LoggingConfig object with all logging settings
+     */
+    public getLoggingConfig(): LoggingConfig {
+        return {
+            level: this.config.get<string>('logging.level') ?? 'info',
+            enableFileLogging: this.config.get<boolean>('logging.enableFileLogging') ?? true,
+            logDirectory: this.config.get<string>('logging.logDirectory'),
+            maxFileSize: this.config.get<number>('logging.maxFileSize') ?? 10 * 1024 * 1024,
+            maxFiles: this.config.get<number>('logging.maxFiles') ?? 5,
+            enableConsoleLogging: this.config.get<boolean>('logging.enableConsoleLogging') ?? true,
+            enableOutputChannel: this.config.get<boolean>('logging.enableOutputChannel') ?? true,
+            logFormat: this.config.get<string>('logging.logFormat') ?? '[{timestamp}] [{level}] {source}: {message}'
         };
     }
 
@@ -248,8 +391,56 @@ export class ConfigService {
             embeddingProvider: this.getEmbeddingProvider(),
             ollama: this.getOllamaConfig(),
             openai: this.getOpenAIConfig(),
-            indexing: this.getIndexingConfig()
+            indexing: this.getIndexingConfig(),
+            queryExpansion: this.getQueryExpansionConfig(),
+            llmReRanking: this.getLLMReRankingConfig(),
+            logging: this.getLoggingConfig()
         };
+    }
+
+    /**
+     * Get the maximum number of search results to return
+     *
+     * @returns The maximum number of search results, defaulting to 20
+     */
+    public getMaxSearchResults(): number {
+        return this.config.get<number>('maxSearchResults') || 20;
+    }
+
+    /**
+     * Get the minimum similarity threshold for search results
+     *
+     * @returns The minimum similarity threshold (0.0 to 1.0), defaulting to 0.5
+     */
+    public getMinSimilarityThreshold(): number {
+        return this.config.get<number>('minSimilarityThreshold') || 0.5;
+    }
+
+    /**
+     * Get whether auto-indexing on startup is enabled
+     *
+     * @returns True if auto-indexing is enabled, false otherwise
+     */
+    public getAutoIndexOnStartup(): boolean {
+        return this.config.get<boolean>('autoIndexOnStartup') || false;
+    }
+
+    /**
+     * Get the indexing batch size
+     *
+     * @returns The number of chunks to process in each batch, defaulting to 100
+     */
+    public getIndexingBatchSize(): number {
+        return this.config.get<number>('indexingBatchSize') || 100;
+    }
+
+    /**
+     * Get whether debug logging is enabled
+     *
+     * @returns True if debug logging is enabled, false otherwise
+     */
+    public getEnableDebugLogging(): boolean {
+        return this.config.get<boolean>('enableDebugLogging') || false;
     }
 
     /**
@@ -289,5 +480,18 @@ export class ConfigService {
     public getCurrentProviderConfig(): OllamaConfig | OpenAIConfig {
         const provider = this.getEmbeddingProvider();
         return provider === 'ollama' ? this.getOllamaConfig() : this.getOpenAIConfig();
+    }
+
+    /**
+     * Get the indexing intensity setting
+     *
+     * Controls the CPU intensity of the indexing process by determining how much
+     * delay is added between processing files. This helps users manage resource
+     * consumption, especially on battery-powered devices.
+     *
+     * @returns The indexing intensity level ('High', 'Medium', or 'Low'), defaulting to 'High'
+     */
+    public getIndexingIntensity(): 'High' | 'Medium' | 'Low' {
+        return this.config.get<'High' | 'Medium' | 'Low'>('indexingIntensity') || 'High';
     }
 }

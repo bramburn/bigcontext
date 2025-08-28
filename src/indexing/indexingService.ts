@@ -4,9 +4,23 @@
  * This module provides the core functionality for indexing code files in a workspace,
  * generating embeddings, and storing them in a vector database for semantic search.
  * It orchestrates the entire indexing pipeline from file discovery to vector storage.
+ * 
+ * The indexing process follows these main steps:
+ * 1. File discovery - Find all relevant code files in the workspace
+ * 2. AST parsing - Parse each file to understand its structure
+ * 3. Chunking - Break down code into semantic units (functions, classes, etc.)
+ * 4. Embedding generation - Create vector representations of each chunk
+ * 5. Vector storage - Store embeddings in Qdrant for efficient semantic search
+ * 
+ * The service supports both parallel processing using worker threads and sequential
+ * processing as a fallback. It also provides progress tracking, pause/resume functionality,
+ * and comprehensive error handling throughout the pipeline.
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { Worker, isMainThread } from 'worker_threads';
 import { FileWalker } from './fileWalker';
 import { AstParser, SupportedLanguage } from '../parsing/astParser';
 import { Chunker, CodeChunk, ChunkType } from '../parsing/chunker';
@@ -14,6 +28,8 @@ import { QdrantService } from '../db/qdrantService';
 import { IEmbeddingProvider, EmbeddingProviderFactory, EmbeddingConfig } from '../embeddings/embeddingProvider';
 import { LSPService } from '../lsp/lspService';
 import { StateManager } from '../stateManager';
+import { WorkspaceManager } from '../workspaceManager';
+import { ConfigService } from '../configService';
 
 /**
  * Progress tracking interface for the indexing process.
@@ -113,12 +129,48 @@ export class IndexingService {
     private lspService: LSPService;
     /** State manager for tracking application state and preventing concurrent operations */
     private stateManager: StateManager;
+    /** Workspace manager for handling multi-workspace support */
+    private workspaceManager: WorkspaceManager;
+    /** Configuration service for accessing extension settings */
+    private configService: ConfigService;
     /** Flag to track if indexing is currently paused */
     private isPaused: boolean = false;
     /** Queue of remaining files to process (used for pause/resume functionality) */
     private remainingFiles: string[] = [];
     /** Current indexing progress callback */
     private currentProgressCallback?: (progress: IndexingProgress) => void;
+    /** Worker pool for parallel processing */
+    private workerPool: Worker[] = [];
+    /** Queue of files waiting to be processed */
+    private fileQueue: string[] = [];
+    /** Number of currently active workers */
+    private activeWorkers: number = 0;
+    /** Map to track worker states and assignments */
+    private workerStates: Map<Worker, { busy: boolean; currentFile?: string }> = new Map();
+    /** Aggregated results from workers */
+    private aggregatedResults: {
+        chunks: CodeChunk[];
+        embeddings: number[][];
+        stats: {
+            filesByLanguage: Record<string, number>;
+            chunksByType: Record<ChunkType, number>;
+            totalLines: number;
+            totalBytes: number;
+        };
+        errors: string[];
+    } = {
+        chunks: [],
+        embeddings: [],
+        stats: {
+            filesByLanguage: {},
+            chunksByType: {} as Record<ChunkType, number>,
+            totalLines: 0,
+            totalBytes: 0
+        },
+        errors: []
+    };
+    /** Flag to track if parallel processing is enabled */
+    private useParallelProcessing: boolean = true;
 
     /**
      * Creates a new IndexingService instance using dependency injection
@@ -130,6 +182,8 @@ export class IndexingService {
      * @param embeddingProvider - Injected embedding provider instance
      * @param lspService - Injected LSPService instance
      * @param stateManager - Injected StateManager instance
+     * @param workspaceManager - Injected WorkspaceManager instance
+     * @param configService - Injected ConfigService instance
      */
     constructor(
         workspaceRoot: string,
@@ -139,7 +193,9 @@ export class IndexingService {
         qdrantService: QdrantService,
         embeddingProvider: IEmbeddingProvider,
         lspService: LSPService,
-        stateManager: StateManager
+        stateManager: StateManager,
+        workspaceManager: WorkspaceManager,
+        configService: ConfigService
     ) {
         this.workspaceRoot = workspaceRoot;
         this.fileWalker = fileWalker;
@@ -149,9 +205,359 @@ export class IndexingService {
         this.embeddingProvider = embeddingProvider;
         this.lspService = lspService;
         this.stateManager = stateManager;
+        this.workspaceManager = workspaceManager;
+        this.configService = configService;
+
+        // Initialize worker pool if we're in the main thread
+        if (isMainThread) {
+            this.initializeWorkerPool();
+        }
     }
 
+    /**
+     * Initialize the worker pool for parallel processing.
+     * Creates a pool of worker threads based on available CPU cores.
+     * 
+     * This method:
+     * 1. Determines the optimal number of worker threads based on CPU cores
+     * 2. Creates worker threads with appropriate configuration
+     * 3. Sets up event handlers for each worker
+     * 4. Initializes worker state tracking
+     * 
+     * The worker pool enables parallel processing of files, significantly
+     * improving indexing performance on multi-core systems.
+     */
+    private initializeWorkerPool(): void {
+        try {
+            const numCpus = os.cpus().length;
+            const numWorkers = Math.max(1, numCpus - 1); // Use at least 1 worker, leave one CPU for main thread
 
+            console.log(`IndexingService: Initializing worker pool with ${numWorkers} workers (${numCpus} CPUs available)`);
+
+            for (let i = 0; i < numWorkers; i++) {
+                const workerPath = path.join(__dirname, 'indexingWorker.js');
+
+                // Create embedding configuration for worker
+                const providerType = this.configService.getEmbeddingProvider();
+                const embeddingConfig = {
+                    provider: providerType,
+                    model: providerType === 'ollama'
+                        ? this.configService.getOllamaConfig().model
+                        : this.configService.getOpenAIConfig().model,
+                    apiKey: providerType === 'openai'
+                        ? this.configService.getOpenAIConfig().apiKey
+                        : undefined,
+                    apiUrl: providerType === 'ollama'
+                        ? this.configService.getOllamaConfig().apiUrl
+                        : undefined
+                };
+
+                const worker = new Worker(workerPath, {
+                    workerData: {
+                        workspaceRoot: this.workspaceRoot,
+                        embeddingConfig
+                    }
+                });
+
+                // Set up worker event handlers
+                this.setupWorkerEventHandlers(worker);
+
+                // Initialize worker state
+                this.workerStates.set(worker, { busy: false });
+                this.workerPool.push(worker);
+            }
+
+            console.log(`IndexingService: Worker pool initialized with ${this.workerPool.length} workers`);
+
+        } catch (error) {
+            console.error('IndexingService: Failed to initialize worker pool:', error);
+            this.useParallelProcessing = false;
+            console.log('IndexingService: Falling back to sequential processing');
+        }
+    }
+
+    /**
+     * Set up event handlers for a worker thread.
+     * 
+     * Configures the necessary event listeners for worker thread communication:
+     * - 'message' event: Handles messages sent from the worker thread
+     * - 'error' event: Handles errors that occur in the worker thread
+     * - 'exit' event: Handles worker thread termination
+     * 
+     * @param worker - The worker thread instance to configure
+     */
+    private setupWorkerEventHandlers(worker: Worker): void {
+        worker.on('message', (message) => {
+            this.handleWorkerMessage(worker, message);
+        });
+
+        worker.on('error', (error) => {
+            console.error('IndexingService: Worker error:', error);
+            this.handleWorkerError(worker, error);
+        });
+
+        worker.on('exit', (code) => {
+            if (code !== 0) {
+                console.error(`IndexingService: Worker exited with code ${code}`);
+            }
+            this.handleWorkerExit(worker, code);
+        });
+    }
+
+    /**
+     * Handle messages from worker threads.
+     * 
+     * Processes different types of messages sent from worker threads:
+     * - 'ready': Worker initialization complete
+     * - 'processed': Worker has finished processing a file
+     * - 'error': Worker encountered an error during processing
+     * 
+     * This method routes each message type to the appropriate handler
+     * and maintains the overall state of the worker pool.
+     * 
+     * @param worker - The worker thread that sent the message
+     * @param message - The message object received from the worker
+     */
+    private handleWorkerMessage(worker: Worker, message: any): void {
+        const workerState = this.workerStates.get(worker);
+        if (!workerState) return;
+
+        switch (message.type) {
+            case 'ready':
+                console.log('IndexingService: Worker ready');
+                break;
+
+            case 'processed':
+                this.handleProcessedFile(worker, message.data);
+                break;
+
+            case 'error':
+                console.error('IndexingService: Worker processing error:', message.error);
+                this.aggregatedResults.errors.push(message.error);
+                this.markWorkerIdle(worker);
+                this.processNextFile();
+                break;
+
+            default:
+                console.warn('IndexingService: Unknown worker message type:', message.type);
+        }
+    }
+
+    /**
+     * Handle processed file data from worker.
+     * 
+     * This method:
+     * 1. Aggregates chunks and embeddings from the worker
+     * 2. Updates statistics (file counts by language, line counts, etc.)
+     * 3. Updates chunk type statistics
+     * 4. Collects any errors reported by the worker
+     * 5. Marks the worker as idle and processes the next file
+     * 
+     * This is a critical part of the parallel processing pipeline as it
+     * consolidates results from multiple workers into a single dataset.
+     * 
+     * @param worker - The worker thread that processed the file
+     * @param data - The processing results including chunks and embeddings
+     */
+    private handleProcessedFile(worker: Worker, data: any): void {
+        try {
+            // Aggregate chunks and embeddings
+            this.aggregatedResults.chunks.push(...data.chunks);
+            this.aggregatedResults.embeddings.push(...data.embeddings);
+
+            // Update statistics
+            if (data.language) {
+                this.aggregatedResults.stats.filesByLanguage[data.language] =
+                    (this.aggregatedResults.stats.filesByLanguage[data.language] || 0) + 1;
+            }
+
+            this.aggregatedResults.stats.totalLines += data.lineCount;
+            this.aggregatedResults.stats.totalBytes += data.byteCount;
+
+            // Update chunk type statistics
+            for (const chunk of data.chunks) {
+                const chunkType = chunk.type as ChunkType;
+                this.aggregatedResults.stats.chunksByType[chunkType] =
+                    (this.aggregatedResults.stats.chunksByType[chunkType] || 0) + 1;
+            }
+
+            // Add any errors
+            if (data.errors && data.errors.length > 0) {
+                this.aggregatedResults.errors.push(...data.errors);
+            }
+
+            console.log(`IndexingService: Processed ${data.filePath} - ${data.chunks.length} chunks, ${data.embeddings.length} embeddings`);
+
+            // Mark worker as idle and process next file
+            this.markWorkerIdle(worker);
+            this.processNextFile();
+
+        } catch (error) {
+            console.error('IndexingService: Error handling processed file:', error);
+            this.aggregatedResults.errors.push(`Error handling processed file: ${error instanceof Error ? error.message : String(error)}`);
+            this.markWorkerIdle(worker);
+            this.processNextFile();
+        }
+    }
+
+    /**
+     * Handle worker errors.
+     * 
+     * Processes errors that occur in worker threads:
+     * 1. Logs the error to the console
+     * 2. Adds the error to the aggregated results
+     * 3. Marks the worker as idle so it can process other files
+     * 4. Triggers processing of the next file in the queue
+     * 
+     * This error handling ensures that a single file failure doesn't
+     * stop the entire indexing process.
+     * 
+     * @param worker - The worker thread that encountered the error
+     * @param error - The error object from the worker
+     */
+    private handleWorkerError(worker: Worker, error: Error): void {
+        console.error('IndexingService: Worker error:', error);
+        this.aggregatedResults.errors.push(`Worker error: ${error.message}`);
+        this.markWorkerIdle(worker);
+        this.processNextFile();
+    }
+
+    /**
+     * Handle worker exit.
+     * 
+     * Manages worker thread termination:
+     * 1. Logs the exit code
+     * 2. Removes the worker from the pool and state tracking
+     * 3. If the worker exited unexpectedly during processing,
+     *    adjusts the active worker count and processes the next file
+     * 
+     * This method ensures proper cleanup of worker resources and
+     * maintains the integrity of the worker pool.
+     * 
+     * @param worker - The worker thread that exited
+     * @param code - The exit code (0 for normal exit, non-zero for error)
+     */
+    private handleWorkerExit(worker: Worker, code: number): void {
+        console.log(`IndexingService: Worker exited with code ${code}`);
+
+        // Remove worker from pool and state tracking
+        const index = this.workerPool.indexOf(worker);
+        if (index > -1) {
+            this.workerPool.splice(index, 1);
+        }
+        this.workerStates.delete(worker);
+
+        // If worker exited unexpectedly during processing, handle it
+        if (code !== 0) {
+            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            this.processNextFile();
+        }
+    }
+
+    /**
+     * Mark a worker as idle and available for new tasks.
+     * 
+     * Updates the worker's state in the tracking map:
+     * 1. Sets the busy flag to false
+     * 2. Clears the currentFile reference
+     * 3. Decrements the active worker count
+     * 
+     * This method is essential for the worker pool management system
+     * as it makes workers available for processing new files.
+     * 
+     * @param worker - The worker thread to mark as idle
+     */
+    private markWorkerIdle(worker: Worker): void {
+        const workerState = this.workerStates.get(worker);
+        if (workerState) {
+            workerState.busy = false;
+            workerState.currentFile = undefined;
+        }
+        this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+    }
+
+    /**
+     * Process the next file in the queue using available workers.
+     * 
+     * This method is the core of the worker scheduling system:
+     * 1. Checks if there are files remaining in the queue
+     * 2. If the queue is empty and all workers are idle, triggers completion
+     * 3. Finds an idle worker if available
+     * 4. Assigns the next file from the queue to the idle worker
+     * 
+     * The method is called recursively after each file is processed,
+     * ensuring continuous utilization of all available workers.
+     */
+    private processNextFile(): void {
+        if (this.fileQueue.length === 0) {
+            // Check if all workers are idle
+            if (this.activeWorkers === 0) {
+                console.log('IndexingService: All files processed, workers idle');
+                this.onAllFilesProcessed();
+            }
+            return;
+        }
+
+        // Find an idle worker
+        const idleWorker = this.workerPool.find(worker => {
+            const state = this.workerStates.get(worker);
+            return state && !state.busy;
+        });
+
+        if (idleWorker && this.fileQueue.length > 0) {
+            const filePath = this.fileQueue.shift();
+            if (filePath) {
+                this.assignFileToWorker(idleWorker, filePath);
+            }
+        }
+    }
+
+    /**
+     * Assign a file to a specific worker for processing.
+     * 
+     * This method:
+     * 1. Updates the worker's state to busy and sets its current file
+     * 2. Increments the active worker count
+     * 3. Sends a message to the worker with the file to process
+     * 4. Logs the assignment for debugging purposes
+     * 
+     * This is the key method that distributes work among the worker threads.
+     * 
+     * @param worker - The worker thread to assign the file to
+     * @param filePath - The path of the file to be processed
+     */
+    private assignFileToWorker(worker: Worker, filePath: string): void {
+        const workerState = this.workerStates.get(worker);
+        if (!workerState) return;
+
+        workerState.busy = true;
+        workerState.currentFile = filePath;
+        this.activeWorkers++;
+
+        // Send file to worker for processing
+        worker.postMessage({
+            type: 'processFile',
+            filePath,
+            workspaceRoot: this.workspaceRoot
+        });
+
+        console.log(`IndexingService: Assigned ${filePath} to worker (${this.activeWorkers} active workers)`);
+    }
+
+    /**
+     * Called when all files have been processed by workers.
+     * 
+     * This is a placeholder method that gets overridden during parallel processing.
+     * The actual implementation is set dynamically in processFilesInParallel()
+     * to resolve the promise when all files are processed.
+     * 
+     * In the default implementation, it simply logs a message indicating
+     * that all files have been processed.
+     */
+    private onAllFilesProcessed(): void {
+        console.log('IndexingService: All files processed by workers');
+        // This will be called by the modified startIndexing method
+    }
 
     /**
      * Starts the indexing process for the entire workspace.
@@ -237,82 +643,55 @@ export class IndexingService {
             }
 
             // Phase 3: Process files
-            // For each file, parse the AST and create code chunks
-            // Store the current progress callback for pause/resume functionality
+            // Use parallel processing if available, otherwise fall back to sequential
             this.currentProgressCallback = progressCallback;
 
-            for (let i = 0; i < codeFiles.length; i++) {
-                // Check for pause flag before processing each file
-                if (this.isPaused) {
-                    console.log('IndexingService: Indexing paused, saving remaining files...');
-                    this.remainingFiles = codeFiles.slice(i); // Save remaining files
-                    result.success = false; // Mark as incomplete due to pause
-                    result.duration = Date.now() - startTime;
-                    return result;
-                }
+            if (this.useParallelProcessing && this.workerPool.length > 0) {
+                console.log(`IndexingService: Starting parallel processing with ${this.workerPool.length} workers`);
+                await this.processFilesInParallel(codeFiles, progressCallback);
 
-                const filePath = codeFiles[i];
+                // Copy aggregated results to main result object
+                result.chunks = this.aggregatedResults.chunks;
+                result.stats.filesByLanguage = this.aggregatedResults.stats.filesByLanguage;
+                result.stats.chunksByType = this.aggregatedResults.stats.chunksByType;
+                result.stats.totalLines = this.aggregatedResults.stats.totalLines;
+                result.stats.totalBytes = this.aggregatedResults.stats.totalBytes;
+                result.errors.push(...this.aggregatedResults.errors);
+                result.processedFiles = codeFiles.length;
 
-                try {
-                    progressCallback?.({
-                        currentFile: filePath,
-                        processedFiles: i,
-                        totalFiles: codeFiles.length,
-                        currentPhase: 'parsing',
-                        chunks: result.chunks,
-                        errors: result.errors
-                    });
-
-                    const fileResult = await this.processFile(filePath);
-                    
-                    if (fileResult.success) {
-                        result.chunks.push(...fileResult.chunks);
-                        
-                        // Update stats
-                        if (fileResult.language) {
-                            result.stats.filesByLanguage[fileResult.language] =
-                                (result.stats.filesByLanguage[fileResult.language] || 0) + 1;
-                        }
-                        
-                        result.stats.totalLines += fileResult.lineCount;
-                        result.stats.totalBytes += fileResult.byteCount;
-                        
-                        // Update chunk stats
-                        for (const chunk of fileResult.chunks) {
-                            result.stats.chunksByType[chunk.type] =
-                                (result.stats.chunksByType[chunk.type] || 0) + 1;
-                        }
-                    } else {
-                        result.errors.push(...fileResult.errors);
-                    }
-                    
-                    result.processedFiles++;
-                    
-                } catch (error) {
-                    const errorMessage = `Error processing file ${filePath}: ${error instanceof Error ? error.message : String(error)}`;
-                    result.errors.push(errorMessage);
-                    console.error(errorMessage);
-                }
+            } else {
+                console.log('IndexingService: Using sequential processing (parallel processing disabled or unavailable)');
+                await this.processFilesSequentially(codeFiles, result, progressCallback);
             }
 
-            // Phase 4: Generate embeddings
-            // If we have chunks and an embedding provider, generate vector embeddings
-            if (result.chunks.length > 0 && this.embeddingProvider) {
-                progressCallback?.({
-                    currentFile: '',
-                    processedFiles: result.processedFiles,
-                    totalFiles: result.totalFiles,
-                    currentPhase: 'embedding',
-                    chunks: result.chunks,
-                    errors: result.errors,
-                    embeddingProgress: {
-                        processedChunks: 0,
-                        totalChunks: result.chunks.length
-                    }
-                });
+            // Phase 4: Handle embeddings and storage
+            // For parallel processing, embeddings are already generated by workers
+            // For sequential processing, we need to generate them here
+            let embeddings: number[][] = [];
 
-                const chunkContents = result.chunks.map(chunk => chunk.content);
-                const embeddings = await this.embeddingProvider.generateEmbeddings(chunkContents);
+            if (result.chunks.length > 0 && this.embeddingProvider) {
+                if (this.useParallelProcessing && this.aggregatedResults.embeddings.length > 0) {
+                    // Use embeddings from parallel processing
+                    embeddings = this.aggregatedResults.embeddings;
+                    console.log(`IndexingService: Using ${embeddings.length} embeddings from parallel processing`);
+                } else {
+                    // Generate embeddings for sequential processing
+                    progressCallback?.({
+                        currentFile: '',
+                        processedFiles: result.processedFiles,
+                        totalFiles: result.totalFiles,
+                        currentPhase: 'embedding',
+                        chunks: result.chunks,
+                        errors: result.errors,
+                        embeddingProgress: {
+                            processedChunks: 0,
+                            totalChunks: result.chunks.length
+                        }
+                    });
+
+                    const chunkContents = result.chunks.map(chunk => chunk.content);
+                    embeddings = await this.embeddingProvider.generateEmbeddings(chunkContents);
+                }
 
                 result.stats.totalEmbeddings = embeddings.length;
                 result.stats.vectorDimensions = this.embeddingProvider.getDimensions();
@@ -383,6 +762,187 @@ export class IndexingService {
     }
 
     /**
+     * Process files in parallel using worker threads.
+     * 
+     * This method implements a sophisticated parallel processing system:
+     * 1. Resets aggregated results to collect new data
+     * 2. Initializes the file queue with all code files
+     * 3. Sets up a completion handler to resolve the promise when done
+     * 4. Configures progress tracking and reporting
+     * 5. Overrides the handleProcessedFile method to track progress
+     * 6. Starts processing by filling the worker pool
+     * 7. Sets a safety timeout to prevent infinite waiting
+     * 
+     * The parallel processing significantly improves indexing performance
+     * on multi-core systems by distributing work across worker threads.
+     * 
+     * @param codeFiles - Array of file paths to process
+     * @param progressCallback - Optional callback for reporting progress
+     * @returns Promise that resolves when all files are processed
+     */
+    private async processFilesInParallel(
+        codeFiles: string[],
+        progressCallback?: (progress: IndexingProgress) => void
+    ): Promise<void> {
+        return new Promise((resolve, reject) => {
+            // Reset aggregated results
+            this.aggregatedResults = {
+                chunks: [],
+                embeddings: [],
+                stats: {
+                    filesByLanguage: {},
+                    chunksByType: {} as Record<ChunkType, number>,
+                    totalLines: 0,
+                    totalBytes: 0
+                },
+                errors: []
+            };
+
+            // Initialize file queue and counters
+            this.fileQueue = [...codeFiles];
+            this.activeWorkers = 0;
+            let processedFiles = 0;
+
+            // Set up completion handler
+            const originalOnAllFilesProcessed = this.onAllFilesProcessed;
+            this.onAllFilesProcessed = () => {
+                console.log(`IndexingService: Parallel processing complete. Processed ${processedFiles} files.`);
+                this.onAllFilesProcessed = originalOnAllFilesProcessed; // Restore original handler
+                resolve();
+            };
+
+            // Set up progress tracking
+            const updateProgress = () => {
+                progressCallback?.({
+                    currentFile: '',
+                    processedFiles,
+                    totalFiles: codeFiles.length,
+                    currentPhase: 'parsing',
+                    chunks: this.aggregatedResults.chunks,
+                    errors: this.aggregatedResults.errors
+                });
+            };
+
+            // Override handleProcessedFile to track progress
+            const originalHandleProcessedFile = this.handleProcessedFile.bind(this);
+            this.handleProcessedFile = (worker: Worker, data: any) => {
+                originalHandleProcessedFile(worker, data);
+                processedFiles++;
+                updateProgress();
+            };
+
+            // Start processing by filling the worker pool
+            const initialBatch = Math.min(this.workerPool.length, this.fileQueue.length);
+            for (let i = 0; i < initialBatch; i++) {
+                this.processNextFile();
+            }
+
+            // Initial progress update
+            updateProgress();
+
+            // Set timeout as safety net
+            const timeout = setTimeout(() => {
+                console.error('IndexingService: Parallel processing timeout');
+                reject(new Error('Parallel processing timeout'));
+            }, 300000); // 5 minutes timeout
+
+            // Clear timeout when processing completes
+            const originalResolve = resolve;
+            resolve = () => {
+                clearTimeout(timeout);
+                originalResolve();
+            };
+        });
+    }
+
+    /**
+     * Process files sequentially (fallback method).
+     * 
+     * This method provides a sequential processing alternative when parallel
+     * processing is unavailable or disabled:
+     * 1. Processes each file one at a time
+     * 2. Checks for pause flag before each file
+     * 3. Updates progress after each file
+     * 4. Collects results and statistics
+     * 5. Applies throttling based on indexing intensity setting
+     * 
+     * While slower than parallel processing, this method ensures compatibility
+     * with all environments and provides more predictable resource usage.
+     * 
+     * @param codeFiles - Array of file paths to process
+     * @param result - Result object to populate with data
+     * @param progressCallback - Optional callback for reporting progress
+     * @returns Promise that resolves when all files are processed
+     */
+    private async processFilesSequentially(
+        codeFiles: string[],
+        result: IndexingResult,
+        progressCallback?: (progress: IndexingProgress) => void
+    ): Promise<void> {
+        for (let i = 0; i < codeFiles.length; i++) {
+            // Check for pause flag before processing each file
+            // This enables the pause/resume functionality by saving our current state
+            if (this.isPaused) {
+                console.log('IndexingService: Indexing paused, saving remaining files...');
+                this.remainingFiles = codeFiles.slice(i); // Save remaining files for later resumption
+                result.success = false; // Mark as incomplete due to pause
+                return;
+            }
+
+            const filePath = codeFiles[i];
+
+            try {
+                progressCallback?.({
+                    currentFile: filePath,
+                    processedFiles: i,
+                    totalFiles: codeFiles.length,
+                    currentPhase: 'parsing',
+                    chunks: result.chunks,
+                    errors: result.errors
+                });
+
+                const fileResult = await this.processFile(filePath);
+
+                if (fileResult.success) {
+                    result.chunks.push(...fileResult.chunks);
+
+                    // Update stats
+                    if (fileResult.language) {
+                        result.stats.filesByLanguage[fileResult.language] =
+                            (result.stats.filesByLanguage[fileResult.language] || 0) + 1;
+                    }
+
+                    result.stats.totalLines += fileResult.lineCount;
+                    result.stats.totalBytes += fileResult.byteCount;
+
+                    // Update chunk stats
+                    for (const chunk of fileResult.chunks) {
+                        result.stats.chunksByType[chunk.type] =
+                            (result.stats.chunksByType[chunk.type] || 0) + 1;
+                    }
+                } else {
+                    result.errors.push(...fileResult.errors);
+                }
+
+                result.processedFiles++;
+
+            } catch (error) {
+                const errorMessage = `Error processing file ${filePath}: ${error instanceof Error ? error.message : String(error)}`;
+                result.errors.push(errorMessage);
+                console.error(errorMessage);
+            }
+
+            // Apply throttling based on indexing intensity setting
+            // This helps manage CPU usage and battery consumption by introducing
+            // controlled delays between file processing operations
+            const delayMs = this.getDelayForIntensity();
+            if (delayMs > 0) {
+                await this.delay(delayMs); // Pause briefly to reduce resource usage
+            }
+        }
+    }
+
+    /**
      * Processes a single file by reading its content, parsing its AST,
      * and creating code chunks.
      *
@@ -410,15 +970,19 @@ export class IndexingService {
         
         try {
             // Read file content
-            // This is the first step in processing any file
+            // This is the first step in processing any file - we need the raw content
+            // before we can do any parsing or analysis
             const content = await fs.promises.readFile(filePath, 'utf8');
-            const lineCount = content.split('\n').length;
-            const byteCount = Buffer.byteLength(content, 'utf8');
+            const lineCount = content.split('\n').length; // Count lines for statistics
+            const byteCount = Buffer.byteLength(content, 'utf8'); // Get file size for statistics
             
-            // Determine language
-            // We need to know the language to use the correct parser
+            // Determine language based on file extension
+            // We need to know the language to use the correct parser implementation
+            // as each language has its own AST structure and parsing rules
             const language = this.getLanguage(filePath);
             if (!language) {
+                // If we can't determine the language, we can't parse the file
+                // so we return early with an error
                 return {
                     success: false,
                     chunks: [],
@@ -428,14 +992,19 @@ export class IndexingService {
                 };
             }
 
-            // Parse AST
-            // This creates a structured representation of the code
+            // Parse AST (Abstract Syntax Tree)
+            // This creates a structured representation of the code that captures
+            // its semantic structure (functions, classes, variables, etc.)
+            // We use error recovery to handle partial parsing even when there are syntax errors
             const parseResult = this.astParser.parseWithErrorRecovery(language, content);
             if (parseResult.errors.length > 0) {
+                // Collect parsing errors but continue if possible
                 errors.push(...parseResult.errors.map(err => `${filePath}: ${err}`));
             }
 
             if (!parseResult.tree) {
+                // If parsing completely failed and we couldn't get a tree,
+                // we can't proceed with chunking, so return with error
                 return {
                     success: false,
                     chunks: [],
@@ -446,12 +1015,14 @@ export class IndexingService {
                 };
             }
 
-            // Create chunks
-            // Break down the code into manageable pieces for embedding
+            // Create chunks from the AST
+            // Break down the code into manageable semantic pieces (functions, classes, methods)
+            // that will be used for embedding generation and semantic search
             const chunks = this.chunker.chunk(filePath, parseResult.tree, content, language);
 
-            // Enhance chunks with LSP metadata
-            // This adds semantic information like symbols, definitions, and references
+            // Enhance chunks with LSP (Language Server Protocol) metadata
+            // This adds rich semantic information like symbols, definitions, references, and hover info
+            // which improves the quality of embeddings and search results
             const enhancedChunks = await this.enhanceChunksWithLSP(chunks, filePath, content, language);
 
             return {
@@ -544,20 +1115,54 @@ export class IndexingService {
     }
 
     /**
+     * Simple delay helper function for throttling indexing operations
+     *
+     * This function creates a promise that resolves after the specified number
+     * of milliseconds, allowing the indexing process to yield CPU time to other
+     * operations and reduce resource consumption.
+     *
+     * @param ms - Number of milliseconds to delay
+     * @returns Promise that resolves after the delay
+     */
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Gets the appropriate delay based on the current indexing intensity setting
+     *
+     * This method reads the indexing intensity from configuration and returns
+     * the corresponding delay in milliseconds to throttle the indexing process.
+     *
+     * @returns Number of milliseconds to delay between file processing
+     */
+    private getDelayForIntensity(): number {
+        const intensity = this.configService.getIndexingIntensity();
+
+        switch (intensity) {
+            case 'Low':
+                return 500; // 500ms delay - battery friendly
+            case 'Medium':
+                return 100; // 100ms delay - moderate speed
+            case 'High':
+            default:
+                return 0; // No delay - maximum speed
+        }
+    }
+
+    /**
      * Generates a unique collection name for the Qdrant database.
      *
-     * This method creates a sanitized version of the workspace name to use
-     * as the collection name. This ensures that the collection name is
-     * valid for Qdrant and unique per workspace.
+     * This method uses the WorkspaceManager to create a workspace-specific
+     * collection name. This ensures that each workspace has its own isolated
+     * index and collections don't interfere with each other.
      *
-     * @returns A sanitized collection name string
+     * @returns A unique collection name string for the current workspace
      */
     private generateCollectionName(): string {
-        // Generate a collection name based on workspace root
-        // This helps organize collections by workspace
-        const workspaceName = this.workspaceRoot.split('/').pop() || 'workspace';
-        const sanitizedName = workspaceName.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
-        return `code_context_${sanitizedName}`;
+        // Use the WorkspaceManager to generate a workspace-specific collection name
+        // This ensures proper isolation between different workspaces
+        return this.workspaceManager.generateCollectionName();
     }
 
     /**
@@ -883,6 +1488,56 @@ export class IndexingService {
         } catch (error) {
             console.error('IndexingService: Error getting index info:', error);
             return null;
+        }
+    }
+
+    /**
+     * Cleanup method to terminate worker threads and free resources
+     * Should be called when the extension is deactivated
+     */
+    public async cleanup(): Promise<void> {
+        try {
+            console.log('IndexingService: Cleaning up worker pool...');
+
+            // Terminate all workers
+            for (const worker of this.workerPool) {
+                try {
+                    // Send shutdown message first
+                    worker.postMessage({ type: 'shutdown' });
+
+                    // Wait a bit for graceful shutdown
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // Force terminate if still running
+                    await worker.terminate();
+                } catch (error) {
+                    console.error('IndexingService: Error terminating worker:', error);
+                }
+            }
+
+            // Clear worker pool and state
+            this.workerPool = [];
+            this.workerStates.clear();
+            this.fileQueue = [];
+            this.activeWorkers = 0;
+
+            // Reset aggregated results
+            this.aggregatedResults = {
+                chunks: [],
+                embeddings: [],
+                stats: {
+                    filesByLanguage: {},
+                    chunksByType: {} as Record<ChunkType, number>,
+                    totalLines: 0,
+                    totalBytes: 0
+                },
+                errors: []
+            };
+
+            console.log('IndexingService: Worker pool cleanup completed');
+
+        } catch (error) {
+            console.error('IndexingService: Error during cleanup:', error);
         }
     }
 

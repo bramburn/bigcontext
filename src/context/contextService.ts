@@ -16,6 +16,7 @@ import * as path from 'path';
 import { IndexingService } from '../indexing/indexingService';
 import { QdrantService, SearchResult } from '../db/qdrantService';
 import { IEmbeddingProvider } from '../embeddings/embeddingProvider';
+import { ConfigService } from '../configService';
 
 /**
  * Represents the result of a file content retrieval operation
@@ -117,6 +118,7 @@ export class ContextService {
     private indexingService: IndexingService;
     private qdrantService: QdrantService;
     private embeddingProvider: IEmbeddingProvider;
+    private configService: ConfigService;
     
     // Configuration constants
     private readonly DEFAULT_CHUNK_LIMIT = 50;
@@ -148,22 +150,25 @@ export class ContextService {
 
     /**
      * Constructor now uses dependency injection for better testability and decoupling
-     * 
+     *
      * @param workspaceRoot - The workspace root path
      * @param qdrantService - Injected QdrantService instance
      * @param embeddingProvider - Injected embedding provider instance
      * @param indexingService - Injected IndexingService instance
+     * @param configService - Injected ConfigService instance
      */
     constructor(
         workspaceRoot: string,
         qdrantService: QdrantService,
         embeddingProvider: IEmbeddingProvider,
-        indexingService: IndexingService
+        indexingService: IndexingService,
+        configService: ConfigService
     ) {
         this.workspaceRoot = workspaceRoot;
         this.qdrantService = qdrantService;
         this.embeddingProvider = embeddingProvider;
         this.indexingService = indexingService;
+        this.configService = configService;
     }
 
     /**
@@ -278,9 +283,8 @@ export class ContextService {
         minSimilarity?: number
     ): Promise<RelatedFile[]> {
         // Get configuration values with fallbacks
-        const config = vscode.workspace.getConfiguration('code-context-engine');
-        maxResults = maxResults ?? config.get<number>('maxSearchResults') ?? 10;
-        minSimilarity = minSimilarity ?? config.get<number>('minSimilarityThreshold') ?? 0.5;
+        maxResults = maxResults ?? this.configService.getMaxSearchResults() ?? 10;
+        minSimilarity = minSimilarity ?? this.configService.getMinSimilarityThreshold() ?? 0.5;
         try {
             if (!this.embeddingProvider) {
                 throw new Error('Embedding provider not available');
@@ -396,11 +400,10 @@ export class ContextService {
             const collectionName = this.generateCollectionName();
 
             // Get configuration values with fallbacks
-            const config = vscode.workspace.getConfiguration('code-context-engine');
             // For pagination, we need to fetch more results than just the current page
             // to ensure we have enough data for proper pagination
-            const maxSearchResults = contextQuery.maxResults ?? config.get<number>('maxSearchResults') ?? 100;
-            const defaultMinSimilarity = config.get<number>('minSimilarityThreshold') ?? 0.5;
+            const maxSearchResults = contextQuery.maxResults ?? this.configService.getMaxSearchResults() ?? 100;
+            const defaultMinSimilarity = this.configService.getMinSimilarityThreshold() ?? 0.5;
             
             // Build filter for file types if specified
             let filter: { should: Array<{ key: string, match: { value: string } }> } | undefined = undefined;

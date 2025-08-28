@@ -46,7 +46,7 @@ export class OllamaProvider implements IEmbeddingProvider {
         this.model = config.model || 'nomic-embed-text';
         
         // Set base URL with fallback to local Ollama default
-        this.baseUrl = config.baseUrl || 'http://localhost:11434';
+        this.baseUrl = config.apiUrl || 'http://localhost:11434';
         
         // Set batch size with conservative default to avoid overwhelming local service
         this.maxBatchSize = config.maxBatchSize || 10;

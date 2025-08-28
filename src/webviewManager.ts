@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import { MessageRouter } from './messageRouter';
+import { ExtensionManager } from './extensionManager';
 
 /**
  * Webview panel configuration interface
@@ -82,6 +86,10 @@ export interface WebviewMessage {
  * - Centralized error handling and logging throughout all operations
  */
 export class WebviewManager {
+    /** Extension context for resolving webview URIs */
+    private context: vscode.ExtensionContext;
+    /** Extension manager for accessing all services */
+    private extensionManager: ExtensionManager;
     /** Map storing all managed webview panels by their unique IDs */
     private panels: Map<string, WebviewPanel> = new Map();
     /** Array of disposable resources for cleanup */
@@ -93,13 +101,23 @@ export class WebviewManager {
     /** Debounce delay in milliseconds for message processing */
     private readonly updateDebounceMs = 100;
 
+    /** Reference to the main panel for single-instance management */
+    private mainPanel: vscode.WebviewPanel | undefined;
+    /** Reference to the settings panel for single-instance management */
+    private settingsPanel: vscode.WebviewPanel | undefined;
+
     /**
      * Initializes a new WebviewManager instance
      *
      * Sets up the manager with empty data structures and registers
      * event listeners for configuration changes and other system events.
+     *
+     * @param context - The VS Code extension context for resolving webview URIs
+     * @param extensionManager - The extension manager for accessing all services
      */
-    constructor() {
+    constructor(context: vscode.ExtensionContext, extensionManager: ExtensionManager) {
+        this.context = context;
+        this.extensionManager = extensionManager;
         this.setupEventListeners();
     }
 
@@ -137,9 +155,28 @@ export class WebviewManager {
                 }
             );
 
-            // Set up message handling for bidirectional communication
+            // Set up message handling using MessageRouter for centralized routing
+            const messageRouter = new MessageRouter(
+                this.extensionManager.getContextService(),
+                this.extensionManager.getIndexingService(),
+                this.context,
+                this.extensionManager.getStateManager()
+            );
+
+            // Set up advanced managers if available
+            try {
+                messageRouter.setAdvancedManagers(
+                    this.extensionManager.getSearchManager(),
+                    this.extensionManager.getConfigurationManager(),
+                    this.extensionManager.getPerformanceManager(),
+                    this.extensionManager.getXmlFormatterService()
+                );
+            } catch (error) {
+                console.warn('WebviewManager: Some advanced managers not available during panel creation:', error);
+            }
+
             panel.webview.onDidReceiveMessage(
-                message => this.handleMessage(config.id, message),
+                message => messageRouter.handleMessage(message, panel.webview),
                 undefined,
                 this.disposables
             );
@@ -645,27 +682,155 @@ export class WebviewManager {
     }
 
     /**
-     * Shows the main panel (legacy compatibility method)
+     * Shows the main panel with single-instance management
      *
-     * This method provides backward compatibility with the expected interface.
-     * It creates or shows the main code context panel.
+     * This method manages the main code context panel, ensuring only one instance
+     * exists at a time. If the panel already exists, it brings it into focus.
+     * Otherwise, it creates a new panel with proper HTML content loading.
      */
     showMainPanel(): void {
-        const mainPanelId = 'codeContextMain';
+        const panelId = 'codeContextMain';
+        const panelTitle = 'Code Context';
 
-        // Check if panel already exists
-        if (this.panels.has(mainPanelId)) {
-            this.showPanel(mainPanelId);
+        // If main panel already exists, just reveal it
+        if (this.mainPanel) {
+            this.mainPanel.reveal(vscode.ViewColumn.One);
             return;
         }
 
         // Create new main panel
-        this.createPanel({
-            id: mainPanelId,
-            title: 'Code Context',
-            viewColumn: vscode.ViewColumn.One,
-            enableScripts: true
+        this.mainPanel = vscode.window.createWebviewPanel(
+            panelId,
+            panelTitle,
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'dist')]
+            }
+        );
+
+        // Set HTML content using the helper method
+        this.mainPanel.webview.html = this.getWebviewContent(this.mainPanel.webview, this.context.extensionUri);
+
+        // Set up MessageRouter for message handling
+        const messageRouter = new MessageRouter(
+            this.extensionManager.getContextService(),
+            this.extensionManager.getIndexingService(),
+            this.context,
+            this.extensionManager.getStateManager()
+        );
+
+        // Set up advanced managers if available
+        try {
+            messageRouter.setAdvancedManagers(
+                this.extensionManager.getSearchManager(),
+                this.extensionManager.getConfigurationManager(),
+                this.extensionManager.getPerformanceManager(),
+                this.extensionManager.getXmlFormatterService()
+            );
+        } catch (error) {
+            console.warn('WebviewManager: Some advanced managers not available for main panel:', error);
+        }
+
+        this.mainPanel.webview.onDidReceiveMessage(
+            message => messageRouter.handleMessage(message, this.mainPanel!.webview),
+            undefined,
+            this.disposables
+        );
+
+        // Set up disposal listener to clear the reference
+        this.mainPanel.onDidDispose(() => {
+            this.mainPanel = undefined;
+            this.deletePanel(panelId);
+        }, null, this.disposables);
+
+        // Add to general panels map for consistent management
+        this.panels.set(panelId, {
+            id: panelId,
+            panel: this.mainPanel,
+            config: { id: panelId, title: panelTitle, enableScripts: true },
+            visible: true,
+            lastUpdated: new Date(),
+            messageHandlers: new Map()
         });
+
+        console.log('WebviewManager: Main panel created and displayed');
+    }
+
+    /**
+     * Shows the settings panel with single-instance management
+     *
+     * This method manages the settings panel, ensuring only one instance
+     * exists at a time. If the panel already exists, it brings it into focus.
+     * Otherwise, it creates a new panel with proper HTML content loading.
+     */
+    showSettingsPanel(): void {
+        const panelId = 'codeContextSettings';
+        const panelTitle = 'Code Context Settings';
+
+        // If settings panel already exists, just reveal it
+        if (this.settingsPanel) {
+            this.settingsPanel.reveal(vscode.ViewColumn.One);
+            return;
+        }
+
+        // Create new settings panel
+        this.settingsPanel = vscode.window.createWebviewPanel(
+            panelId,
+            panelTitle,
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'dist')]
+            }
+        );
+
+        // Set HTML content using the helper method
+        this.settingsPanel.webview.html = this.getWebviewContent(this.settingsPanel.webview, this.context.extensionUri);
+
+        // Set up MessageRouter for message handling
+        const messageRouter = new MessageRouter(
+            this.extensionManager.getContextService(),
+            this.extensionManager.getIndexingService(),
+            this.context,
+            this.extensionManager.getStateManager()
+        );
+
+        // Set up advanced managers if available
+        try {
+            messageRouter.setAdvancedManagers(
+                this.extensionManager.getSearchManager(),
+                this.extensionManager.getConfigurationManager(),
+                this.extensionManager.getPerformanceManager(),
+                this.extensionManager.getXmlFormatterService()
+            );
+        } catch (error) {
+            console.warn('WebviewManager: Some advanced managers not available for settings panel:', error);
+        }
+
+        this.settingsPanel.webview.onDidReceiveMessage(
+            message => messageRouter.handleMessage(message, this.settingsPanel!.webview),
+            undefined,
+            this.disposables
+        );
+
+        // Set up disposal listener to clear the reference
+        this.settingsPanel.onDidDispose(() => {
+            this.settingsPanel = undefined;
+            this.deletePanel(panelId);
+        }, null, this.disposables);
+
+        // Add to general panels map for consistent management
+        this.panels.set(panelId, {
+            id: panelId,
+            panel: this.settingsPanel,
+            config: { id: panelId, title: panelTitle, enableScripts: true },
+            visible: true,
+            lastUpdated: new Date(),
+            messageHandlers: new Map()
+        });
+
+        console.log('WebviewManager: Settings panel created and displayed');
     }
 
     /**
@@ -696,6 +861,95 @@ export class WebviewManager {
      * Static property for view type (legacy compatibility)
      */
     static readonly viewType = 'codeContextMain';
+
+    /**
+     * Loads and prepares webview HTML content with proper asset URI resolution
+     *
+     * This helper method reads the index.html file from the webview/dist directory
+     * and replaces relative asset paths with webview-compatible URIs using
+     * webview.asWebviewUri. This ensures that CSS, JavaScript, and other assets
+     * load correctly within the webview context.
+     *
+     * @param webview - The webview instance for URI resolution
+     * @param extensionUri - The extension's base URI
+     * @returns The processed HTML content with resolved asset URIs
+     */
+    private getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+        try {
+            const htmlPath = path.join(extensionUri.fsPath, 'webview', 'dist', 'index.html');
+
+            // Check if the HTML file exists
+            if (!fs.existsSync(htmlPath)) {
+                console.warn(`WebviewManager: HTML file not found at ${htmlPath}, using fallback content`);
+                return this.getFallbackHtmlContent();
+            }
+
+            let html = fs.readFileSync(htmlPath, 'utf8');
+
+            // Replace relative paths with webview-compatible URIs
+            // This handles SvelteKit's typical asset patterns
+            html = html.replace(/(src|href)="(\/_app\/[^"]+)"/g, (match, attr, src) => {
+                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'dist', src));
+                return `${attr}="${resourceUri}"`;
+            });
+
+            // Also handle any other relative paths that might exist
+            html = html.replace(/(src|href)="(\/[^"]+\.(js|css|png|jpg|jpeg|gif|svg|ico))"/g, (match, attr, src) => {
+                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'dist', src));
+                return `${attr}="${resourceUri}"`;
+            });
+
+            return html;
+        } catch (error) {
+            console.error('WebviewManager: Error loading webview content:', error);
+            return this.getFallbackHtmlContent();
+        }
+    }
+
+    /**
+     * Provides fallback HTML content when the main HTML file cannot be loaded
+     *
+     * @returns Basic HTML content for the webview
+     */
+    private getFallbackHtmlContent(): string {
+        return `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Code Context Engine</title>
+                <style>
+                    body {
+                        font-family: var(--vscode-font-family);
+                        color: var(--vscode-foreground);
+                        background-color: var(--vscode-editor-background);
+                        padding: 20px;
+                        margin: 0;
+                    }
+                    .container {
+                        max-width: 800px;
+                        margin: 0 auto;
+                        text-align: center;
+                    }
+                    .error {
+                        color: var(--vscode-errorForeground);
+                        margin: 20px 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Code Context Engine</h1>
+                    <div class="error">
+                        <p>Unable to load the main interface. Please ensure the webview assets are built.</p>
+                        <p>Run <code>npm run build:webview</code> to build the webview assets.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+    }
 
     /**
      * Disposes of the WebviewManager and all associated resources

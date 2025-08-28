@@ -9,6 +9,7 @@ import { TroubleshootingSystem } from './validation/troubleshootingGuide';
 import { ConfigurationManager } from './configuration/configurationManager';
 import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
+import { WorkspaceManager } from './workspaceManager';
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
@@ -43,6 +44,7 @@ export class MessageRouter {
     private configurationManager: ConfigurationManager;
     private stateManager: StateManager;
     private xmlFormatterService?: XmlFormatterService;
+    private workspaceManager?: WorkspaceManager;
 
     /**
      * Constructs a new MessageRouter instance with core services
@@ -186,6 +188,15 @@ export class MessageRouter {
                     break;
                 case 'clearIndex':
                     await this.handleClearIndex(webview);
+                    break;
+                case 'getWorkspaceList':
+                    await this.handleGetWorkspaceList(webview);
+                    break;
+                case 'switchWorkspace':
+                    await this.handleSwitchWorkspace(message, webview);
+                    break;
+                case 'getWorkspaceStats':
+                    await this.handleGetWorkspaceStats(webview);
                     break;
                 case 'advancedSearch':
                     await this.handleAdvancedSearch(message, webview);
@@ -724,13 +735,44 @@ export class MessageRouter {
      * Initiates the document indexing process
      *
      * This handler triggers the indexing of workspace documents to make them
-     * searchable. It delegates to a VS Code command for the actual implementation.
+     * searchable. It includes state validation to prevent concurrent indexing
+     * operations and provides appropriate error responses.
      *
-     * @param webview - The webview (not used in this implementation but kept for consistency)
+     * @param webview - The webview to send the response to
      */
     private async handleStartIndexing(webview: vscode.Webview): Promise<void> {
-        // Delegate to the existing VS Code command for indexing
-        await vscode.commands.executeCommand('code-context-engine.startIndexing');
+        try {
+            console.log('MessageRouter: Handling start indexing request');
+
+            // Check if indexing is already in progress
+            if (this.stateManager.isIndexing()) {
+                const errorResponse = {
+                    command: 'startIndexing',
+                    error: 'Indexing is already in progress.'
+                };
+                webview.postMessage(errorResponse);
+                console.log('MessageRouter: Indexing already in progress, request rejected');
+                return;
+            }
+
+            // Delegate to the existing VS Code command for indexing
+            await vscode.commands.executeCommand('code-context-engine.startIndexing');
+
+            const successResponse = {
+                command: 'startIndexing',
+                result: 'Indexing started successfully.'
+            };
+            webview.postMessage(successResponse);
+            console.log('MessageRouter: Indexing started successfully');
+
+        } catch (error) {
+            console.error('MessageRouter: Error starting indexing:', error);
+            const errorResponse = {
+                command: 'startIndexing',
+                error: error instanceof Error ? error.message : 'An unknown error occurred while starting indexing.'
+            };
+            webview.postMessage(errorResponse);
+        }
     }
 
     /**
@@ -1416,5 +1458,134 @@ export class MessageRouter {
     private async handleRestoreConfigurationBackup(message: any, webview: vscode.Webview): Promise<void> {
         // Implementation would restore configuration backup
         await this.sendErrorResponse(webview, 'Not implemented yet');
+    }
+
+    /**
+     * Gets the list of available workspaces
+     *
+     * This handler retrieves all available workspace folders and their information,
+     * including the currently active workspace.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handleGetWorkspaceList(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling get workspace list request');
+
+            if (!this.workspaceManager) {
+                await webview.postMessage({
+                    command: 'workspaceListResponse',
+                    success: false,
+                    error: 'Workspace manager not available'
+                });
+                return;
+            }
+
+            const workspaces = this.workspaceManager.getAllWorkspaces();
+            const currentWorkspace = this.workspaceManager.getCurrentWorkspace();
+
+            await webview.postMessage({
+                command: 'workspaceListResponse',
+                success: true,
+                data: {
+                    workspaces: workspaces,
+                    current: currentWorkspace?.id || null
+                }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting workspace list:', error);
+            await this.sendErrorResponse(webview, `Failed to get workspace list: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Switches to a different workspace
+     *
+     * This handler changes the active workspace and notifies the UI of the change.
+     *
+     * @param message - The switch workspace message containing the workspace ID
+     * @param webview - The webview to send the response to
+     */
+    private async handleSwitchWorkspace(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling switch workspace request');
+
+            if (!this.workspaceManager) {
+                await webview.postMessage({
+                    command: 'workspaceSwitchResponse',
+                    success: false,
+                    error: 'Workspace manager not available'
+                });
+                return;
+            }
+
+            const workspaceId = message.data?.workspaceId;
+            if (!workspaceId) {
+                await webview.postMessage({
+                    command: 'workspaceSwitchResponse',
+                    success: false,
+                    error: 'Workspace ID is required'
+                });
+                return;
+            }
+
+            const success = this.workspaceManager.switchToWorkspace(workspaceId);
+
+            if (success) {
+                await webview.postMessage({
+                    command: 'workspaceSwitchResponse',
+                    success: true,
+                    data: {
+                        workspaceId: workspaceId
+                    }
+                });
+            } else {
+                await webview.postMessage({
+                    command: 'workspaceSwitchResponse',
+                    success: false,
+                    error: 'Workspace not found'
+                });
+            }
+
+        } catch (error) {
+            console.error('MessageRouter: Error switching workspace:', error);
+            await this.sendErrorResponse(webview, `Failed to switch workspace: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Gets workspace statistics
+     *
+     * This handler retrieves statistics about the current workspace setup,
+     * including the total number of workspaces and current workspace info.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handleGetWorkspaceStats(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling get workspace stats request');
+
+            if (!this.workspaceManager) {
+                await webview.postMessage({
+                    command: 'workspaceStatsResponse',
+                    success: false,
+                    error: 'Workspace manager not available'
+                });
+                return;
+            }
+
+            const stats = this.workspaceManager.getWorkspaceStats();
+
+            await webview.postMessage({
+                command: 'workspaceStatsResponse',
+                success: true,
+                data: stats
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting workspace stats:', error);
+            await this.sendErrorResponse(webview, `Failed to get workspace stats: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 }
