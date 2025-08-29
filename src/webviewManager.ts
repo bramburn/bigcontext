@@ -1044,6 +1044,31 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             // Add nonce to inline scripts
             html = html.replace(/<script>/g, `<script nonce="${nonce}">`);
 
+            // Inject fetch interceptor for SvelteKit runtime requests
+            const fetchInterceptor = `
+                <script nonce="${nonce}">
+                    // Intercept fetch requests for SvelteKit assets
+                    const originalFetch = window.fetch;
+                    window.fetch = function(url, options) {
+                        // Handle relative URLs that start with /_app/
+                        if (typeof url === 'string' && url.startsWith('/_app/')) {
+                            console.log('Intercepting fetch for:', url);
+                            // For version.json, return a mock response since it's just used for cache busting
+                            if (url.includes('version.json')) {
+                                return Promise.resolve(new Response('{"version":"${Date.now()}"}', {
+                                    status: 200,
+                                    headers: { 'Content-Type': 'application/json' }
+                                }));
+                            }
+                        }
+                        return originalFetch.call(this, url, options);
+                    };
+                </script>
+            `;
+
+            // Insert fetch interceptor before the first script tag
+            html = html.replace(/<script/, fetchInterceptor + '<script');
+
             return html;
         } catch (error) {
             console.error('WebviewManager: Error loading webview content:', error);
