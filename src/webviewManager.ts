@@ -240,6 +240,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 {
                     enableScripts: config.enableScripts || true,
                     enableCommandUris: config.enableCommandUris || false,
+                    retainContextWhenHidden: true, // Important for Remote SSH
                     localResourceRoots: config.localResourceRoots || [vscode.Uri.joinPath(vscode.Uri.file(__dirname), 'resources')],
                     portMapping: config.portMapping
                 }
@@ -795,6 +796,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
+                retainContextWhenHidden: true, // Important for Remote SSH
                 localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
             }
         );

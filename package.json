@@ -401,9 +401,9 @@
     "test": "node ./out/test/runTest.js",
     "build-webview": "cd webview && npm run build",
     "build:all": "npm run compile && npm run build-webview",
-    "package": "npm run build:all && vsce package --no-dependencies",
-    "publish": "vsce publish --no-dependencies",
-    "publish:vsce": "vsce publish --pat $VSCE_PAT",
+    "package": "npm run build:all && @vscode/vsce package --no-dependencies",
+    "publish": "@vscode/vsce publish --no-dependencies",
+    "publish:vsce": "@vscode/vsce publish --pat $VSCE_PAT",
     "release": "node scripts/release.js",
     "clean": "rimraf out *.vsix",
     "dev": "npm run watch"
@@ -420,7 +420,7 @@
     "rimraf": "^5.0.10",
     "shelljs": "^0.10.0",
     "typescript": "^4.9.4",
-    "vsce": "^2.15.0"
+    "@vscode/vsce": "^3.0.0"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.7.0",
