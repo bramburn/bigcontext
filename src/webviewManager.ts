@@ -1055,11 +1055,33 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}'; font-src ${cspSource}; img-src ${cspSource} https: data:; connect-src ${cspSource};">`;
 
             if (basicTestMode) {
-                this.loggingService.warn('Basic webview test mode enabled. Serving diagnostic HTML instead of Svelte app.', {}, 'WebviewManager');
+                this.loggingService.warn('Basic webview test mode enabled. Serving diagnostic HTML instead of app.', {}, 'WebviewManager');
                 return this.getBasicTestHtml(csp, nonce);
             }
 
-            const htmlPath = path.join(extensionUri.fsPath, 'webview', 'build', 'index.html');
+            // Choose webview implementation
+            const implementation = vscode.workspace.getConfiguration('code-context-engine').get<string>('webview.implementation', 'sveltekit');
+            let htmlPath: string;
+            let buildDir: string;
+
+            switch (implementation) {
+                case 'react':
+                    buildDir = 'webview-react/dist';
+                    htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
+                    this.loggingService.info('Using React webview implementation', { buildDir }, 'WebviewManager');
+                    break;
+                case 'svelte-simple':
+                    buildDir = 'webview-simple/dist';
+                    htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
+                    this.loggingService.info('Using Simple Svelte webview implementation', { buildDir }, 'WebviewManager');
+                    break;
+                case 'sveltekit':
+                default:
+                    buildDir = 'webview/build';
+                    htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
+                    this.loggingService.info('Using SvelteKit webview implementation', { buildDir }, 'WebviewManager');
+                    break;
+            }
 
             // Check if the HTML file exists
             if (!fs.existsSync(htmlPath)) {
@@ -1076,25 +1098,59 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             );
 
             // Replace relative paths with webview-compatible URIs
-            // This handles SvelteKit's typical asset patterns
-            html = html.replace(/(src|href)="(\/_app\/[^"]+)"/g, (match, attr, src) => {
-                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'build', src));
-                console.log(`WebviewManager: Replacing ${src} with ${resourceUri}`);
-                return `${attr}="${resourceUri}"`;
-            });
+            // Handle different asset patterns based on implementation
+            if (implementation === 'sveltekit') {
+                // SvelteKit uses /_app/ pattern
+                html = html.replace(/(src|href)="(\/_app\/[^"]+)"/g, (_, attr, src) => {
+                    const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, buildDir, src));
+                    console.log(`WebviewManager: Replacing ${src} with ${resourceUri}`);
+                    return `${attr}="${resourceUri}"`;
+                });
+            } else {
+                // React/Simple Svelte use direct file references
+                html = html.replace(/(src|href)="(\/[^"]+\.(js|css|png|jpg|jpeg|gif|svg|ico|json))"/g, (_, attr, src) => {
+                    const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, buildDir, src.substring(1))); // Remove leading /
+                    console.log(`WebviewManager: Replacing ${src} with ${resourceUri}`);
+                    return `${attr}="${resourceUri}"`;
+                });
+            }
 
             // Also handle any other relative paths that might exist
-            html = html.replace(/(src|href)="(\/[^"]+\.(js|css|png|jpg|jpeg|gif|svg|ico|json))"/g, (match, attr, src) => {
-                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'build', src));
+            html = html.replace(/(src|href)="(\/[^"]+\.(js|css|png|jpg|jpeg|gif|svg|ico|json))"/g, (_, attr, src) => {
+                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, buildDir, src.substring(1)));
                 console.log(`WebviewManager: Replacing ${src} with ${resourceUri}`);
                 return `${attr}="${resourceUri}"`;
             });
 
-            // Replace import() calls in inline scripts to use webview URIs
-            html = html.replace(/import\("(\/_app\/[^"]+)"\)/g, (match, src) => {
-                const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview', 'build', src));
-                return `import("${resourceUri}")`;
-            });
+            // Optionally navigate to a debug route via hash to isolate Svelte routing issues in webview
+            const routeOverride = vscode.workspace.getConfiguration('code-context-engine').get<string>('webview.routeOverride','');
+            if (routeOverride) {
+                const routeScript = `
+                    <script nonce="${nonce}">
+                        (function(){
+                            const target = ${JSON.stringify('#' + 'test-basic')}.replace('##','#');
+                            try {
+                                if (location.hash !== target) {
+                                    console.log('Navigating to debug route', target);
+                                    location.hash = target;
+                                }
+                            } catch (e) {
+                                console.warn('Route override navigation failed', e);
+                            }
+                        })();
+                    </script>
+                `;
+                html = html.replace(/<body[^>]*>/, (m) => m + routeScript);
+            }
+
+
+            // Replace import() calls in inline scripts to use webview URIs (SvelteKit only)
+            if (implementation === 'sveltekit') {
+                html = html.replace(/import\("(\/_app\/[^"]+)"\)/g, (_, src) => {
+                    const resourceUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, buildDir, src));
+                    return `import("${resourceUri}")`;
+                });
+            }
 
             // Add nonce to inline scripts
             html = html.replace(/<script>/g, `<script nonce="${nonce}">`);

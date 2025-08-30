@@ -368,6 +368,18 @@
           "description": "Serve a minimal test HTML for the webview to verify VS Code API initialization and messaging. Enable for troubleshooting Remote SSH issues."
         }
       }
+,
+        "code-context-engine.webview.routeOverride": {
+          "type": "string",
+          "default": "",
+          "description": "If set (e.g. '/test-basic'), the webview will client-navigate to this SvelteKit route on load to aid debugging."
+        },
+        "code-context-engine.webview.implementation": {
+          "type": "string",
+          "enum": ["sveltekit", "react", "svelte-simple"],
+          "default": "sveltekit",
+          "description": "Choose which webview implementation to use: SvelteKit (original), React (Fluent UI), or Simple Svelte (minimal)."
+        }
     },
     "keybindings": [
       {

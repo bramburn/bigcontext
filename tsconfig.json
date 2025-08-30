@@ -16,6 +16,8 @@
 	},
 	"exclude": [
 		"webview/**/*",
-		"webview-backup-*/**/*"
+		"webview-backup-*/**/*",
+		"webview-simple/**/*",
+		"webview-react/**/*"
 	]
 }
