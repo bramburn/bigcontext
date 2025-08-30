@@ -44,6 +44,11 @@
         "command": "code-context-engine.openDiagnostics",
         "title": "Open Diagnostics",
         "category": "Code Context"
+      },
+      {
+        "command": "codeContextEngine.healthCheck",
+        "title": "Health Check",
+        "category": "Code Context"
       }
     ],
     "configuration": {
@@ -355,6 +360,12 @@
             "Show informational messages, warnings, and errors (recommended)",
             "Show all messages including debug information"
           ]
+        }
+,
+        "code-context-engine.webview.basicTestMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Serve a minimal test HTML for the webview to verify VS Code API initialization and messaging. Enable for troubleshooting Remote SSH issues."
         }
       }
     },

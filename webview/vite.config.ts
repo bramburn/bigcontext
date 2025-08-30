@@ -12,22 +12,24 @@ export default defineConfig({
 				drop_debugger: true,
 			},
 		},
-		// Enable tree-shaking
+		// Consolidate to a single JS bundle to simplify webview resource loading
 		rollupOptions: {
 			output: {
-				manualChunks: (id) => {
-					// Separate vendor chunks for better caching
-					if (id.includes('node_modules')) {
-						if (id.includes('@fluentui/web-components')) {
-							return 'fluent-ui';
-						}
-						return 'vendor';
+				manualChunks: undefined,
+				inlineDynamicImports: true,
+				entryFileNames: 'app.js',
+				chunkFileNames: 'app.js',
+				assetFileNames: (assetInfo) => {
+					if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+						return 'app.css';
 					}
-				},
+					return 'assets/[name][extname]';
+				}
 			},
 		},
 		// Set chunk size warning limit
-		chunkSizeWarningLimit: 1000,
+		chunkSizeWarningLimit: 2000,
+		target: ['es2020','chrome87','safari14','firefox78','edge88']
 	},
 	// Optimize dependencies
 	optimizeDeps: {

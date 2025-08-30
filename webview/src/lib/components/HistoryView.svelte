@@ -173,7 +173,7 @@
         {:else}
             <div class="history-list">
                 {#each filteredItems as item (item.id)}
-                    <div class="history-item" on:click={() => handleRerun(item.query)}>
+                    <div class="history-item" role="button" tabindex="0" on:click={() => handleRerun(item.query)} on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleRerun(item.query)}>
                         <div class="item-content">
                             <div class="item-header">
                                 <span class="query-text" title={item.query}>

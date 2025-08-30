@@ -96,14 +96,15 @@ function handleIncomingMessage(event: MessageEvent): void {
         return;
     }
     
-    // Handle command-based messages
-    if (message.command && messageHandlers.has(message.command)) {
-        const handlers = messageHandlers.get(message.command)!;
+    // Handle command- or type-based messages (support both shapes)
+    const key = (message as any).command ?? (message as any).type;
+    if (key && messageHandlers.has(key)) {
+        const handlers = messageHandlers.get(key)!;
         handlers.forEach(handler => {
             try {
                 handler(message);
             } catch (error) {
-                console.error(`Error in message handler for command '${message.command}':`, error);
+                console.error(`Error in message handler for key '${key}':`, error);
             }
         });
     }

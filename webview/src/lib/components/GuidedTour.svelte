@@ -119,7 +119,7 @@
     <!-- Tour overlay -->
     <div class="tour-overlay" on:click={skipTour} on:keydown={(e) => e.key === 'Escape' && skipTour()} role="button" tabindex="0">
         <!-- Tour modal -->
-        <div class="tour-modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+        <div class="tour-modal" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
             <!-- Header -->
             <div class="tour-header">
                 <h3 class="tour-title">{currentStepData.title || 'Welcome Tour'}</h3>

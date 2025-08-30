@@ -280,10 +280,11 @@
                 appearance="accent"
                 disabled={isSearching || !searchQuery.trim()}
                 on:click={handleSearch}
-                on:keydown={(e: KeyboardEvent) => e.key === 'Enter' && handleSearch()}
+                on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSearch()}
                 class="search-button"
-                role="button"
+                aria-label="Search"
                 tabindex="0"
+                role="button"
             >
                 {#if isSearching}
                     Searching...
@@ -338,8 +339,6 @@
                 class="notification-close"
                 on:click={clearMessages}
                 on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, clearMessages)}
-                role="button"
-                tabindex="0"
             >×</button>
         </div>
     {/if}
@@ -354,8 +353,6 @@
                         class="history-item"
                         on:click={() => selectHistoryItem(historyItem)}
                         on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => selectHistoryItem(historyItem))}
-                        role="button"
-                        tabindex="0"
                     >
                         {historyItem}
                     </button>
@@ -428,6 +425,9 @@
                                 <fluent-button
                                     appearance="outline"
                                     on:click={() => copyToClipboard(JSON.stringify(searchResults, null, 2))}
+                                    on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => copyToClipboard(JSON.stringify(searchResults, null, 2)))}
+                                    role="button"
+                                    tabindex="0"
                                 >
                                     📋 Copy JSON
                                 </fluent-button>
@@ -444,6 +444,9 @@
                                 <fluent-button
                                     appearance="outline"
                                     on:click={() => copyToClipboard(xmlResults)}
+                                    on:keydown={(e: KeyboardEvent) => handleKeyboardClick(e, () => copyToClipboard(xmlResults))}
+                                    role="button"
+                                    tabindex="0"
                                 >
                                     📋 Copy XML
                                 </fluent-button>
@@ -481,6 +484,9 @@
                             appearance="outline"
                             disabled={isLoadingMore}
                             on:click={loadMoreResults}
+                            on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && loadMoreResults()}
+                            role="button"
+                            tabindex="0"
                             class="load-more-btn"
                         >
                             {#if isLoadingMore}

@@ -20,6 +20,8 @@ __pycache__
 .github
 .vscode-test/
 
+repomix-output.xml
+
 
 .repomix-output.xml
 

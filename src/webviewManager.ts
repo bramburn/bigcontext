@@ -8,7 +8,7 @@ import { NotificationService } from './notifications/notificationService';
 
 /**
  * Webview panel configuration interface
- * 
+ *
  * Defines the configuration options for creating a webview panel in VS Code.
  * These options determine how the webview behaves, what resources it can access,
  * and how it's displayed in the editor.
@@ -34,7 +34,7 @@ export interface WebviewConfig {
 
 /**
  * Enhanced webview panel interface with metadata
- * 
+ *
  * Extends the basic VS Code webview panel with additional metadata for tracking
  * panel state, configuration, and message handlers. This interface provides
  * a comprehensive view of the webview panel's current state and capabilities.
@@ -56,7 +56,7 @@ export interface WebviewPanel {
 
 /**
  * Webview message structure
- * 
+ *
  * Defines the standard format for messages exchanged between the extension
  * and webview content. This standardized format ensures consistent
  * message handling and processing across all webview communications.
@@ -72,13 +72,13 @@ export interface WebviewMessage {
 
 /**
  * Centralized webview management system for VS Code extensions
- * 
+ *
  * The WebviewManager class provides a comprehensive solution for managing multiple
  * webview panels within a VS Code extension. It handles the complete lifecycle of
  * webview panels including creation, configuration, message passing, resource management,
  * and disposal. This manager implements a debounced message queue system to optimize
  * performance and prevent excessive updates to webview content.
- * 
+ *
  * Key features:
  * - Dynamic creation and configuration of webview panels with customizable options
  * - Bidirectional message passing between extension and webview content
@@ -165,6 +165,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             // Set up message handling
             webviewView.webview.onDidReceiveMessage(
                 message => {
+                    // Log all sidebar messages with timestamps
+                    this.logWebviewMessage('sidebar', message, 'view');
+                    if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
+                        this.loggingService.info('Sidebar webview reported ready', { timestamp: new Date().toISOString(), message }, 'WebviewManager');
+                    }
                     this.handleSidebarMessage(message);
                 },
                 undefined,
@@ -213,11 +218,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Creates a new webview panel with the specified configuration
-     * 
+     *
      * This method creates a VS Code webview panel and wraps it with additional
      * metadata and functionality. It sets up message handling, disposal callbacks,
      * and stores the panel in the internal management system.
-     * 
+     *
      * @param config - Configuration object defining the webview panel properties
      * @returns The unique ID of the created webview panel
      * @throws Error if panel creation fails
@@ -267,7 +272,13 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             }
 
             panel.webview.onDidReceiveMessage(
-                message => messageRouter.handleMessage(message, panel.webview),
+                message => {
+                    this.logWebviewMessage(config.id, message, 'panel');
+                    if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
+                        this.loggingService.info('Webview panel reported ready', { panelId: config.id, timestamp: new Date().toISOString(), message }, 'WebviewManager');
+                    }
+                    messageRouter.handleMessage(message, panel.webview);
+                },
                 undefined,
                 this.disposables
             );
@@ -291,7 +302,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
             // Store the panel in our management system
             this.panels.set(config.id, webviewPanel);
-            
+
             this.loggingService.info(`Created webview panel '${config.id}'`, {}, 'WebviewManager');
             return config.id;
 
@@ -303,11 +314,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Shows an existing webview panel by bringing it to focus
-     * 
+     *
      * This method reveals a previously created or hidden webview panel,
      * making it visible in the specified editor column. The panel's
      * visibility state is updated accordingly.
-     * 
+     *
      * @param id - Unique identifier of the webview panel to show
      */
     showPanel(id: string): void {
@@ -332,11 +343,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Hides a webview panel by disposing its VS Code panel instance
-     * 
+     *
      * This method disposes the underlying VS Code webview panel,
      * effectively hiding it from view while maintaining the panel
      * metadata in our management system for potential later use.
-     * 
+     *
      * @param id - Unique identifier of the webview panel to hide
      */
     hidePanel(id: string): void {
@@ -361,11 +372,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Toggles the visibility state of a webview panel
-     * 
+     *
      * This method provides a convenient way to switch between showing
      * and hiding a webview panel based on its current visibility state.
      * If the panel is visible, it will be hidden; if hidden, it will be shown.
-     * 
+     *
      * @param id - Unique identifier of the webview panel to toggle
      */
     togglePanel(id: string): void {
@@ -390,10 +401,10 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Retrieves a webview panel by its unique identifier
-     * 
+     *
      * This method provides access to the enhanced webview panel object
      * containing both the VS Code panel and additional metadata.
-     * 
+     *
      * @param id - Unique identifier of the webview panel to retrieve
      * @returns The webview panel object if found, undefined otherwise
      */
@@ -403,11 +414,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Retrieves all managed webview panels
-     * 
+     *
      * This method returns an array of all webview panels currently
      * managed by this WebviewManager instance, regardless of their
      * visibility state.
-     * 
+     *
      * @returns Array of all managed webview panels
      */
     getAllPanels(): WebviewPanel[] {
@@ -416,10 +427,10 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Retrieves all currently visible webview panels
-     * 
+     *
      * This method filters the managed panels to return only those
      * that are currently visible to the user.
-     * 
+     *
      * @returns Array of visible webview panels
      */
     getVisiblePanels(): WebviewPanel[] {
@@ -428,11 +439,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Completely removes a webview panel from management
-     * 
+     *
      * This method performs a full cleanup of the specified webview panel,
      * including disposal of the VS Code panel, removal from internal maps,
      * and cleanup of any associated timers and message queues.
-     * 
+     *
      * @param id - Unique identifier of the webview panel to delete
      */
     deletePanel(id: string): void {
@@ -445,11 +456,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
             // Dispose the VS Code panel to free resources
             webviewPanel.panel.dispose();
-            
+
             // Remove from our management system
             this.panels.delete(id);
             this.messageQueue.delete(id);
-            
+
             // Clear any pending update timers
             const timer = this.updateTimers.get(id);
             if (timer) {
@@ -466,11 +477,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Sets the HTML content for a webview panel
-     * 
+     *
      * This method updates the webview panel's HTML content, which will
      * be immediately rendered in the panel. The content can include
      * references to local resources through the webview's URI system.
-     * 
+     *
      * @param id - Unique identifier of the webview panel
      * @param html - HTML content to set for the webview
      */
@@ -495,12 +506,12 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Posts a message to a webview panel with debouncing
-     * 
+     *
      * This method queues messages for delivery to webview panels,
      * implementing a debouncing mechanism to optimize performance.
      * Messages are standardized to the WebviewMessage format and
      * processed in batches to minimize webview updates.
-     * 
+     *
      * @param id - Unique identifier of the webview panel
      * @param message - Message data to post (can be string or object)
      */
@@ -516,7 +527,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             if (!this.messageQueue.has(id)) {
                 this.messageQueue.set(id, []);
             }
-            
+
             // Standardize message format for consistent handling
             const webviewMessage: WebviewMessage = {
                 type: typeof message === 'string' ? message : message.type || 'default',
@@ -535,11 +546,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Registers a message handler for a specific message type
-     * 
+     *
      * This method allows the extension to handle incoming messages
      * from the webview content. Each message type can have its own
      * dedicated handler function for processing the message data.
-     * 
+     *
      * @param id - Unique identifier of the webview panel
      * @param messageType - Type of message to handle
      * @param handler - Function to process messages of this type
@@ -563,10 +574,10 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Unregisters a previously registered message handler
-     * 
+     *
      * This method removes a message handler for a specific message type,
      * effectively stopping the processing of messages of that type.
-     * 
+     *
      * @param id - Unique identifier of the webview panel
      * @param messageType - Type of message to unregister
      */
@@ -589,12 +600,12 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Gets a webview-compatible URI for local resources
-     * 
+     *
      * This method converts local file paths to webview-compatible URIs
      * that can be safely accessed from within the webview content.
      * This is essential for loading local resources like images, stylesheets,
      * or scripts in the webview.
-     * 
+     *
      * @param id - Unique identifier of the webview panel
      * @param path - Relative path to the local resource
      * @returns Webview-compatible URI for the resource, or undefined if panel not found
@@ -619,12 +630,12 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Processes incoming messages from webview panels
-     * 
+     *
      * This private method handles messages received from webview content,
      * routing them to the appropriate registered handlers based on the
      * message type. It provides centralized message processing with
      * error handling and logging.
-     * 
+     *
      * @param panelId - Unique identifier of the source webview panel
      * @param message - The message data received from the webview
      */
@@ -639,7 +650,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             // Determine message type and get appropriate handler
             const messageType = message.type || 'default';
             const handler = webviewPanel.messageHandlers.get(messageType);
-            
+
             if (handler) {
                 // Execute the handler with the message data
                 handler(message);
@@ -654,12 +665,12 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Handles the disposal of webview panels
-     * 
+     *
      * This private method is called when a webview panel is disposed,
      * either by the user or programmatically. It updates the panel's
      * visibility state and cleans up associated resources like message
      * queues and update timers.
-     * 
+     *
      * @param panelId - Unique identifier of the disposed webview panel
      */
     private handlePanelDispose(panelId: string): void {
@@ -687,12 +698,12 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Schedules debounced message processing for a panel
-     * 
+     *
      * This private method implements the debouncing mechanism for message
      * processing. It cancels any existing timer for the panel and creates
      * a new one to process the message queue after the specified delay.
      * This prevents excessive updates and improves performance.
-     * 
+     *
      * @param panelId - Unique identifier of the webview panel
      */
     private scheduleMessageUpdate(panelId: string): void {
@@ -713,11 +724,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Processes the message queue for a specific panel
-     * 
+     *
      * This private method processes all queued messages for a panel,
      * sending them to the webview content in a batch. It clears the
      * queue after processing to prepare for new messages.
-     * 
+     *
      * @param panelId - Unique identifier of the webview panel
      */
     private processMessageQueue(panelId: string): void {
@@ -749,7 +760,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
      * Sets up event listeners for system and configuration changes
-     * 
+     *
      * This private method registers event listeners for various system
      * events that may affect webview panels, such as configuration changes.
      * These listeners ensure that webview panels remain synchronized with
@@ -831,7 +842,13 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         }
 
         this.mainPanel.webview.onDidReceiveMessage(
-            message => messageRouter.handleMessage(message, this.mainPanel!.webview),
+            message => {
+                this.logWebviewMessage(panelId, message, 'panel');
+                if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
+                    this.loggingService.info('Main panel webview reported ready', { panelId, timestamp: new Date().toISOString(), message }, 'WebviewManager');
+                }
+                messageRouter.handleMessage(message, this.mainPanel!.webview);
+            },
             undefined,
             this.disposables
         );
@@ -908,7 +925,13 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         }
 
         this.settingsPanel.webview.onDidReceiveMessage(
-            message => messageRouter.handleMessage(message, this.settingsPanel!.webview),
+            message => {
+                this.logWebviewMessage(panelId, message, 'panel');
+                if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
+                    this.loggingService.info('Settings panel webview reported ready', { panelId, timestamp: new Date().toISOString(), message }, 'WebviewManager');
+                }
+                messageRouter.handleMessage(message, this.settingsPanel!.webview);
+            },
             undefined,
             this.disposables
         );
@@ -930,6 +953,29 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         });
 
         console.log('WebviewManager: Settings panel created and displayed');
+    }
+
+    /**
+     * Log a message received from a webview with timestamp and context
+     */
+    private logWebviewMessage(sourceId: string, message: any, sourceType: 'panel' | 'view'): void {
+        try {
+            const timestamp = new Date().toISOString();
+            const summary = {
+                sourceType,
+                sourceId,
+                timestamp,
+                keys: Object.keys(message || {}),
+                command: (message as any)?.command,
+                type: (message as any)?.type
+            };
+            this.loggingService.debug('Webview message received', { summary, message }, 'WebviewManager');
+            if ((message as any)?.command === 'webviewReady' || (message as any)?.type === 'webviewReady') {
+                this.loggingService.info('Webview reported ready', { sourceType, sourceId, timestamp }, 'WebviewManager');
+            }
+        } catch (error) {
+            this.loggingService.error('Failed to log webview message', { error: error instanceof Error ? error.message : String(error) }, 'WebviewManager');
+        }
     }
 
     /**
@@ -1000,6 +1046,19 @@ export class WebviewManager implements vscode.WebviewViewProvider {
      */
     private getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
         try {
+            // Basic test mode: serve a minimal HTML to validate VS Code API and messaging
+            const basicTestMode = vscode.workspace.getConfiguration('code-context-engine').get<boolean>('webview.basicTestMode', false);
+
+            // Generate a nonce and CSP early (used by both modes)
+            const nonce = this.generateNonce();
+            const cspSource = webview.cspSource;
+            const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}'; font-src ${cspSource}; img-src ${cspSource} https: data:; connect-src ${cspSource};">`;
+
+            if (basicTestMode) {
+                this.loggingService.warn('Basic webview test mode enabled. Serving diagnostic HTML instead of Svelte app.', {}, 'WebviewManager');
+                return this.getBasicTestHtml(csp, nonce);
+            }
+
             const htmlPath = path.join(extensionUri.fsPath, 'webview', 'build', 'index.html');
 
             // Check if the HTML file exists
@@ -1009,13 +1068,6 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             }
 
             let html = fs.readFileSync(htmlPath, 'utf8');
-
-            // Generate a nonce for inline scripts
-            const nonce = this.generateNonce();
-
-            // Add Content Security Policy for VS Code webview with nonce
-            const cspSource = webview.cspSource;
-            const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}'; font-src ${cspSource}; img-src ${cspSource} https: data:; connect-src ${cspSource};">`;
 
             // Insert CSP after the charset meta tag
             html = html.replace(
@@ -1125,8 +1177,71 @@ export class WebviewManager implements vscode.WebviewViewProvider {
     }
 
     /**
+
+    /**
+     * Minimal diagnostic HTML to verify VS Code API initialization and messaging
+     */
+    private getBasicTestHtml(cspMeta: string, nonce: string): string {
+        const style = `
+            body { font-family: var(--vscode-font-family, sans-serif); padding: 12px; color: var(--vscode-foreground); background: var(--vscode-editor-background); }
+            .status { padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; }
+            .ok { background: #093; color: white; }
+            .warn { background: #960; color: white; }
+            .err { background: #900; color: white; }
+            .log { font-family: monospace; white-space: pre-wrap; padding: 8px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; max-height: 200px; overflow: auto; }
+        `;
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    ${cspMeta}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webview Test</title>
+    <style>${style}</style>
+</head>
+<body>
+    <h2>Webview Test</h2>
+    <div id="status" class="status warn">Initializing...</div>
+    <div id="details" class="log"></div>
+    <script nonce="${nonce}">
+    (function(){
+        const logEl = document.getElementById('details');
+        const statusEl = document.getElementById('status');
+        function log(msg){ logEl.textContent += (new Date()).toISOString()+" - "+msg+"\n"; }
+        function setStatus(text, cls){ statusEl.textContent = text; statusEl.className = 'status '+cls; }
+
+        let retries = 0; const maxRetries = 10;
+        function init(){
+            if (window.acquireVsCodeApi) {
+                try {
+                    const vscode = window.acquireVsCodeApi();
+                    setStatus('VS Code API acquired', 'ok');
+                    log('Posting webviewReady message');
+                    vscode.postMessage({ command: 'webviewReady', timestamp: Date.now(), userAgent: navigator.userAgent });
+                    window.addEventListener('message', (event) => {
+                        log('Received message from extension: '+JSON.stringify(event.data));
+                    });
+                } catch (e) {
+                    setStatus('Error acquiring VS Code API: '+e.message, 'err');
+                    log('Error: '+e.stack);
+                }
+            } else if (retries < maxRetries) {
+                retries++; setStatus('VS Code API not ready, retry '+retries+'/'+maxRetries, 'warn');
+                setTimeout(init, 150);
+            } else {
+                setStatus('VS Code API unavailable after retries', 'err');
+                log('Giving up after '+maxRetries+' retries');
+            }
+        }
+        init();
+    })();
+    </script>
+</body>
+</html>`;
+    }
+
+/**
      * Generates a cryptographically secure nonce for Content Security Policy
-     *
      * @returns A base64-encoded nonce string
      */
     private generateNonce(): string {
