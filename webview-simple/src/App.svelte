@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     provideFluentDesignSystem,
     fluentButton,
@@ -135,8 +135,17 @@
         log('Failed to acquire VS Code API after retries');
       }
     }
-    
+
     initVSCode();
+  });
+
+  onDestroy(() => {
+    connectionMonitor.destroy();
+    unsubscribeConnected();
+    unsubscribeDisconnected();
+    unsubscribeReconnecting();
+    unsubscribeError();
+    unsubscribeHeartbeat();
   });
 </script>
 
