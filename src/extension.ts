@@ -36,6 +36,57 @@ export async function activate(context: vscode.ExtensionContext) {
         await manager.initialize();
         extensionState.setExtensionManager(manager);
         console.log('ExtensionManager initialized successfully');
+
+        // Register health check command for debugging webview issues
+        const healthCheckCommand = vscode.commands.registerCommand('codeContextEngine.healthCheck', async () => {
+            const diagnostics = {
+                environment: process.platform,
+                isRemote: vscode.env.remoteName !== undefined,
+                remoteName: vscode.env.remoteName || 'local',
+                extensionPath: context.extensionPath,
+                extensionUri: context.extensionUri.toString(),
+                webviewSupport: true,
+                timestamp: new Date().toISOString()
+            };
+
+            const message = `Health Check Results:\n${JSON.stringify(diagnostics, null, 2)}`;
+            console.log('Code Context Engine Health Check:', diagnostics);
+            vscode.window.showInformationMessage('Health check completed. See console for details.');
+
+            // Also try to create a test webview to verify webview functionality
+            try {
+                const testPanel = vscode.window.createWebviewPanel(
+                    'healthCheck',
+                    'Health Check Test',
+                    vscode.ViewColumn.One,
+                    { enableScripts: true, retainContextWhenHidden: true }
+                );
+                testPanel.webview.html = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Health Check</title></head>
+                    <body>
+                        <h1>Webview Test Successful</h1>
+                        <pre>${message}</pre>
+                        <script>
+                            console.log('Test webview loaded successfully');
+                            const vscode = acquireVsCodeApi();
+                            vscode.postMessage({ command: 'healthCheckSuccess' });
+                        </script>
+                    </body>
+                    </html>
+                `;
+
+                // Auto-close after 3 seconds
+                setTimeout(() => testPanel.dispose(), 3000);
+            } catch (webviewError) {
+                console.error('Webview creation failed:', webviewError);
+                vscode.window.showErrorMessage(`Webview creation failed: ${webviewError}`);
+            }
+        });
+
+        context.subscriptions.push(healthCheckCommand);
+
     } catch (error) {
         console.error('Failed to initialize ExtensionManager:', error);
         vscode.window.showErrorMessage('Code Context Engine failed to initialize. Please check the logs.');

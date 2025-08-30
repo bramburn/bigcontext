@@ -401,9 +401,9 @@
     "test": "node ./out/test/runTest.js",
     "build-webview": "cd webview && npm run build",
     "build:all": "npm run compile && npm run build-webview",
-    "package": "npm run build:all && @vscode/vsce package --no-dependencies",
-    "publish": "@vscode/vsce publish --no-dependencies",
-    "publish:vsce": "@vscode/vsce publish --pat $VSCE_PAT",
+    "package": "npm run build:all && npx @vscode/vsce package --no-dependencies",
+    "publish": "npx @vscode/vsce publish --no-dependencies",
+    "publish:vsce": "npx @vscode/vsce publish --pat $VSCE_PAT",
     "release": "node scripts/release.js",
     "clean": "rimraf out *.vsix",
     "dev": "npm run watch"

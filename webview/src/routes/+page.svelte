@@ -9,7 +9,7 @@
     import { performanceTracker, measureComponentLoad } from '$lib/utils/performance';
     import { registerCoreComponents } from '$lib/utils/fluentUI';
     import { fadeIn, slideInFromBottom } from '$lib/utils/animations';
-    import { postMessage, onMessage } from '$lib/vscodeApi';
+    import { postMessage, onMessage, initializeVSCodeApi } from '$lib/vscodeApi';
 
     // Dynamic imports for code splitting
     let SetupView: any = null;
@@ -112,69 +112,94 @@
 
     // Subscribe to view store changes
     onMount(() => {
-        // Start performance tracking
-        performanceTracker.start('app-initialization');
+        console.log('Webview mounting...');
 
-        // Register core Fluent UI components
-        registerCoreComponents();
+        const initializeWebview = async () => {
+            try {
+                // Start performance tracking
+                performanceTracker.start('app-initialization');
 
-        // Initialize persistence system
-        const cleanupPersistence = initializePersistence();
+                // Register core Fluent UI components
+                registerCoreComponents();
 
-        // Initialize app
-        appActions.initialize();
+                // Initialize persistence system
+                const cleanupPersistence = initializePersistence();
 
-        // End performance tracking
-        performanceTracker.end('app-initialization');
+                // Initialize app
+                appActions.initialize();
 
-        const unsubscribe = currentView.subscribe(async (newView) => {
-            view = newView;
-            await preloadComponents(newView);
-        });
+                // Initialize VS Code API with timeout for Remote SSH
+                const initPromise = initializeVSCodeApi();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('VS Code API initialization timeout')), 5000)
+                );
 
-        // VS Code API for receiving initial view state
-        const vscode = (window as any).acquireVsCodeApi();
+                await Promise.race([initPromise, timeoutPromise]);
+                console.log('VS Code API initialized successfully');
 
-        // Listen for view change messages from extension
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            if (message.type === 'initialState') {
-                // Handle initial state message from extension
-                appState.update((state: any) => ({
-                    ...state,
-                    isWorkspaceOpen: message.data.isWorkspaceOpen
-                }));
-            } else if (message.type === 'workspaceStateChanged') {
-                // Handle workspace state change message from extension
-                appActions.setWorkspaceOpen(message.data.isWorkspaceOpen);
-            } else if (message.command === 'setView') {
-                currentView.set(message.view);
-            } else if (message.command === 'globalStateResponse') {
-                // Handle global state response for first-run check
-                if (message.key === 'hasCompletedFirstRun') {
-                    hasCompletedFirstRun = message.value ?? false;
-                }
-            } else if (message.command === 'startTour') {
-                // Start the guided tour
-                if (guidedTourComponent && !hasCompletedFirstRun) {
-                    guidedTourComponent.startTour();
-                }
+                // End performance tracking
+                performanceTracker.end('app-initialization');
+
+                const unsubscribe = currentView.subscribe(async (newView) => {
+                    view = newView;
+                    await preloadComponents(newView);
+                });
+
+                // Set up message handlers using the vscodeApi wrapper
+                onMessage('initialState', (message) => {
+                    // Handle initial state message from extension
+                    appState.update((state: any) => ({
+                        ...state,
+                        isWorkspaceOpen: message.data.isWorkspaceOpen
+                    }));
+                });
+
+                onMessage('workspaceStateChanged', (message) => {
+                    // Handle workspace state change message from extension
+                    appActions.setWorkspaceOpen(message.data.isWorkspaceOpen);
+                });
+
+                onMessage('setView', (message) => {
+                    currentView.set(message.view);
+                });
+
+                onMessage('globalStateResponse', (message) => {
+                    // Handle global state response for first-run check
+                    if (message.key === 'hasCompletedFirstRun') {
+                        hasCompletedFirstRun = message.value ?? false;
+                    }
+                });
+
+                onMessage('startTour', () => {
+                    // Start the guided tour
+                    if (guidedTourComponent && !hasCompletedFirstRun) {
+                        guidedTourComponent.startTour();
+                    }
+                });
+
+                // Test message passing and request initial state
+                postMessage('webviewReady', { timestamp: Date.now() });
+                postMessage('getInitialView', {});
+                postMessage('getGlobalState', { key: 'hasCompletedFirstRun' });
+
+                // Load initial component
+                preloadComponents(view);
+
+                return () => {
+                    unsubscribe();
+                    cleanupPersistence();
+                };
+
+            } catch (error) {
+                console.error('Failed to initialize webview:', error);
+                // Show error state in UI
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                appActions.setError(`Webview initialization failed: ${errorMessage}`);
             }
-        });
-
-        // Request initial view state
-        vscode.postMessage({ command: 'getInitialView' });
-
-        // Request first-run state
-        vscode.postMessage({ command: 'getGlobalState', key: 'hasCompletedFirstRun' });
-
-        // Load initial component
-        preloadComponents(view);
-
-        return () => {
-            unsubscribe();
-            cleanupPersistence();
         };
+
+        // Start initialization
+        initializeWebview();
     });
 </script>
 

@@ -38,20 +38,42 @@ const pendingRequests = new Map<string, {
 }>();
 
 /**
- * Initialize the VS Code API
+ * Initialize the VS Code API with retry mechanism for Remote SSH
  * This should be called once when the webview loads
  */
-export function initializeVSCodeApi(): void {
-    if (typeof window !== 'undefined' && (window as any).acquireVsCodeApi) {
-        vscodeApi = (window as any).acquireVsCodeApi();
-        
-        // Set up the global message listener
-        window.addEventListener('message', handleIncomingMessage);
-        
-        console.log('VS Code API initialized');
-    } else {
-        console.warn('VS Code API not available - running outside of VS Code webview');
-    }
+export function initializeVSCodeApi(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (typeof window === 'undefined') {
+            reject(new Error('Not in browser environment'));
+            return;
+        }
+
+        // Add retry mechanism for Remote SSH
+        let retries = 0;
+        const maxRetries = 10;
+
+        const tryInitialize = () => {
+            if ((window as any).acquireVsCodeApi) {
+                try {
+                    vscodeApi = (window as any).acquireVsCodeApi();
+                    window.addEventListener('message', handleIncomingMessage);
+                    console.log('VS Code API initialized successfully');
+                    resolve();
+                } catch (error) {
+                    console.error('Failed to initialize VS Code API:', error);
+                    reject(error);
+                }
+            } else if (retries < maxRetries) {
+                retries++;
+                console.log(`VS Code API not ready, retry ${retries}/${maxRetries}`);
+                setTimeout(tryInitialize, 100);
+            } else {
+                reject(new Error('VS Code API not available after retries'));
+            }
+        };
+
+        tryInitialize();
+    });
 }
 
 /**
@@ -225,5 +247,9 @@ export function isInitialized(): boolean {
 // Auto-initialize when the module is loaded
 if (typeof window !== 'undefined') {
     // Initialize on next tick to ensure DOM is ready
-    setTimeout(initializeVSCodeApi, 0);
+    setTimeout(() => {
+        initializeVSCodeApi().catch(error => {
+            console.error('Auto-initialization of VS Code API failed:', error);
+        });
+    }, 0);
 }
