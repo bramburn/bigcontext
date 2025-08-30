@@ -87,16 +87,22 @@
     </div>
     
     <div class="controls">
-      <fluent-text-field 
-        bind:value={message} 
+      <fluent-text-field
+        value={message}
         placeholder="Type a test message"
+        role="textbox"
+        tabindex="0"
+        on:input={(e) => message = e.target.value}
         on:keydown={(e) => e.key === 'Enter' && sendMessage()}
       ></fluent-text-field>
-      
-      <fluent-button 
-        appearance="accent" 
+
+      <fluent-button
+        appearance="accent"
         disabled={!vscode || !message.trim()}
+        role="button"
+        tabindex="0"
         on:click={sendMessage}
+        on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && sendMessage()}
       >
         Send Message
       </fluent-button>

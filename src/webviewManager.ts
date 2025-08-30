@@ -156,7 +156,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             // Configure webview options
             webviewView.webview.options = {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, this.getBuildDirectory())]
             };
 
             // Set HTML content using the helper method
@@ -808,7 +808,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true, // Important for Remote SSH
-                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, this.getBuildDirectory())]
             }
         );
 
@@ -897,7 +897,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true, // Important for Remote SSH
-                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'build')]
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, this.getBuildDirectory())]
             }
         );
 
@@ -1061,27 +1061,10 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
             // Choose webview implementation
             const implementation = vscode.workspace.getConfiguration('code-context-engine').get<string>('webview.implementation', 'sveltekit');
-            let htmlPath: string;
-            let buildDir: string;
+            const buildDir = this.getBuildDirectory();
+            const htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
 
-            switch (implementation) {
-                case 'react':
-                    buildDir = 'webview-react/dist';
-                    htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
-                    this.loggingService.info('Using React webview implementation', { buildDir }, 'WebviewManager');
-                    break;
-                case 'svelte-simple':
-                    buildDir = 'webview-simple/dist';
-                    htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
-                    this.loggingService.info('Using Simple Svelte webview implementation', { buildDir }, 'WebviewManager');
-                    break;
-                case 'sveltekit':
-                default:
-                    buildDir = 'webview/build';
-                    htmlPath = path.join(extensionUri.fsPath, buildDir, 'index.html');
-                    this.loggingService.info('Using SvelteKit webview implementation', { buildDir }, 'WebviewManager');
-                    break;
-            }
+            this.loggingService.info(`Using ${implementation} webview implementation`, { buildDir }, 'WebviewManager');
 
             // Check if the HTML file exists
             if (!fs.existsSync(htmlPath)) {
@@ -1184,6 +1167,22 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         } catch (error) {
             console.error('WebviewManager: Error loading webview content:', error);
             return this.getFallbackHtmlContent();
+        }
+    }
+
+    /**
+     * Gets the correct build directory based on webview implementation setting
+     */
+    private getBuildDirectory(): string {
+        const implementation = vscode.workspace.getConfiguration('code-context-engine').get<string>('webview.implementation', 'sveltekit');
+        switch (implementation) {
+            case 'react':
+                return 'webview-react/dist';
+            case 'svelte-simple':
+                return 'webview-simple/dist';
+            case 'sveltekit':
+            default:
+                return 'webview/build';
         }
     }
 

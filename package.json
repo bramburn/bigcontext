@@ -360,15 +360,12 @@
             "Show informational messages, warnings, and errors (recommended)",
             "Show all messages including debug information"
           ]
-        }
-,
+        },
         "code-context-engine.webview.basicTestMode": {
           "type": "boolean",
           "default": false,
           "description": "Serve a minimal test HTML for the webview to verify VS Code API initialization and messaging. Enable for troubleshooting Remote SSH issues."
-        }
-      }
-,
+        },
         "code-context-engine.webview.routeOverride": {
           "type": "string",
           "default": "",
@@ -380,6 +377,7 @@
           "default": "sveltekit",
           "description": "Choose which webview implementation to use: SvelteKit (original), React (Fluent UI), or Simple Svelte (minimal)."
         }
+      }
     },
     "keybindings": [
       {
