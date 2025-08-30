@@ -907,6 +907,6 @@ PRD 2, Sprint 4: Documentation & CI/CD
 
 </examples>
 <user-requirements>
-    the react and simple svelte is working properly.
+    the react and simple svelte is working properly now in our application.
 maybe let's work with react for the frontend webview, generate the PRDs in docs/todo/new-react/ to build a migration plan to move our old svelte-kit to react as it is working. each prd, tasklist should be in its own .md file in that folder. in the documentation when we reach each PRD or large milestone ensure we can run and test it, let me know when to go and run the debug f5 to see if the page is working. But ensure the new webview is complete.
 </user-requirements>

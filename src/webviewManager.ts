@@ -170,7 +170,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                     if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
                         this.loggingService.info('Sidebar webview reported ready', { timestamp: new Date().toISOString(), message }, 'WebviewManager');
                     }
-                    this.handleSidebarMessage(message);
+                    this.handleSidebarMessage(message, webviewView.webview);
                 },
                 undefined,
                 this.disposables
@@ -195,10 +195,17 @@ export class WebviewManager implements vscode.WebviewViewProvider {
      * Handles messages from the sidebar webview
      *
      * @param message - The message received from the sidebar webview
+     * @param webview - The webview instance for sending responses
      */
-    private handleSidebarMessage(message: any): void {
+    private handleSidebarMessage(message: any, webview?: vscode.Webview): void {
         try {
             this.loggingService.debug('Received sidebar message', { type: message.type }, 'WebviewManager');
+
+            // Handle heartbeat messages
+            if (message.command === 'heartbeat') {
+                this.handleHeartbeat(message, webview);
+                return;
+            }
 
             // Handle sidebar-specific messages here
             switch (message.type) {
@@ -276,6 +283,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                     this.logWebviewMessage(config.id, message, 'panel');
                     if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
                         this.loggingService.info('Webview panel reported ready', { panelId: config.id, timestamp: new Date().toISOString(), message }, 'WebviewManager');
+                    }
+                    // Handle heartbeat messages
+                    if (message.command === 'heartbeat') {
+                        this.handleHeartbeat(message, panel.webview);
+                        return;
                     }
                     messageRouter.handleMessage(message, panel.webview);
                 },
@@ -847,6 +859,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
                     this.loggingService.info('Main panel webview reported ready', { panelId, timestamp: new Date().toISOString(), message }, 'WebviewManager');
                 }
+                // Handle heartbeat messages
+                if (message.command === 'heartbeat') {
+                    this.handleHeartbeat(message, this.mainPanel!.webview);
+                    return;
+                }
                 messageRouter.handleMessage(message, this.mainPanel!.webview);
             },
             undefined,
@@ -930,6 +947,11 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 if (message?.command === 'webviewReady' || message?.type === 'webviewReady') {
                     this.loggingService.info('Settings panel webview reported ready', { panelId, timestamp: new Date().toISOString(), message }, 'WebviewManager');
                 }
+                // Handle heartbeat messages
+                if (message.command === 'heartbeat') {
+                    this.handleHeartbeat(message, this.settingsPanel!.webview);
+                    return;
+                }
                 messageRouter.handleMessage(message, this.settingsPanel!.webview);
             },
             undefined,
@@ -953,6 +975,104 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         });
 
         console.log('WebviewManager: Settings panel created and displayed');
+    }
+
+    /**
+     * Handle heartbeat messages from webviews
+     */
+    private handleHeartbeat(message: any, webview?: vscode.Webview): void {
+        try {
+            if (webview && message.timestamp) {
+                const latency = Date.now() - message.timestamp;
+
+                // Send heartbeat response back to webview
+                webview.postMessage({
+                    command: 'heartbeatResponse',
+                    timestamp: message.timestamp,
+                    serverTime: Date.now()
+                });
+
+                this.loggingService.debug('Heartbeat response sent', {
+                    originalTimestamp: message.timestamp,
+                    latency
+                }, 'WebviewManager');
+
+                // Check for health alerts
+                this.checkHealthAlerts(latency, message.connectionId);
+            }
+        } catch (error) {
+            this.loggingService.error('Error handling heartbeat', {
+                error: error instanceof Error ? error.message : String(error)
+            }, 'WebviewManager');
+        }
+    }
+
+    /**
+     * Check health metrics and trigger alerts if thresholds are exceeded
+     */
+    private checkHealthAlerts(latency: number, connectionId?: string): void {
+        try {
+            const config = vscode.workspace.getConfiguration('code-context-engine.webview.healthMonitoring');
+
+            if (!config.get<boolean>('enabled', true)) {
+                return;
+            }
+
+            const latencyThreshold = config.get<number>('latencyThreshold', 1000);
+            // TODO: Implement error count and reconnection attempt tracking with thresholds
+
+            // Check latency threshold
+            if (latency > latencyThreshold) {
+                this.triggerHealthAlert('warning', 'High Latency Detected',
+                    `Webview latency (${latency}ms) exceeds threshold (${latencyThreshold}ms)`,
+                    { latency, threshold: latencyThreshold, connectionId });
+            }
+
+            // Additional health checks can be added here for error count and reconnection attempts
+            // These would require tracking state over time, which could be implemented with a health metrics store
+
+        } catch (error) {
+            this.loggingService.error('Error checking health alerts', {
+                error: error instanceof Error ? error.message : String(error)
+            }, 'WebviewManager');
+        }
+    }
+
+    /**
+     * Trigger a health alert with the specified severity
+     */
+    private triggerHealthAlert(severity: 'info' | 'warning' | 'error', title: string, message: string, context?: any): void {
+        try {
+            // Log the alert
+            this.loggingService.warn(`Health Alert [${severity.toUpperCase()}]: ${title}`, {
+                message,
+                context,
+                timestamp: new Date().toISOString()
+            }, 'WebviewManager');
+
+            // Show VS Code notification for warnings and errors
+            if (severity === 'warning') {
+                vscode.window.showWarningMessage(`Code Context Engine: ${title}`, 'View Logs').then(selection => {
+                    if (selection === 'View Logs') {
+                        vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+                    }
+                });
+            } else if (severity === 'error') {
+                vscode.window.showErrorMessage(`Code Context Engine: ${title}`, 'View Logs', 'Restart Webview').then(selection => {
+                    if (selection === 'View Logs') {
+                        vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+                    } else if (selection === 'Restart Webview') {
+                        // Implement webview restart logic if needed
+                        this.loggingService.info('User requested webview restart', {}, 'WebviewManager');
+                    }
+                });
+            }
+
+        } catch (error) {
+            this.loggingService.error('Error triggering health alert', {
+                error: error instanceof Error ? error.message : String(error)
+            }, 'WebviewManager');
+        }
     }
 
     /**

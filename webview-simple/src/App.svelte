@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { 
-    provideFluentDesignSystem, 
-    fluentButton, 
+  import {
+    provideFluentDesignSystem,
+    fluentButton,
     fluentTextField,
     fluentCard
   } from '@fluentui/web-components';
+  import { connectionMonitor } from '../../src/shared/connectionMonitor.ts';
 
   // Register Fluent UI components
   provideFluentDesignSystem().register(fluentButton(), fluentTextField(), fluentCard());
@@ -14,6 +15,8 @@
   let logs: string[] = [];
   let vscode: any = null;
   let message = '';
+  let connectionState = connectionMonitor.getState();
+  let reconnectProgress: { attempt: number; delay: number } | null = null;
 
   function log(msg: string) {
     const timestamp = new Date().toISOString();
@@ -21,41 +24,87 @@
   }
 
   function sendMessage() {
-    if (vscode && message.trim()) {
-      vscode.postMessage({ 
-        command: 'testMessage', 
+    if (message.trim()) {
+      const messageData = {
+        command: 'testMessage',
         data: message.trim(),
-        timestamp: Date.now() 
-      });
-      log(`Sent: ${message.trim()}`);
+        timestamp: Date.now()
+      };
+
+      const sent = connectionMonitor.sendMessage(messageData);
+      if (sent) {
+        log(`Sent: ${message.trim()}`);
+      } else {
+        log(`Queued: ${message.trim()} (will send when connected)`);
+      }
       message = '';
     }
   }
 
   onMount(() => {
     log('App mounted');
-    
+
     let retries = 0;
     const maxRetries = 10;
-    
+
+    // Set up connection monitor event handlers
+    const unsubscribeConnected = connectionMonitor.on('connected', (event) => {
+      connectionState = connectionMonitor.getState();
+      status = 'Connected to VS Code';
+      log(`Connected - Latency: ${event.data?.latency || 0}ms`);
+      reconnectProgress = null;
+    });
+
+    const unsubscribeDisconnected = connectionMonitor.on('disconnected', (event) => {
+      connectionState = connectionMonitor.getState();
+      status = 'Disconnected from VS Code';
+      log('Connection lost - attempting to reconnect...');
+    });
+
+    const unsubscribeReconnecting = connectionMonitor.on('reconnecting', (event) => {
+      connectionState = connectionMonitor.getState();
+      reconnectProgress = { attempt: event.data.attempt, delay: event.data.delay };
+      status = `Reconnecting... (attempt ${event.data.attempt})`;
+      log(`Reconnecting in ${event.data.delay}ms (attempt ${event.data.attempt})`);
+    });
+
+    const unsubscribeError = connectionMonitor.on('error', (event) => {
+      connectionState = connectionMonitor.getState();
+      log(`Connection error: ${event.data.message}`);
+    });
+
+    const unsubscribeHeartbeat = connectionMonitor.on('heartbeat', (event) => {
+      connectionState = connectionMonitor.getState();
+    });
+
     function initVSCode() {
       if (typeof window !== 'undefined' && (window as any).acquireVsCodeApi) {
         try {
           vscode = (window as any).acquireVsCodeApi();
           status = 'VS Code API acquired successfully';
           log('VS Code API acquired');
-          
+
+          // Initialize connection monitor
+          connectionMonitor.initialize(vscode);
+
           // Send ready message
-          vscode.postMessage({ 
-            command: 'webviewReady', 
+          vscode.postMessage({
+            command: 'webviewReady',
             source: 'simple-svelte',
-            timestamp: Date.now() 
+            timestamp: Date.now()
           });
           log('Sent webviewReady message');
-          
+
           // Listen for messages from extension
           window.addEventListener('message', (event) => {
             const msg = event.data;
+
+            // Handle heartbeat responses
+            if (msg.command === 'heartbeatResponse') {
+              connectionMonitor.handleHeartbeatResponse(msg.timestamp);
+              return;
+            }
+
             log(`Received from extension: ${JSON.stringify(msg)}`);
           });
           
@@ -84,6 +133,29 @@
     
     <div class="status" class:success={status.includes('successfully')} class:error={status.includes('Error')}>
       Status: {status}
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-status">
+      <div class="connection-indicator" class:connected={connectionState.isConnected} class:disconnected={!connectionState.isConnected}>
+        {connectionState.isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+      </div>
+
+      {#if connectionState.isConnected}
+        <div class="quality-indicator" class:excellent={connectionState.connectionQuality === 'excellent'} class:good={connectionState.connectionQuality === 'good'} class:poor={connectionState.connectionQuality === 'poor'}>
+          Quality: {connectionState.connectionQuality}
+        </div>
+
+        <div class="latency-indicator">
+          Latency: {connectionState.latency}ms
+        </div>
+      {/if}
+
+      {#if reconnectProgress}
+        <div class="reconnect-indicator">
+          Reconnecting... ({reconnectProgress.attempt})
+        </div>
+      {/if}
     </div>
     
     <div class="controls">
@@ -149,6 +221,50 @@
   .status.error {
     background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
     border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+  }
+
+  .connection-status {
+    display: flex;
+    gap: 12px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+  }
+
+  .connection-indicator, .quality-indicator, .latency-indicator, .reconnect-indicator {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    border: 1px solid;
+  }
+
+  .connection-indicator.connected {
+    background: var(--vscode-inputValidation-infoBackground, #063b49);
+    border-color: var(--vscode-inputValidation-infoBorder, #007acc);
+  }
+
+  .connection-indicator.disconnected {
+    background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+  }
+
+  .quality-indicator.excellent {
+    background: var(--vscode-inputValidation-infoBackground, #063b49);
+    border-color: var(--vscode-inputValidation-infoBorder, #007acc);
+  }
+
+  .quality-indicator.good {
+    background: var(--vscode-inputValidation-warningBackground, #664d00);
+    border-color: var(--vscode-inputValidation-warningBorder, #ffcc00);
+  }
+
+  .quality-indicator.poor {
+    background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+  }
+
+  .latency-indicator, .reconnect-indicator {
+    background: var(--vscode-inputValidation-warningBackground, #664d00);
+    border-color: var(--vscode-inputValidation-warningBorder, #ffcc00);
   }
 
   .controls {

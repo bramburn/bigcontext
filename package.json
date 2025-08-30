@@ -366,6 +366,26 @@
           "default": false,
           "description": "Serve a minimal test HTML for the webview to verify VS Code API initialization and messaging. Enable for troubleshooting Remote SSH issues."
         },
+        "code-context-engine.webview.healthMonitoring.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable health monitoring and alerting for webview connections."
+        },
+        "code-context-engine.webview.healthMonitoring.latencyThreshold": {
+          "type": "number",
+          "default": 1000,
+          "description": "Latency threshold in milliseconds. Alerts will be triggered when latency exceeds this value."
+        },
+        "code-context-engine.webview.healthMonitoring.errorThreshold": {
+          "type": "number",
+          "default": 5,
+          "description": "Error count threshold. Alerts will be triggered when error count exceeds this value within a time window."
+        },
+        "code-context-engine.webview.healthMonitoring.reconnectThreshold": {
+          "type": "number",
+          "default": 3,
+          "description": "Reconnection attempts threshold. Alerts will be triggered when reconnection attempts exceed this value."
+        },
         "code-context-engine.webview.routeOverride": {
           "type": "string",
           "default": "",
