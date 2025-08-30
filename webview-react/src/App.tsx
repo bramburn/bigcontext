@@ -101,6 +101,19 @@ function App() {
           setStatus('VS Code API acquired successfully');
           log('VS Code API acquired');
 
+          // Register service worker for offline support
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+              .then((registration) => {
+                log('Service Worker registered successfully');
+                console.log('SW registered:', registration);
+              })
+              .catch((error) => {
+                log('Service Worker registration failed: ' + error.message);
+                console.error('SW registration failed:', error);
+              });
+          }
+
           // Initialize connection monitor
           connectionMonitor.initialize(api);
 

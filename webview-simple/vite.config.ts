@@ -12,13 +12,6 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug']
-      }
-    },
     rollupOptions: {
       output: {
         entryFileNames: 'app.js',
@@ -31,10 +24,6 @@ export default defineConfig({
         },
         inlineDynamicImports: true,
         manualChunks: undefined
-      },
-      treeshake: {
-        moduleSideEffects: false,
-        propertyReadSideEffects: false
       }
     },
     target: ['es2020', 'chrome87', 'safari14', 'firefox78', 'edge88'],

@@ -10,8 +10,12 @@ export default defineConfig({
 			compress: {
 				drop_console: true,
 				drop_debugger: true,
+				pure_funcs: ['console.log', 'console.info', 'console.debug']
 			},
 		},
+		cssCodeSplit: false, // Inline CSS for faster loading
+		sourcemap: false, // Disable sourcemaps for production
+		reportCompressedSize: false, // Faster builds
 		// Consolidate to a single JS bundle to simplify webview resource loading
 		rollupOptions: {
 			output: {
@@ -34,6 +38,10 @@ export default defineConfig({
 	// Optimize dependencies
 	optimizeDeps: {
 		include: ['@fluentui/web-components'],
+	},
+	esbuild: {
+		drop: ['console', 'debugger'],
+		legalComments: 'none'
 	},
 	test: {
 		expect: { requireAssertions: true },
