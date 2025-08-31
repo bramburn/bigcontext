@@ -248,6 +248,12 @@ export class MessageRouter {
                 case 'requestOpenFolder':
                     await this.handleRequestOpenFolder(message, webview);
                     break;
+                case 'heartbeat':
+                    await this.handleHeartbeat(message, webview);
+                    break;
+                case 'getHealthStatus':
+                    await this.handleGetHealthStatus(message, webview);
+                    break;
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
@@ -1285,6 +1291,55 @@ export class MessageRouter {
             command: 'firstRunCheckResponse',
             data: { isFirstRun }
         });
+    }
+
+    /**
+     * Handles heartbeat messages from webviews for connection monitoring
+     */
+    private async handleHeartbeat(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const timestamp = message.timestamp || Date.now();
+            const connectionId = message.connectionId;
+
+            // Send heartbeat response back to webview
+            await webview.postMessage({
+                command: 'heartbeatResponse',
+                timestamp: timestamp,
+                serverTime: Date.now(),
+                connectionId: connectionId
+            });
+
+            console.log('MessageRouter: Heartbeat response sent', { timestamp, connectionId });
+        } catch (error) {
+            console.error('MessageRouter: Error handling heartbeat:', error);
+        }
+    }
+
+    /**
+     * Handles health status requests from webviews
+     */
+    private async handleGetHealthStatus(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            // Get basic health metrics - in a real implementation this would be more comprehensive
+            const healthStatus = {
+                timestamp: Date.now(),
+                status: 'healthy',
+                uptime: process.uptime() * 1000, // Convert to milliseconds
+                memoryUsage: process.memoryUsage(),
+                // Add more health metrics as needed
+            };
+
+            await webview.postMessage({
+                command: 'healthStatusResponse',
+                requestId: message.requestId,
+                data: healthStatus
+            });
+
+            console.log('MessageRouter: Health status response sent');
+        } catch (error) {
+            console.error('MessageRouter: Error handling health status request:', error);
+            await this.sendErrorResponse(webview, `Failed to get health status: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**

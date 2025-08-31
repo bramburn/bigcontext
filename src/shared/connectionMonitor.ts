@@ -169,6 +169,9 @@ export class ConnectionMonitor {
     }
 
     this.emit("heartbeat", { latency, timestamp: now });
+
+    // Check network quality after each successful heartbeat
+    this.checkNetworkQuality();
   }
 
   /**
@@ -223,6 +226,32 @@ export class ConnectionMonitor {
     } else {
       this.state.bandwidth = "low";
     }
+  }
+
+  /**
+   * Check network quality and emit qualityChange event
+   */
+  public checkNetworkQuality(): void {
+    let quality: 'good' | 'poor' = 'good';
+
+    // Try to use navigator.connection API first
+    if ("connection" in navigator) {
+      const connection = (navigator as any).connection;
+      if (connection && connection.effectiveType) {
+        // Consider 'slow-2g' and '2g' as poor quality
+        if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') {
+          quality = 'poor';
+        }
+      }
+    } else {
+      // Fallback to latency-based detection
+      if (this.state.latency > 1000) { // Consider >1s latency as poor
+        quality = 'poor';
+      }
+    }
+
+    // Emit quality change event
+    this.emit('qualityChange', { quality, timestamp: Date.now() });
   }
 
   /**

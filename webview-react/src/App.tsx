@@ -16,6 +16,7 @@ import {
 import { useAppStore, useCurrentView, useIsWorkspaceOpen } from './stores/appStore';
 import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
 import { connectionMonitor } from './utils/connectionMonitor';
+import ConnectionIndicator from './components/ConnectionStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 import NoWorkspaceView from './components/NoWorkspaceView';
 import SetupView from './components/SetupView';
@@ -123,6 +124,7 @@ function App() {
         }}
       >
         <div className={styles.app}>
+          <ConnectionIndicator />
           {renderCurrentView()}
         </div>
       </ErrorBoundary>

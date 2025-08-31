@@ -1,10 +1,12 @@
 /**
  * VS Code API utilities for React webview
- * 
+ *
  * This module provides utilities for communicating with the VS Code extension
  * from the React webview. It handles message passing, state management, and
  * provides a clean interface for webview-extension communication.
  */
+
+import { connectionMonitor } from './connectionMonitor';
 
 interface VSCodeAPI {
   postMessage: (message: any) => void;
@@ -47,19 +49,16 @@ export function getVSCodeApi(): VSCodeAPI | null {
 }
 
 /**
- * Post a message to the VS Code extension
+ * Post a message to the VS Code extension using the connection monitor
  * @param command - The command to send
  * @param data - Optional data to send with the command
  */
 export function postMessage(command: string, data?: any): void {
-  const api = vscodeApi || initializeVSCodeApi();
-  if (api) {
-    api.postMessage({
-      command,
-      ...data
-    });
-  } else {
-    console.warn('VS Code API not available, cannot send message:', command);
+  // Use connectionMonitor's postMessage for automatic queuing and retry logic
+  const success = connectionMonitor.postMessage(command, data);
+
+  if (!success) {
+    console.warn('Message queued due to connection issues:', command);
   }
 }
 
