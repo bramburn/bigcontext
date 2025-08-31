@@ -1,10 +1,10 @@
 /**
  * Type-Safe Communication Service
- * 
+ *
  * This service provides type-safe communication between the VS Code extension
  * and the webview. It handles message serialization, validation, and routing
  * with full TypeScript type safety.
- * 
+ *
  * Features:
  * - Type-safe message passing
  * - Request/response pattern with promises
@@ -14,461 +14,514 @@
  * - Timeout handling for requests
  */
 
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 import {
-    BaseMessage,
-    RequestMessage,
-    ResponseMessage,
-    EventMessage,
-    ErrorInfo,
-    ExtensionToWebviewMessageType,
-    WebviewToExtensionMessageType,
-    MessageTypeGuards,
-    MessageFactory
-} from '../shared/communicationTypes';
-import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
+  BaseMessage,
+  RequestMessage,
+  ResponseMessage,
+  EventMessage,
+  ErrorInfo,
+  ExtensionToWebviewMessageType,
+  WebviewToExtensionMessageType,
+  MessageTypeGuards,
+  MessageFactory,
+} from "../shared/communicationTypes";
+import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
 
 /**
  * Message handler interface
  */
 export interface MessageHandler<TRequest = any, TResponse = any> {
-    (payload: TRequest): Promise<TResponse> | TResponse;
+  (payload: TRequest): Promise<TResponse> | TResponse;
 }
 
 /**
  * Event handler interface
  */
 export interface EventHandler<TPayload = any> {
-    (payload: TPayload): void | Promise<void>;
+  (payload: TPayload): void | Promise<void>;
 }
 
 /**
  * Pending request interface
  */
 interface PendingRequest {
-    resolve: (value: any) => void;
-    reject: (error: Error) => void;
-    timeout: NodeJS.Timeout;
-    timestamp: number;
+  resolve: (value: any) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+  timestamp: number;
 }
 
 /**
  * Communication service configuration
  */
 export interface CommunicationConfig {
-    /** Default timeout for requests (in milliseconds) */
-    defaultTimeout: number;
-    /** Maximum number of pending requests */
-    maxPendingRequests: number;
-    /** Whether to enable message validation */
-    enableValidation: boolean;
-    /** Whether to log all messages */
-    enableMessageLogging: boolean;
+  /** Default timeout for requests (in milliseconds) */
+  defaultTimeout: number;
+  /** Maximum number of pending requests */
+  maxPendingRequests: number;
+  /** Whether to enable message validation */
+  enableValidation: boolean;
+  /** Whether to log all messages */
+  enableMessageLogging: boolean;
 }
 
 /**
  * Type-safe communication service
  */
 export class TypeSafeCommunicationService {
-    private webviewPanel?: vscode.WebviewPanel;
-    private messageHandlers: Map<string, MessageHandler> = new Map();
-    private eventHandlers: Map<string, Set<EventHandler>> = new Map();
-    private pendingRequests: Map<string, PendingRequest> = new Map();
-    private config: CommunicationConfig;
-    private loggingService?: CentralizedLoggingService;
-    private isDisposed: boolean = false;
+  private webviewPanel?: vscode.WebviewPanel;
+  private messageHandlers: Map<string, MessageHandler> = new Map();
+  private eventHandlers: Map<string, Set<EventHandler>> = new Map();
+  private pendingRequests: Map<string, PendingRequest> = new Map();
+  private config: CommunicationConfig;
+  private loggingService?: CentralizedLoggingService;
+  private isDisposed: boolean = false;
 
-    constructor(
-        config?: Partial<CommunicationConfig>,
-        loggingService?: CentralizedLoggingService
-    ) {
-        this.config = {
-            defaultTimeout: 30000, // 30 seconds
-            maxPendingRequests: 100,
-            enableValidation: true,
-            enableMessageLogging: false,
-            ...config
-        };
-        this.loggingService = loggingService;
+  constructor(
+    config?: Partial<CommunicationConfig>,
+    loggingService?: CentralizedLoggingService,
+  ) {
+    this.config = {
+      defaultTimeout: 30000, // 30 seconds
+      maxPendingRequests: 100,
+      enableValidation: true,
+      enableMessageLogging: false,
+      ...config,
+    };
+    this.loggingService = loggingService;
+  }
+
+  /**
+   * Initialize the communication service with a webview panel
+   */
+  public initialize(webviewPanel: vscode.WebviewPanel): void {
+    if (this.isDisposed) {
+      throw new Error("Communication service has been disposed");
     }
 
-    /**
-     * Initialize the communication service with a webview panel
-     */
-    public initialize(webviewPanel: vscode.WebviewPanel): void {
-        if (this.isDisposed) {
-            throw new Error('Communication service has been disposed');
-        }
+    this.webviewPanel = webviewPanel;
 
-        this.webviewPanel = webviewPanel;
-        
-        // Set up message listener
-        this.webviewPanel.webview.onDidReceiveMessage(
-            (message) => this.handleIncomingMessage(message),
-            undefined,
-            []
+    // Set up message listener
+    this.webviewPanel.webview.onDidReceiveMessage(
+      (message) => this.handleIncomingMessage(message),
+      undefined,
+      [],
+    );
+
+    // Clean up on panel disposal
+    this.webviewPanel.onDidDispose(() => {
+      this.cleanup();
+    });
+
+    this.loggingService?.info(
+      "TypeSafeCommunicationService initialized",
+      {
+        config: this.config,
+      },
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Register a message handler
+   */
+  public registerMessageHandler<TRequest, TResponse>(
+    messageType: string,
+    handler: MessageHandler<TRequest, TResponse>,
+  ): void {
+    this.messageHandlers.set(messageType, handler);
+    this.loggingService?.debug(
+      `Message handler registered for type: ${messageType}`,
+      {},
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Unregister a message handler
+   */
+  public unregisterMessageHandler(messageType: string): void {
+    this.messageHandlers.delete(messageType);
+    this.loggingService?.debug(
+      `Message handler unregistered for type: ${messageType}`,
+      {},
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Register an event handler
+   */
+  public registerEventHandler<TPayload>(
+    eventName: string,
+    handler: EventHandler<TPayload>,
+  ): void {
+    if (!this.eventHandlers.has(eventName)) {
+      this.eventHandlers.set(eventName, new Set());
+    }
+    this.eventHandlers.get(eventName)!.add(handler);
+    this.loggingService?.debug(
+      `Event handler registered for event: ${eventName}`,
+      {},
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Unregister an event handler
+   */
+  public unregisterEventHandler<TPayload>(
+    eventName: string,
+    handler: EventHandler<TPayload>,
+  ): void {
+    const handlers = this.eventHandlers.get(eventName);
+    if (handlers) {
+      handlers.delete(handler);
+      if (handlers.size === 0) {
+        this.eventHandlers.delete(eventName);
+      }
+    }
+    this.loggingService?.debug(
+      `Event handler unregistered for event: ${eventName}`,
+      {},
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Send a request to the webview and wait for a response
+   */
+  public async sendRequest<TRequest, TResponse>(
+    messageType: ExtensionToWebviewMessageType,
+    payload: TRequest,
+    timeout?: number,
+  ): Promise<TResponse> {
+    if (!this.webviewPanel) {
+      throw new Error("Communication service not initialized");
+    }
+
+    if (this.pendingRequests.size >= this.config.maxPendingRequests) {
+      throw new Error("Too many pending requests");
+    }
+
+    const request = MessageFactory.createRequest(messageType, payload, true);
+    const requestTimeout = timeout || this.config.defaultTimeout;
+
+    return new Promise<TResponse>((resolve, reject) => {
+      // Set up timeout
+      const timeoutHandle = setTimeout(() => {
+        this.pendingRequests.delete(request.id);
+        reject(new Error(`Request timeout after ${requestTimeout}ms`));
+      }, requestTimeout);
+
+      // Store pending request
+      this.pendingRequests.set(request.id, {
+        resolve,
+        reject,
+        timeout: timeoutHandle,
+        timestamp: Date.now(),
+      });
+
+      // Send the message
+      this.sendMessage(request);
+    });
+  }
+
+  /**
+   * Send a message to the webview without expecting a response
+   */
+  public sendMessage<TPayload>(
+    messageType:
+      | ExtensionToWebviewMessageType
+      | RequestMessage<TPayload>
+      | ResponseMessage<TPayload>
+      | EventMessage<TPayload>,
+    payload?: TPayload,
+  ): void {
+    if (!this.webviewPanel) {
+      throw new Error("Communication service not initialized");
+    }
+
+    let message: BaseMessage;
+
+    if (typeof messageType === "string") {
+      message = MessageFactory.createRequest(messageType, payload, false);
+    } else {
+      message = messageType;
+    }
+
+    if (this.config.enableValidation) {
+      this.validateMessage(message);
+    }
+
+    if (this.config.enableMessageLogging) {
+      this.loggingService?.debug(
+        "Sending message to webview",
+        {
+          type: message.type,
+          id: message.id,
+        },
+        "TypeSafeCommunicationService",
+      );
+    }
+
+    this.webviewPanel.webview.postMessage(message);
+  }
+
+  /**
+   * Send an event to the webview
+   */
+  public sendEvent<TPayload>(eventName: string, payload: TPayload): void {
+    const event = MessageFactory.createEvent(
+      ExtensionToWebviewMessageType.STATE_UPDATE,
+      eventName,
+      payload,
+    );
+    this.sendMessage(event);
+  }
+
+  /**
+   * Handle incoming messages from the webview
+   */
+  private async handleIncomingMessage(message: any): Promise<void> {
+    try {
+      if (this.config.enableValidation) {
+        this.validateMessage(message);
+      }
+
+      if (this.config.enableMessageLogging) {
+        this.loggingService?.debug(
+          "Received message from webview",
+          {
+            type: message.type,
+            id: message.id,
+          },
+          "TypeSafeCommunicationService",
         );
+      }
 
-        // Clean up on panel disposal
-        this.webviewPanel.onDidDispose(() => {
-            this.cleanup();
-        });
-
-        this.loggingService?.info('TypeSafeCommunicationService initialized', {
-            config: this.config
-        }, 'TypeSafeCommunicationService');
-    }
-
-    /**
-     * Register a message handler
-     */
-    public registerMessageHandler<TRequest, TResponse>(
-        messageType: string,
-        handler: MessageHandler<TRequest, TResponse>
-    ): void {
-        this.messageHandlers.set(messageType, handler);
-        this.loggingService?.debug(`Message handler registered for type: ${messageType}`, {}, 'TypeSafeCommunicationService');
-    }
-
-    /**
-     * Unregister a message handler
-     */
-    public unregisterMessageHandler(messageType: string): void {
-        this.messageHandlers.delete(messageType);
-        this.loggingService?.debug(`Message handler unregistered for type: ${messageType}`, {}, 'TypeSafeCommunicationService');
-    }
-
-    /**
-     * Register an event handler
-     */
-    public registerEventHandler<TPayload>(
-        eventName: string,
-        handler: EventHandler<TPayload>
-    ): void {
-        if (!this.eventHandlers.has(eventName)) {
-            this.eventHandlers.set(eventName, new Set());
-        }
-        this.eventHandlers.get(eventName)!.add(handler);
-        this.loggingService?.debug(`Event handler registered for event: ${eventName}`, {}, 'TypeSafeCommunicationService');
-    }
-
-    /**
-     * Unregister an event handler
-     */
-    public unregisterEventHandler<TPayload>(
-        eventName: string,
-        handler: EventHandler<TPayload>
-    ): void {
-        const handlers = this.eventHandlers.get(eventName);
-        if (handlers) {
-            handlers.delete(handler);
-            if (handlers.size === 0) {
-                this.eventHandlers.delete(eventName);
-            }
-        }
-        this.loggingService?.debug(`Event handler unregistered for event: ${eventName}`, {}, 'TypeSafeCommunicationService');
-    }
-
-    /**
-     * Send a request to the webview and wait for a response
-     */
-    public async sendRequest<TRequest, TResponse>(
-        messageType: ExtensionToWebviewMessageType,
-        payload: TRequest,
-        timeout?: number
-    ): Promise<TResponse> {
-        if (!this.webviewPanel) {
-            throw new Error('Communication service not initialized');
-        }
-
-        if (this.pendingRequests.size >= this.config.maxPendingRequests) {
-            throw new Error('Too many pending requests');
-        }
-
-        const request = MessageFactory.createRequest(messageType, payload, true);
-        const requestTimeout = timeout || this.config.defaultTimeout;
-
-        return new Promise<TResponse>((resolve, reject) => {
-            // Set up timeout
-            const timeoutHandle = setTimeout(() => {
-                this.pendingRequests.delete(request.id);
-                reject(new Error(`Request timeout after ${requestTimeout}ms`));
-            }, requestTimeout);
-
-            // Store pending request
-            this.pendingRequests.set(request.id, {
-                resolve,
-                reject,
-                timeout: timeoutHandle,
-                timestamp: Date.now()
-            });
-
-            // Send the message
-            this.sendMessage(request);
-        });
-    }
-
-    /**
-     * Send a message to the webview without expecting a response
-     */
-    public sendMessage<TPayload>(
-        messageType: ExtensionToWebviewMessageType | RequestMessage<TPayload> | ResponseMessage<TPayload> | EventMessage<TPayload>,
-        payload?: TPayload
-    ): void {
-        if (!this.webviewPanel) {
-            throw new Error('Communication service not initialized');
-        }
-
-        let message: BaseMessage;
-
-        if (typeof messageType === 'string') {
-            message = MessageFactory.createRequest(messageType, payload, false);
-        } else {
-            message = messageType;
-        }
-
-        if (this.config.enableValidation) {
-            this.validateMessage(message);
-        }
-
-        if (this.config.enableMessageLogging) {
-            this.loggingService?.debug('Sending message to webview', {
-                type: message.type,
-                id: message.id
-            }, 'TypeSafeCommunicationService');
-        }
-
-        this.webviewPanel.webview.postMessage(message);
-    }
-
-    /**
-     * Send an event to the webview
-     */
-    public sendEvent<TPayload>(
-        eventName: string,
-        payload: TPayload
-    ): void {
-        const event = MessageFactory.createEvent(
-            ExtensionToWebviewMessageType.STATE_UPDATE,
-            eventName,
-            payload
+      if (MessageTypeGuards.isResponseMessage(message)) {
+        await this.handleResponse(message);
+      } else if (MessageTypeGuards.isRequestMessage(message)) {
+        await this.handleRequest(message);
+      } else if (MessageTypeGuards.isEventMessage(message)) {
+        await this.handleEvent(message);
+      } else {
+        this.loggingService?.warn(
+          "Unknown message type received",
+          {
+            message,
+          },
+          "TypeSafeCommunicationService",
         );
-        this.sendMessage(event);
+      }
+    } catch (error) {
+      this.loggingService?.error(
+        "Error handling incoming message",
+        {
+          error: error instanceof Error ? error.message : String(error),
+          message,
+        },
+        "TypeSafeCommunicationService",
+      );
+    }
+  }
+
+  /**
+   * Handle response messages
+   */
+  private async handleResponse(response: ResponseMessage): Promise<void> {
+    const pendingRequest = this.pendingRequests.get(response.requestId);
+    if (!pendingRequest) {
+      this.loggingService?.warn(
+        "Received response for unknown request",
+        {
+          requestId: response.requestId,
+        },
+        "TypeSafeCommunicationService",
+      );
+      return;
     }
 
-    /**
-     * Handle incoming messages from the webview
-     */
-    private async handleIncomingMessage(message: any): Promise<void> {
-        try {
-            if (this.config.enableValidation) {
-                this.validateMessage(message);
-            }
+    // Clear timeout and remove from pending requests
+    clearTimeout(pendingRequest.timeout);
+    this.pendingRequests.delete(response.requestId);
 
-            if (this.config.enableMessageLogging) {
-                this.loggingService?.debug('Received message from webview', {
-                    type: message.type,
-                    id: message.id
-                }, 'TypeSafeCommunicationService');
-            }
+    if (response.success) {
+      pendingRequest.resolve(response.payload);
+    } else {
+      const error = new Error(response.error?.message || "Request failed");
+      if (response.error) {
+        (error as any).code = response.error.code;
+        (error as any).details = response.error.details;
+      }
+      pendingRequest.reject(error);
+    }
+  }
 
-            if (MessageTypeGuards.isResponseMessage(message)) {
-                await this.handleResponse(message);
-            } else if (MessageTypeGuards.isRequestMessage(message)) {
-                await this.handleRequest(message);
-            } else if (MessageTypeGuards.isEventMessage(message)) {
-                await this.handleEvent(message);
-            } else {
-                this.loggingService?.warn('Unknown message type received', {
-                    message
-                }, 'TypeSafeCommunicationService');
-            }
-        } catch (error) {
-            this.loggingService?.error('Error handling incoming message', {
-                error: error instanceof Error ? error.message : String(error),
-                message
-            }, 'TypeSafeCommunicationService');
-        }
+  /**
+   * Handle request messages
+   */
+  private async handleRequest(request: RequestMessage): Promise<void> {
+    const handler = this.messageHandlers.get(request.type);
+    if (!handler) {
+      if (request.expectsResponse) {
+        const errorResponse = MessageFactory.createResponse(
+          request.id,
+          request.type,
+          false,
+          undefined,
+          {
+            code: "HANDLER_NOT_FOUND",
+            message: `No handler registered for message type: ${request.type}`,
+          },
+        );
+        this.sendMessage(errorResponse);
+      }
+      return;
     }
 
-    /**
-     * Handle response messages
-     */
-    private async handleResponse(response: ResponseMessage): Promise<void> {
-        const pendingRequest = this.pendingRequests.get(response.requestId);
-        if (!pendingRequest) {
-            this.loggingService?.warn('Received response for unknown request', {
-                requestId: response.requestId
-            }, 'TypeSafeCommunicationService');
-            return;
-        }
+    try {
+      const result = await handler(request.payload);
 
-        // Clear timeout and remove from pending requests
-        clearTimeout(pendingRequest.timeout);
-        this.pendingRequests.delete(response.requestId);
+      if (request.expectsResponse) {
+        const response = MessageFactory.createResponse(
+          request.id,
+          request.type,
+          true,
+          result,
+        );
+        this.sendMessage(response);
+      }
+    } catch (error) {
+      if (request.expectsResponse) {
+        const errorResponse = MessageFactory.createResponse(
+          request.id,
+          request.type,
+          false,
+          undefined,
+          {
+            code: "HANDLER_ERROR",
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        );
+        this.sendMessage(errorResponse);
+      }
+    }
+  }
 
-        if (response.success) {
-            pendingRequest.resolve(response.payload);
-        } else {
-            const error = new Error(response.error?.message || 'Request failed');
-            if (response.error) {
-                (error as any).code = response.error.code;
-                (error as any).details = response.error.details;
-            }
-            pendingRequest.reject(error);
-        }
+  /**
+   * Handle event messages
+   */
+  private async handleEvent(event: EventMessage): Promise<void> {
+    const handlers = this.eventHandlers.get(event.event);
+    if (!handlers || handlers.size === 0) {
+      return;
     }
 
-    /**
-     * Handle request messages
-     */
-    private async handleRequest(request: RequestMessage): Promise<void> {
-        const handler = this.messageHandlers.get(request.type);
-        if (!handler) {
-            if (request.expectsResponse) {
-                const errorResponse = MessageFactory.createResponse(
-                    request.id,
-                    request.type,
-                    false,
-                    undefined,
-                    {
-                        code: 'HANDLER_NOT_FOUND',
-                        message: `No handler registered for message type: ${request.type}`
-                    }
-                );
-                this.sendMessage(errorResponse);
-            }
-            return;
-        }
+    // Execute all handlers for this event
+    const promises = Array.from(handlers).map((handler) => {
+      try {
+        return handler(event.payload);
+      } catch (error) {
+        this.loggingService?.error(
+          "Event handler error",
+          {
+            event: event.event,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "TypeSafeCommunicationService",
+        );
+        return Promise.resolve();
+      }
+    });
 
-        try {
-            const result = await handler(request.payload);
-            
-            if (request.expectsResponse) {
-                const response = MessageFactory.createResponse(
-                    request.id,
-                    request.type,
-                    true,
-                    result
-                );
-                this.sendMessage(response);
-            }
-        } catch (error) {
-            if (request.expectsResponse) {
-                const errorResponse = MessageFactory.createResponse(
-                    request.id,
-                    request.type,
-                    false,
-                    undefined,
-                    {
-                        code: 'HANDLER_ERROR',
-                        message: error instanceof Error ? error.message : String(error),
-                        stack: error instanceof Error ? error.stack : undefined
-                    }
-                );
-                this.sendMessage(errorResponse);
-            }
-        }
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Validate a message
+   */
+  private validateMessage(message: any): void {
+    if (!message || typeof message !== "object") {
+      throw new Error("Invalid message format");
     }
 
-    /**
-     * Handle event messages
-     */
-    private async handleEvent(event: EventMessage): Promise<void> {
-        const handlers = this.eventHandlers.get(event.event);
-        if (!handlers || handlers.size === 0) {
-            return;
-        }
-
-        // Execute all handlers for this event
-        const promises = Array.from(handlers).map(handler => {
-            try {
-                return handler(event.payload);
-            } catch (error) {
-                this.loggingService?.error('Event handler error', {
-                    event: event.event,
-                    error: error instanceof Error ? error.message : String(error)
-                }, 'TypeSafeCommunicationService');
-                return Promise.resolve();
-            }
-        });
-
-        await Promise.allSettled(promises);
+    if (!message.id || typeof message.id !== "string") {
+      throw new Error("Message must have a valid id");
     }
 
-    /**
-     * Validate a message
-     */
-    private validateMessage(message: any): void {
-        if (!message || typeof message !== 'object') {
-            throw new Error('Invalid message format');
-        }
-
-        if (!message.id || typeof message.id !== 'string') {
-            throw new Error('Message must have a valid id');
-        }
-
-        if (!message.type || typeof message.type !== 'string') {
-            throw new Error('Message must have a valid type');
-        }
-
-        if (typeof message.timestamp !== 'number') {
-            throw new Error('Message must have a valid timestamp');
-        }
+    if (!message.type || typeof message.type !== "string") {
+      throw new Error("Message must have a valid type");
     }
 
-    /**
-     * Clean up pending requests and handlers
-     */
-    private cleanup(): void {
-        // Clear all pending requests
-        for (const [id, request] of this.pendingRequests) {
-            clearTimeout(request.timeout);
-            request.reject(new Error('Communication service disposed'));
-        }
-        this.pendingRequests.clear();
-
-        // Clear handlers
-        this.messageHandlers.clear();
-        this.eventHandlers.clear();
-
-        this.webviewPanel = undefined;
-        this.isDisposed = true;
-
-        this.loggingService?.info('TypeSafeCommunicationService cleaned up', {}, 'TypeSafeCommunicationService');
+    if (typeof message.timestamp !== "number") {
+      throw new Error("Message must have a valid timestamp");
     }
+  }
 
-    /**
-     * Get communication statistics
-     */
-    public getStatistics(): {
-        pendingRequests: number;
-        registeredHandlers: number;
-        registeredEvents: number;
-        isInitialized: boolean;
-    } {
-        return {
-            pendingRequests: this.pendingRequests.size,
-            registeredHandlers: this.messageHandlers.size,
-            registeredEvents: this.eventHandlers.size,
-            isInitialized: !!this.webviewPanel
-        };
+  /**
+   * Clean up pending requests and handlers
+   */
+  private cleanup(): void {
+    // Clear all pending requests
+    for (const [id, request] of this.pendingRequests) {
+      clearTimeout(request.timeout);
+      request.reject(new Error("Communication service disposed"));
     }
+    this.pendingRequests.clear();
 
-    /**
-     * Update configuration
-     */
-    public updateConfig(newConfig: Partial<CommunicationConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        this.loggingService?.debug('Communication configuration updated', {
-            config: this.config
-        }, 'TypeSafeCommunicationService');
-    }
+    // Clear handlers
+    this.messageHandlers.clear();
+    this.eventHandlers.clear();
 
-    /**
-     * Dispose of the service
-     */
-    public dispose(): void {
-        this.cleanup();
-    }
+    this.webviewPanel = undefined;
+    this.isDisposed = true;
+
+    this.loggingService?.info(
+      "TypeSafeCommunicationService cleaned up",
+      {},
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Get communication statistics
+   */
+  public getStatistics(): {
+    pendingRequests: number;
+    registeredHandlers: number;
+    registeredEvents: number;
+    isInitialized: boolean;
+  } {
+    return {
+      pendingRequests: this.pendingRequests.size,
+      registeredHandlers: this.messageHandlers.size,
+      registeredEvents: this.eventHandlers.size,
+      isInitialized: !!this.webviewPanel,
+    };
+  }
+
+  /**
+   * Update configuration
+   */
+  public updateConfig(newConfig: Partial<CommunicationConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    this.loggingService?.debug(
+      "Communication configuration updated",
+      {
+        config: this.config,
+      },
+      "TypeSafeCommunicationService",
+    );
+  }
+
+  /**
+   * Dispose of the service
+   */
+  public dispose(): void {
+    this.cleanup();
+  }
 }

@@ -15,6 +15,7 @@ import {
 } from '@fluentui/react-components';
 import { useAppStore, useCurrentView, useIsWorkspaceOpen } from './stores/appStore';
 import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
+import { connectionMonitor } from './utils/connectionMonitor';
 import ErrorBoundary from './components/ErrorBoundary';
 import NoWorkspaceView from './components/NoWorkspaceView';
 import SetupView from './components/SetupView';
@@ -43,7 +44,12 @@ function App() {
     // Notify extension that webview is ready
     postMessage('webviewReady');
 
-    initializeVSCodeApi();
+    const api = initializeVSCodeApi();
+
+    // Initialize connection monitor
+    if (api) {
+      connectionMonitor.initialize(api);
+    }
 
     // Set up message listeners
     const unsubscribeWorkspace = onMessageCommand('workspaceChanged', (data) => {
@@ -66,12 +72,11 @@ function App() {
     });
 
     // Request initial state from extension (support multiple endpoints)
-    const vscodeApi = initializeVSCodeApi();
-    if (vscodeApi) {
+    if (api) {
       // Preferred new API
-      vscodeApi.postMessage({ command: 'getInitialState' });
+      api.postMessage({ command: 'getInitialState' });
       // Fallback to legacy state request
-      vscodeApi.postMessage({ command: 'getState' });
+      api.postMessage({ command: 'getState' });
     }
 
     return () => {
