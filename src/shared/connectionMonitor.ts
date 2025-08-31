@@ -36,7 +36,8 @@ export type ConnectionEventType =
   | "disconnected"
   | "reconnecting"
   | "error"
-  | "heartbeat";
+  | "heartbeat"
+  | "qualityChange";
 
 export interface ConnectionEvent {
   type: ConnectionEventType;

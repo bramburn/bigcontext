@@ -57,6 +57,13 @@ function App() {
       setWorkspaceOpen(data.isOpen);
     });
 
+    // Listen for workspace state changes from the backend
+    const unsubscribeWorkspaceState = onMessageCommand('workspaceStateChanged', (data) => {
+      if (data?.data?.isWorkspaceOpen !== undefined) {
+        setWorkspaceOpen(!!data.data.isWorkspaceOpen);
+      }
+    });
+
     const unsubscribeView = onMessageCommand('changeView', (data) => {
       setCurrentView(data.view);
     });
@@ -67,21 +74,31 @@ function App() {
 
     // Handle initial state message from extension
     const unsubscribeInitial = onMessageCommand('initialState', (data) => {
+      console.log('Frontend: Received initialState message:', data);
       if (data?.data?.isWorkspaceOpen !== undefined) {
-        setWorkspaceOpen(!!data.data.isWorkspaceOpen);
+        const isOpen = !!data.data.isWorkspaceOpen;
+        console.log('Frontend: Setting workspace open to:', isOpen);
+        setWorkspaceOpen(isOpen);
+      } else {
+        console.warn('Frontend: initialState message missing isWorkspaceOpen data');
       }
     });
 
     // Request initial state from extension (support multiple endpoints)
     if (api) {
+      console.log('Frontend: Requesting initial state from extension...');
       // Preferred new API
       api.postMessage({ command: 'getInitialState' });
       // Fallback to legacy state request
       api.postMessage({ command: 'getState' });
+      console.log('Frontend: Initial state requests sent');
+    } else {
+      console.error('Frontend: VS Code API not available, cannot request initial state');
     }
 
     return () => {
       unsubscribeWorkspace();
+      unsubscribeWorkspaceState();
       unsubscribeView();
       unsubscribeFirstRun();
       unsubscribeInitial();

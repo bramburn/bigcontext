@@ -3,7 +3,7 @@ import { Caption1, MessageBar, MessageBarBody, MessageBarTitle } from '@fluentui
 import { connectionMonitor } from '../utils/connectionMonitor';
 import type { ConnectionStatus as ConnectionStatusType } from '../utils/connectionMonitor';
 
-const statusText: Record<ConnStatusType, string> = {
+const statusText: Record<ConnectionStatusType, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting to extension...',
   disconnected: 'Disconnected from extension. Trying to reconnect...'
@@ -15,7 +15,7 @@ export const ConnectionStatus: React.FC = () => {
   const [networkQuality, setNetworkQuality] = useState<'good' | 'poor'>('good');
 
   useEffect(() => {
-    const offStatus = connectionMonitor.on('statusChange', (next: ConnStatusType) => setStatus(next));
+    const offStatus = connectionMonitor.on('statusChange', (next: ConnectionStatusType) => setStatus(next));
     const offHeartbeat = connectionMonitor.on('heartbeat', (e: any) => setLatency(e?.latency ?? 0));
     const offQuality = connectionMonitor.on('qualityChange', (e: any) => setNetworkQuality(e?.quality ?? 'good'));
     return () => { offStatus(); offHeartbeat(); offQuality(); };

@@ -48,7 +48,13 @@ export const NoWorkspaceView: React.FC = () => {
   const styles = useStyles();
 
   const handleOpenFolder = () => {
-    postMessage('requestOpenFolder');
+    console.log('NoWorkspaceView: Open folder button clicked');
+    try {
+      postMessage('requestOpenFolder');
+      console.log('NoWorkspaceView: requestOpenFolder message sent');
+    } catch (error) {
+      console.error('NoWorkspaceView: Failed to send requestOpenFolder message:', error);
+    }
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {

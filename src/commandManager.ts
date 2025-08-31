@@ -122,31 +122,67 @@ export class CommandManager {
     }
 
     /**
+     * Checks workspace availability with retry logic
+     *
+     * This method handles timing issues where VS Code might not have fully
+     * initialized workspace folders when the extension starts. It retries
+     * workspace detection with a small delay to ensure accurate results.
+     *
+     * @returns Promise<boolean> - True if workspace folders are available
+     */
+    private async checkWorkspaceWithRetry(): Promise<boolean> {
+        const maxRetries = 5;
+        const retryDelay = 200; // 200ms delay between retries
+
+        console.log('CommandManager: Starting workspace detection with retry logic...');
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const folders = vscode.workspace.workspaceFolders;
+            const isWorkspaceOpen = !!folders && folders.length > 0;
+
+            console.log(`CommandManager: Attempt ${attempt + 1}/${maxRetries}:`);
+            console.log(`  - workspaceFolders:`, folders);
+            console.log(`  - folders length:`, folders?.length || 0);
+            console.log(`  - isWorkspaceOpen:`, isWorkspaceOpen);
+
+            if (isWorkspaceOpen || attempt === maxRetries - 1) {
+                console.log(`CommandManager: Final result - workspace open: ${isWorkspaceOpen}`);
+                return isWorkspaceOpen;
+            }
+
+            console.log(`CommandManager: Retrying in ${retryDelay}ms...`);
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+
+        return false;
+    }
+
+    /**
      * Handles the 'code-context-engine.openMainPanel' command
-     * 
+     *
      * This command serves as the primary entry point to the extension's user interface.
      * It delegates to the WebviewManager to display the main panel where users can
      * interact with the Code Context Engine features.
-     * 
+     *
      * Error Handling:
      * - Catches and logs any exceptions during panel opening
      * - Shows user-friendly error message via VS Code notification system
-     * 
+     *
      * @returns Promise that resolves when the panel is opened or rejects on error
      */
     private async handleOpenMainPanel(): Promise<void> {
         try {
             console.log('CommandManager: Opening main panel...');
 
-            // Check if workspace folders are available
-            const folders = vscode.workspace.workspaceFolders;
-            const isWorkspaceOpen = !!folders && folders.length > 0;
+            // Check if workspace folders are available with retry logic for timing issues
+            const isWorkspaceOpen = await this.checkWorkspaceWithRetry();
 
             // Delegate to WebviewManager to handle the actual panel creation and display
             // Pass the workspace state to the WebviewManager
             this.webviewManager.showMainPanel({ isWorkspaceOpen });
 
-            console.log('CommandManager: Main panel opened successfully');
+            console.log(`CommandManager: Main panel opened successfully - workspace open: ${isWorkspaceOpen}`);
         } catch (error) {
             // Log detailed error for debugging purposes
             console.error('CommandManager: Failed to open main panel:', error);

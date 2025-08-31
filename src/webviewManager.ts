@@ -176,14 +176,18 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 this.disposables
             );
 
-            // Send initial state message to the webview
-            webviewView.webview.postMessage({
-                type: 'initialState',
-                data: {
-                    isWorkspaceOpen: !!vscode.workspace.workspaceFolders?.length,
-                    isSidebar: true
-                }
-            });
+            // Send initial state message to the webview with a small delay
+            setTimeout(() => {
+                const isWorkspaceOpen = !!vscode.workspace.workspaceFolders?.length;
+                webviewView.webview.postMessage({
+                    type: 'initialState',
+                    data: {
+                        isWorkspaceOpen,
+                        isSidebar: true
+                    }
+                });
+                console.log(`WebviewManager: Sent initial state to sidebar - workspace open: ${isWorkspaceOpen}`);
+            }, 100);
 
             this.loggingService.info('Sidebar webview resolved successfully', {}, 'WebviewManager');
         } catch (error) {
@@ -199,7 +203,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
      */
     private handleSidebarMessage(message: any, webview?: vscode.Webview): void {
         try {
-            this.loggingService.debug('Received sidebar message', { type: message.type }, 'WebviewManager');
+            this.loggingService.debug('Received sidebar message', { type: message.type, command: message.command }, 'WebviewManager');
 
             // Handle heartbeat messages
             if (message.command === 'heartbeat') {
@@ -207,16 +211,28 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 return;
             }
 
-            // Handle sidebar-specific messages here
-            switch (message.type) {
-                case 'openMainPanel':
-                    // Open the main panel when requested from sidebar
-                    this.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders?.length });
-                    break;
-                default:
-                    // For other messages, you might want to delegate to a general message handler
-                    this.loggingService.debug('Unhandled sidebar message type', { type: message.type }, 'WebviewManager');
-                    break;
+            // Handle sidebar-specific messages first
+            if (message.type === 'openMainPanel') {
+                // Open the main panel when requested from sidebar
+                this.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders?.length });
+                return;
+            }
+
+            // For all other messages, delegate to the MessageRouter to ensure consistency
+            if (webview && message.command) {
+                console.log('WebviewManager: Delegating sidebar message to MessageRouter:', message.command);
+                const messageRouter = new MessageRouter(
+                    this.contextService,
+                    this.indexingService,
+                    this.searchManager,
+                    this.legacyConfigurationManager,
+                    this.performanceManager,
+                    this.context,
+                    this.loggingService
+                );
+                messageRouter.handleMessage(message, webview);
+            } else {
+                this.loggingService.debug('Unhandled sidebar message', { type: message.type, command: message.command }, 'WebviewManager');
             }
         } catch (error) {
             this.loggingService.error('Error handling sidebar message', { error: error instanceof Error ? error.message : String(error) }, 'WebviewManager');
@@ -827,11 +843,14 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         // Set HTML content using the helper method
         this.mainPanel.webview.html = this.getWebviewContent(this.mainPanel.webview, this.context.extensionUri);
 
-        // Send initial state message to the webview
-        this.mainPanel.webview.postMessage({
-            type: 'initialState',
-            data: { isWorkspaceOpen: options.isWorkspaceOpen }
-        });
+        // Send initial state message to the webview with a small delay to ensure webview is ready
+        setTimeout(() => {
+            this.mainPanel?.webview.postMessage({
+                type: 'initialState',
+                data: { isWorkspaceOpen: options.isWorkspaceOpen }
+            });
+            console.log(`WebviewManager: Sent initial state to main panel - workspace open: ${options.isWorkspaceOpen}`);
+        }, 100);
 
         // Set up MessageRouter for message handling
         const messageRouter = new MessageRouter(

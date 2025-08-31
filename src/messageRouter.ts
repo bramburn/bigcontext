@@ -254,6 +254,12 @@ export class MessageRouter {
                 case 'getHealthStatus':
                     await this.handleGetHealthStatus(message, webview);
                     break;
+                case 'getInitialState':
+                    await this.handleGetInitialState(message, webview);
+                    break;
+                case 'getState':
+                    await this.handleGetState(message, webview);
+                    break;
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
@@ -1459,23 +1465,92 @@ export class MessageRouter {
      */
     private async handleRequestOpenFolder(message: any, webview: vscode.Webview): Promise<void> {
         try {
-            console.log('MessageRouter: Handling request to open folder');
+            console.log('MessageRouter: Handling request to open folder', message);
 
             // Execute the VS Code command to open folder dialog
+            console.log('MessageRouter: Executing vscode.openFolder command...');
             await vscode.commands.executeCommand('vscode.openFolder');
 
             // Send success response
-            await webview.postMessage({
+            const response = {
                 command: 'response',
                 requestId: message.requestId,
                 data: { success: true }
-            });
+            };
+
+            console.log('MessageRouter: Sending success response:', response);
+            await webview.postMessage(response);
 
             console.log('MessageRouter: Open folder dialog triggered successfully');
         } catch (error) {
             console.error('MessageRouter: Failed to open folder dialog:', error);
+            console.error('MessageRouter: Error details:', {
+                name: error instanceof Error ? error.name : 'Unknown',
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
             await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error));
         }
+    }
+
+    /**
+     * Handle request for initial state
+     *
+     * This method sends the current workspace state and other initial
+     * application state to the webview when requested.
+     *
+     * @param message - The get initial state message
+     * @param webview - The webview to send the response to
+     */
+    private async handleGetInitialState(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling get initial state request', message);
+
+            // Check workspace state with detailed logging
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            const isWorkspaceOpen = !!workspaceFolders && workspaceFolders.length > 0;
+
+            console.log('MessageRouter: Workspace detection details:');
+            console.log('  - workspaceFolders:', workspaceFolders);
+            console.log('  - folders length:', workspaceFolders?.length || 0);
+            console.log('  - isWorkspaceOpen:', isWorkspaceOpen);
+
+            // Send initial state response
+            const response = {
+                type: 'initialState',
+                command: 'response',
+                requestId: message.requestId,
+                data: {
+                    isWorkspaceOpen,
+                    workspaceFolders: workspaceFolders?.map(folder => ({
+                        name: folder.name,
+                        uri: folder.uri.toString()
+                    })) || []
+                }
+            };
+
+            console.log('MessageRouter: Sending response:', response);
+            await webview.postMessage(response);
+
+            console.log(`MessageRouter: Successfully sent initial state - workspace open: ${isWorkspaceOpen}`);
+        } catch (error) {
+            console.error('MessageRouter: Failed to get initial state:', error);
+            await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error));
+        }
+    }
+
+    /**
+     * Handle legacy state request
+     *
+     * This method provides backward compatibility for legacy state requests.
+     * It delegates to the handleGetInitialState method.
+     *
+     * @param message - The get state message
+     * @param webview - The webview to send the response to
+     */
+    private async handleGetState(message: any, webview: vscode.Webview): Promise<void> {
+        // Delegate to the new initial state handler for consistency
+        await this.handleGetInitialState(message, webview);
     }
 
     /**
