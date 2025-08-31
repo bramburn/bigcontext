@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Caption1, MessageBar, MessageBarBody, MessageBarTitle } from '@fluentui/react-components';
-import { connectionMonitor, ConnectionStatus } from '../utils/connectionMonitor';
+import { connectionMonitor, ConnectionStatus as ConnectionStatusType } from '../utils/connectionMonitor';
 
-const statusText: Record<ConnectionStatus, string> = {
+const statusText: Record<ConnectionStatusType, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting to extension...',
   disconnected: 'Disconnected from extension. Trying to reconnect...'
 };
 
 export const ConnectionStatus: React.FC = () => {
-  const [status, setStatus] = useState<ConnectionStatus>(connectionMonitor.getStatus());
+  const [status, setStatus] = useState<ConnectionStatusType>(connectionMonitor.getStatus());
   const [latency, setLatency] = useState<number>(0);
 
   useEffect(() => {
-    const offStatus = connectionMonitor.on('statusChange', (next: ConnectionStatus) => setStatus(next));
+    const offStatus = connectionMonitor.on('statusChange', (next: ConnectionStatusType) => setStatus(next));
     const offHeartbeat = connectionMonitor.on('heartbeat', (e: any) => setLatency(e?.latency ?? 0));
     return () => { offStatus(); offHeartbeat(); };
   }, []);

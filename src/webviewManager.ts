@@ -1166,18 +1166,10 @@ export class WebviewManager implements vscode.WebviewViewProvider {
      */
     private getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
         try {
-            // Basic test mode: serve a minimal HTML to validate VS Code API and messaging
-            const basicTestMode = vscode.workspace.getConfiguration('code-context-engine').get<boolean>('webview.basicTestMode', false);
-
-            // Generate a nonce and CSP early (used by both modes)
+            // Generate a nonce and CSP
             const nonce = this.generateNonce();
             const cspSource = webview.cspSource;
             const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}'; font-src ${cspSource}; img-src ${cspSource} https: data:; connect-src ${cspSource};">`;
-
-            if (basicTestMode) {
-                this.loggingService.warn('Basic webview test mode enabled. Serving diagnostic HTML instead of app.', {}, 'WebviewManager');
-                return this.getBasicTestHtml(csp, nonce);
-            }
 
             // Use React implementation only
             const implementation = 'react';
@@ -1215,26 +1207,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 return `${attr}="${resourceUri}"`;
             });
 
-            // Optionally navigate to a debug route via hash to isolate Svelte routing issues in webview
-            const routeOverride = vscode.workspace.getConfiguration('code-context-engine').get<string>('webview.routeOverride','');
-            if (routeOverride) {
-                const routeScript = `
-                    <script nonce="${nonce}">
-                        (function(){
-                            const target = ${JSON.stringify('#' + 'test-basic')}.replace('##','#');
-                            try {
-                                if (location.hash !== target) {
-                                    console.log('Navigating to debug route', target);
-                                    location.hash = target;
-                                }
-                            } catch (e) {
-                                console.warn('Route override navigation failed', e);
-                            }
-                        })();
-                    </script>
-                `;
-                html = html.replace(/<body[^>]*>/, (m) => m + routeScript);
-            }
+
 
 
             // React doesn't use dynamic imports in the same way, so no special handling needed
@@ -1328,67 +1301,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
 
     /**
 
-    /**
-     * Minimal diagnostic HTML to verify VS Code API initialization and messaging
-     */
-    private getBasicTestHtml(cspMeta: string, nonce: string): string {
-        const style = `
-            body { font-family: var(--vscode-font-family, sans-serif); padding: 12px; color: var(--vscode-foreground); background: var(--vscode-editor-background); }
-            .status { padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; }
-            .ok { background: #093; color: white; }
-            .warn { background: #960; color: white; }
-            .err { background: #900; color: white; }
-            .log { font-family: monospace; white-space: pre-wrap; padding: 8px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; max-height: 200px; overflow: auto; }
-        `;
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    ${cspMeta}
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webview Test</title>
-    <style>${style}</style>
-</head>
-<body>
-    <h2>Webview Test</h2>
-    <div id="status" class="status warn">Initializing...</div>
-    <div id="details" class="log"></div>
-    <script nonce="${nonce}">
-    (function(){
-        const logEl = document.getElementById('details');
-        const statusEl = document.getElementById('status');
-        function log(msg){ logEl.textContent += (new Date()).toISOString()+" - "+msg+"\n"; }
-        function setStatus(text, cls){ statusEl.textContent = text; statusEl.className = 'status '+cls; }
 
-        let retries = 0; const maxRetries = 10;
-        function init(){
-            if (window.acquireVsCodeApi) {
-                try {
-                    const vscode = window.acquireVsCodeApi();
-                    setStatus('VS Code API acquired', 'ok');
-                    log('Posting webviewReady message');
-                    vscode.postMessage({ command: 'webviewReady', timestamp: Date.now(), userAgent: navigator.userAgent });
-                    window.addEventListener('message', (event) => {
-                        log('Received message from extension: '+JSON.stringify(event.data));
-                    });
-                } catch (e) {
-                    setStatus('Error acquiring VS Code API: '+e.message, 'err');
-                    log('Error: '+e.stack);
-                }
-            } else if (retries < maxRetries) {
-                retries++; setStatus('VS Code API not ready, retry '+retries+'/'+maxRetries, 'warn');
-                setTimeout(init, 150);
-            } else {
-                setStatus('VS Code API unavailable after retries', 'err');
-                log('Giving up after '+maxRetries+' retries');
-            }
-        }
-        init();
-    })();
-    </script>
-</body>
-</html>`;
-    }
 
 /**
      * Generates a cryptographically secure nonce for Content Security Policy
