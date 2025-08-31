@@ -1,338 +1,126 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Main App Component
+ *
+ * Root component for the React webview application.
+ * Handles routing between different views and manages global state.
+ */
+
+import { useEffect } from 'react';
 import {
   FluentProvider,
   webLightTheme,
   webDarkTheme,
-  Button,
-  Input,
-  Card,
-  CardHeader,
-  Text,
-  Body1,
-  Caption1
+  makeStyles,
+  tokens
 } from '@fluentui/react-components';
-import { connectionMonitor, ConnectionState, ConnectionEvent } from '../../src/shared/connectionMonitor';
+import { useAppStore, useCurrentView, useIsWorkspaceOpen } from './stores/appStore';
+import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
+import ErrorBoundary from './components/ErrorBoundary';
+import NoWorkspaceView from './components/NoWorkspaceView';
+import SetupView from './components/SetupView';
+import IndexingView from './components/IndexingView';
+import QueryView from './components/QueryView';
+import DiagnosticsView from './components/DiagnosticsView';
+import { useVscodeTheme } from './hooks/useVscodeTheme';
 
-interface VSCodeAPI {
-  postMessage: (message: any) => void;
-  setState: (state: any) => void;
-  getState: () => any;
-}
-
-declare global {
-  interface Window {
-    acquireVsCodeApi?: () => VSCodeAPI;
+const useStyles = makeStyles({
+  app: {
+    minHeight: '100vh',
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    fontFamily: tokens.fontFamilyBase
   }
-}
+});
 
 function App() {
-  const [status, setStatus] = useState('Initializing...');
-  const [logs, setLogs] = useState<string[]>([]);
-  const [vscode, setVscode] = useState<VSCodeAPI | null>(null);
-  const [message, setMessage] = useState('');
-  const [isDark, setIsDark] = useState(true);
-  const [connectionState, setConnectionState] = useState<ConnectionState>(connectionMonitor.getState());
-  const [reconnectProgress, setReconnectProgress] = useState<{ attempt: number; delay: number } | null>(null);
-  const [adaptiveMode, setAdaptiveMode] = useState<'full' | 'reduced' | 'minimal'>('full');
+  const styles = useStyles();
+  const currentView = useCurrentView();
+  const isWorkspaceOpen = useIsWorkspaceOpen();
+  const { setWorkspaceOpen, setCurrentView, setFirstRunComplete } = useAppStore();
 
-  const log = (msg: string) => {
-    const timestamp = new Date().toISOString();
-    setLogs(prev => [...prev, `${timestamp} - ${msg}`]);
-  };
-
-  const updateAdaptiveMode = (state: ConnectionState) => {
-    if (!state.isConnected) {
-      setAdaptiveMode('minimal');
-      return;
-    }
-
-    if (state.bandwidth === 'low' || state.connectionQuality === 'poor') {
-      setAdaptiveMode('minimal');
-    } else if (state.bandwidth === 'medium' || state.connectionQuality === 'good') {
-      setAdaptiveMode('reduced');
-    } else {
-      setAdaptiveMode('full');
-    }
-  };
-
-  const sendMessage = () => {
-    if (message.trim()) {
-      const messageData = {
-        command: 'testMessage',
-        data: message.trim(),
-        timestamp: Date.now()
-      };
-
-      const sent = connectionMonitor.sendMessage(messageData);
-      if (sent) {
-        log(`Sent: ${message.trim()}`);
-      } else {
-        log(`Queued: ${message.trim()} (will send when connected)`);
-      }
-      setMessage('');
-    }
-  };
-
+  // Initialize VS Code API and set up message listeners
   useEffect(() => {
-    log('React app mounted');
+    // Notify extension that webview is ready
+    postMessage('webviewReady');
 
-    let retries = 0;
-    const maxRetries = 10;
+    initializeVSCodeApi();
 
-    // Set up connection monitor event handlers
-    const unsubscribeConnected = connectionMonitor.on('connected', (event: ConnectionEvent) => {
-      setConnectionState(connectionMonitor.getState());
-      setStatus('Connected to VS Code');
-      log(`Connected - Latency: ${event.data?.latency || 0}ms`);
-      setReconnectProgress(null);
+    // Set up message listeners
+    const unsubscribeWorkspace = onMessageCommand('workspaceChanged', (data) => {
+      setWorkspaceOpen(data.isOpen);
     });
 
-    const unsubscribeDisconnected = connectionMonitor.on('disconnected', (_event: ConnectionEvent) => {
-      setConnectionState(connectionMonitor.getState());
-      setStatus('Disconnected from VS Code');
-      log('Connection lost - attempting to reconnect...');
+    const unsubscribeView = onMessageCommand('changeView', (data) => {
+      setCurrentView(data.view);
     });
 
-    const unsubscribeReconnecting = connectionMonitor.on('reconnecting', (event: ConnectionEvent) => {
-      setConnectionState(connectionMonitor.getState());
-      setReconnectProgress({ attempt: event.data.attempt, delay: event.data.delay });
-      setStatus(`Reconnecting... (attempt ${event.data.attempt})`);
-      log(`Reconnecting in ${event.data.delay}ms (attempt ${event.data.attempt})`);
+    const unsubscribeFirstRun = onMessageCommand('firstRunComplete', () => {
+      setFirstRunComplete(true);
     });
 
-    const unsubscribeError = connectionMonitor.on('error', (event: ConnectionEvent) => {
-      setConnectionState(connectionMonitor.getState());
-      log(`Connection error: ${event.data.message}`);
-    });
-
-    const unsubscribeHeartbeat = connectionMonitor.on('heartbeat', (_event: ConnectionEvent) => {
-      const newState = connectionMonitor.getState();
-      setConnectionState(newState);
-
-      // Update adaptive mode based on connection quality and bandwidth
-      updateAdaptiveMode(newState);
-    });
-
-    const initVSCode = () => {
-      if (typeof window !== 'undefined' && window.acquireVsCodeApi) {
-        try {
-          const api = window.acquireVsCodeApi();
-          setVscode(api);
-          setStatus('VS Code API acquired successfully');
-          log('VS Code API acquired');
-
-          // Register service worker for offline support
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
-              .then((registration) => {
-                log('Service Worker registered successfully');
-                console.log('SW registered:', registration);
-              })
-              .catch((error) => {
-                log('Service Worker registration failed: ' + error.message);
-                console.error('SW registration failed:', error);
-              });
-          }
-
-          // Initialize connection monitor
-          connectionMonitor.initialize(api);
-
-          // Send ready message
-          api.postMessage({
-            command: 'webviewReady',
-            source: 'react-app',
-            timestamp: Date.now()
-          });
-          log('Sent webviewReady message');
-
-          // Listen for messages from extension
-          const handleMessage = (event: MessageEvent) => {
-            const msg = event.data;
-
-            // Handle heartbeat responses
-            if (msg.command === 'heartbeatResponse') {
-              connectionMonitor.handleHeartbeatResponse(msg.timestamp);
-              return;
-            }
-
-            log(`Received from extension: ${JSON.stringify(msg)}`);
-          };
-
-          window.addEventListener('message', handleMessage);
-
-          return () => {
-            window.removeEventListener('message', handleMessage);
-            connectionMonitor.destroy();
-            unsubscribeConnected();
-            unsubscribeDisconnected();
-            unsubscribeReconnecting();
-            unsubscribeError();
-            unsubscribeHeartbeat();
-          };
-          
-        } catch (error) {
-          setStatus(`Error acquiring VS Code API: ${error}`);
-          log(`Error: ${error}`);
-        }
-      } else if (retries < maxRetries) {
-        retries++;
-        setStatus(`VS Code API not ready, retry ${retries}/${maxRetries}`);
-        log(`Retry ${retries}/${maxRetries}`);
-        setTimeout(initVSCode, 100);
-      } else {
-        setStatus('VS Code API unavailable after retries');
-        log('Failed to acquire VS Code API after retries');
+    // Handle initial state message from extension
+    const unsubscribeInitial = onMessageCommand('initialState', (data) => {
+      if (data?.data?.isWorkspaceOpen !== undefined) {
+        setWorkspaceOpen(!!data.data.isWorkspaceOpen);
       }
-    };
-    
-    initVSCode();
-  }, []);
+    });
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      sendMessage();
+    // Request initial state from extension (support multiple endpoints)
+    const vscodeApi = initializeVSCodeApi();
+    if (vscodeApi) {
+      // Preferred new API
+      vscodeApi.postMessage({ command: 'getInitialState' });
+      // Fallback to legacy state request
+      vscodeApi.postMessage({ command: 'getState' });
+    }
+
+    return () => {
+      unsubscribeWorkspace();
+      unsubscribeView();
+      unsubscribeFirstRun();
+      unsubscribeInitial();
+    };
+  }, [setWorkspaceOpen, setCurrentView, setFirstRunComplete]);
+
+  // Determine VS Code theme and map to Fluent UI themes
+  // Note: webview inherits classes like 'vscode-dark' on body
+  const vsTheme = useVscodeTheme();
+  const theme = vsTheme === 'dark' ? webDarkTheme : webLightTheme;
+
+  // Render the appropriate view based on current state
+  const renderCurrentView = () => {
+    if (!isWorkspaceOpen) {
+      return <NoWorkspaceView />;
+    }
+
+    switch (currentView) {
+      case 'setup':
+        return <SetupView />;
+      case 'indexing':
+        return <IndexingView />;
+      case 'query':
+        return <QueryView />;
+      case 'diagnostics':
+        return <DiagnosticsView />;
+      default:
+        return <SetupView />;
     }
   };
 
   return (
-    <FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
-      <div style={{ padding: '16px', height: '100vh', overflow: 'auto' }}>
-        <Card>
-          <CardHeader
-            header={<Text weight="semibold">React Webview Test</Text>}
-            action={
-              <Button
-                size="small"
-                onClick={() => setIsDark(!isDark)}
-              >
-                {isDark ? 'Light' : 'Dark'}
-              </Button>
-            }
-          />
-          
-          <div style={{ padding: '16px' }}>
-            <div style={{
-              padding: '8px 12px',
-              borderRadius: '4px',
-              margin: '8px 0',
-              backgroundColor: status.includes('successfully') ? '#063b49' :
-                             status.includes('Error') ? '#5a1d1d' : '#664d00',
-              border: `1px solid ${status.includes('successfully') ? '#007acc' :
-                                 status.includes('Error') ? '#be1100' : '#ffcc00'}`
-            }}>
-              <Body1>Status: {status}</Body1>
-            </div>
-
-            {/* Connection Status */}
-            {/* Adaptive Mode Indicator */}
-            <div style={{
-              padding: '8px 12px',
-              borderRadius: '4px',
-              margin: '8px 0',
-              backgroundColor: adaptiveMode === 'full' ? '#063b49' :
-                             adaptiveMode === 'reduced' ? '#664d00' : '#5a1d1d',
-              border: `1px solid ${adaptiveMode === 'full' ? '#007acc' :
-                                 adaptiveMode === 'reduced' ? '#ffcc00' : '#be1100'}`
-            }}>
-              <Body1>UI Mode: {adaptiveMode} (optimized for {connectionState.bandwidth} bandwidth)</Body1>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', margin: '8px 0', flexWrap: 'wrap' }}>
-              <div style={{
-                padding: '4px 8px',
-                borderRadius: '12px',
-                backgroundColor: connectionState.isConnected ? '#063b49' : '#5a1d1d',
-                border: `1px solid ${connectionState.isConnected ? '#007acc' : '#be1100'}`
-              }}>
-                <Caption1>{connectionState.isConnected ? '🟢 Connected' : '🔴 Disconnected'}</Caption1>
-              </div>
-
-              {connectionState.isConnected && adaptiveMode !== 'minimal' && (
-                <>
-                  <div style={{
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    backgroundColor: connectionState.connectionQuality === 'excellent' ? '#063b49' :
-                                   connectionState.connectionQuality === 'good' ? '#664d00' : '#5a1d1d',
-                    border: `1px solid ${connectionState.connectionQuality === 'excellent' ? '#007acc' :
-                                       connectionState.connectionQuality === 'good' ? '#ffcc00' : '#be1100'}`
-                  }}>
-                    <Caption1>Quality: {connectionState.connectionQuality}</Caption1>
-                  </div>
-
-                  {adaptiveMode === 'full' && (
-                    <div style={{
-                      padding: '4px 8px',
-                      borderRadius: '12px',
-                      backgroundColor: '#664d00',
-                      border: '1px solid #ffcc00'
-                    }}>
-                      <Caption1>Latency: {connectionState.latency}ms</Caption1>
-                    </div>
-                  )}
-
-                  <div style={{
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    backgroundColor: connectionState.bandwidth === 'high' ? '#063b49' :
-                                   connectionState.bandwidth === 'medium' ? '#664d00' : '#5a1d1d',
-                    border: `1px solid ${connectionState.bandwidth === 'high' ? '#007acc' :
-                                       connectionState.bandwidth === 'medium' ? '#ffcc00' : '#be1100'}`
-                  }}>
-                    <Caption1>Bandwidth: {connectionState.bandwidth}</Caption1>
-                  </div>
-                </>
-              )}
-
-              {reconnectProgress && (
-                <div style={{
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  backgroundColor: '#664d00',
-                  border: '1px solid #ffcc00'
-                }}>
-                  <Caption1>Reconnecting... ({reconnectProgress.attempt})</Caption1>
-                </div>
-              )}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '8px', margin: '16px 0', alignItems: 'center' }}>
-              <Input
-                value={message}
-                onChange={(_, data) => setMessage(data.value)}
-                onKeyDown={handleKeyPress}
-                placeholder="Type a test message"
-                style={{ flex: 1 }}
-              />
-              
-              <Button
-                appearance="primary"
-                disabled={!vscode || !message.trim()}
-                onClick={sendMessage}
-              >
-                Send Message
-              </Button>
-            </div>
-            
-            <div style={{ marginTop: '16px' }}>
-              <Text weight="semibold">Logs:</Text>
-              <div style={{
-                backgroundColor: '#0f0f0f',
-                border: '1px solid #3c3c3c',
-                borderRadius: '4px',
-                padding: '8px',
-                maxHeight: '200px',
-                overflowY: 'auto',
-                marginTop: '8px'
-              }}>
-                <Caption1 style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                  {logs.join('\n')}
-                </Caption1>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
+    <FluentProvider theme={theme}>
+      <ErrorBoundary
+        fallbackMessage="The Code Context Engine encountered an unexpected error."
+        showDetails={false}
+        onError={(error, errorInfo) => {
+          console.error('App Error:', error, errorInfo);
+          // Could send error to extension for logging
+        }}
+      >
+        <div className={styles.app}>
+          {renderCurrentView()}
+        </div>
+      </ErrorBoundary>
     </FluentProvider>
   );
 }

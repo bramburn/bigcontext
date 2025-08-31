@@ -1,10 +1,14 @@
 # Source files
 src/**
-webview/src/**
-webview/node_modules/**
 
-# Include built webview artifacts
-!webview/build/**
+# Exclude all webview directories except React build
+webview/**
+webview-simple/**
+webview-react/src/**
+webview-react/node_modules/**
+
+# Include only React webview build artifacts
+!webview-react/dist/**
 
 # Build artifacts
 *.vsix

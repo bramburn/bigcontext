@@ -50,7 +50,7 @@ Try queries like:
 git clone https://github.com/bramburn/bigcontext.git
 cd bigcontext
 npm install
-cd webview && npm install && cd ..
+cd webview-react; npm install; cd ..
 
 # Build the project
 npm run compile
@@ -58,7 +58,7 @@ npm run build-webview
 
 # Start development
 npm run watch  # In one terminal
-cd webview && npm run dev  # In another terminal
+cd webview-react && npm run dev  # In another terminal
 ```
 
 ### Testing the Extension
@@ -203,6 +203,18 @@ npm run clean
 ```
 
 ## 🚀 Publishing
+
+### Local Publishing Process
+
+To publish the extension locally to the VS Code Marketplace:
+
+```bash
+# Set your VS Code Marketplace Personal Access Token
+export VSCE_PAT='your-personal-access-token-here'
+
+# Build and publish directly
+npm run publish:vsce
+```
 
 ### Automated Release Process
 
