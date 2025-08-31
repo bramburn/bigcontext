@@ -11,6 +11,7 @@ export interface ConnectionState {
     latency: number;
     reconnectAttempts: number;
     connectionQuality: 'excellent' | 'good' | 'poor' | 'disconnected';
+    bandwidth: 'high' | 'medium' | 'low' | 'unknown';
     lastError?: string;
 }
 
@@ -64,7 +65,8 @@ export class ConnectionMonitor {
             lastHeartbeat: 0,
             latency: 0,
             reconnectAttempts: 0,
-            connectionQuality: 'disconnected'
+            connectionQuality: 'disconnected',
+            bandwidth: 'unknown'
         };
 
         this.metrics = {
@@ -94,6 +96,10 @@ export class ConnectionMonitor {
         this.isInitialized = true;
         this.startHeartbeat();
         this.updateConnectionState(true);
+
+        // Perform initial bandwidth test
+        this.performBandwidthTest();
+
         this.emit('connected', { timestamp: Date.now() });
     }
 
@@ -169,6 +175,79 @@ export class ConnectionMonitor {
             this.state.connectionQuality = 'poor';
         } else {
             this.state.connectionQuality = 'disconnected';
+        }
+
+        // Update bandwidth estimation based on latency and other factors
+        this.updateBandwidthEstimation(latency);
+    }
+
+    /**
+     * Update bandwidth estimation based on connection metrics
+     */
+    private updateBandwidthEstimation(latency: number): void {
+        // Use Network Information API if available
+        if ('connection' in navigator) {
+            const connection = (navigator as any).connection;
+            if (connection && connection.effectiveType) {
+                switch (connection.effectiveType) {
+                    case '4g':
+                        this.state.bandwidth = 'high';
+                        break;
+                    case '3g':
+                        this.state.bandwidth = 'medium';
+                        break;
+                    case '2g':
+                    case 'slow-2g':
+                        this.state.bandwidth = 'low';
+                        break;
+                    default:
+                        this.state.bandwidth = 'medium';
+                }
+                return;
+            }
+        }
+
+        // Fallback to latency-based estimation
+        if (latency < 100) {
+            this.state.bandwidth = 'high';
+        } else if (latency < 500) {
+            this.state.bandwidth = 'medium';
+        } else {
+            this.state.bandwidth = 'low';
+        }
+    }
+
+    /**
+     * Perform bandwidth test by measuring download speed
+     */
+    public async performBandwidthTest(): Promise<void> {
+        try {
+            const testSize = 1024; // 1KB test
+            const testData = new Uint8Array(testSize);
+            const blob = new Blob([testData]);
+            const url = URL.createObjectURL(blob);
+
+            const startTime = performance.now();
+            const response = await fetch(url);
+            await response.blob();
+            const endTime = performance.now();
+
+            URL.revokeObjectURL(url);
+
+            const duration = endTime - startTime;
+            const speedKbps = (testSize * 8) / duration; // bits per millisecond to Kbps
+
+            if (speedKbps > 1000) {
+                this.state.bandwidth = 'high';
+            } else if (speedKbps > 100) {
+                this.state.bandwidth = 'medium';
+            } else {
+                this.state.bandwidth = 'low';
+            }
+
+        } catch (error) {
+            console.warn('Bandwidth test failed:', error);
+            this.state.bandwidth = 'unknown';
         }
     }
 
@@ -377,7 +456,7 @@ export class ConnectionMonitor {
      * Generate a unique connection ID
      */
     private generateConnectionId(): string {
-        return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `conn_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     }
 
     /**

@@ -17,6 +17,14 @@
   let message = '';
   let connectionState = connectionMonitor.getState();
   let reconnectProgress: { attempt: number; delay: number } | null = null;
+  let adaptiveMode: 'full' | 'reduced' | 'minimal' = 'full';
+
+  // Unsubscribe functions for cleanup
+  let unsubscribeConnected: (() => void) | null = null;
+  let unsubscribeDisconnected: (() => void) | null = null;
+  let unsubscribeReconnecting: (() => void) | null = null;
+  let unsubscribeError: (() => void) | null = null;
+  let unsubscribeHeartbeat: (() => void) | null = null;
 
   function log(msg: string) {
     const timestamp = new Date().toISOString();
@@ -41,6 +49,21 @@
     }
   }
 
+  function updateAdaptiveMode(state) {
+    if (!state.isConnected) {
+      adaptiveMode = 'minimal';
+      return;
+    }
+
+    if (state.bandwidth === 'low' || state.connectionQuality === 'poor') {
+      adaptiveMode = 'minimal';
+    } else if (state.bandwidth === 'medium' || state.connectionQuality === 'good') {
+      adaptiveMode = 'reduced';
+    } else {
+      adaptiveMode = 'full';
+    }
+  }
+
   onMount(() => {
     log('App mounted');
 
@@ -48,33 +71,34 @@
     const maxRetries = 10;
 
     // Set up connection monitor event handlers
-    const unsubscribeConnected = connectionMonitor.on('connected', (event) => {
+    unsubscribeConnected = connectionMonitor.on('connected', (event) => {
       connectionState = connectionMonitor.getState();
       status = 'Connected to VS Code';
       log(`Connected - Latency: ${event.data?.latency || 0}ms`);
       reconnectProgress = null;
     });
 
-    const unsubscribeDisconnected = connectionMonitor.on('disconnected', (_event) => {
+    unsubscribeDisconnected = connectionMonitor.on('disconnected', (_event) => {
       connectionState = connectionMonitor.getState();
       status = 'Disconnected from VS Code';
       log('Connection lost - attempting to reconnect...');
     });
 
-    const unsubscribeReconnecting = connectionMonitor.on('reconnecting', (event) => {
+    unsubscribeReconnecting = connectionMonitor.on('reconnecting', (event) => {
       connectionState = connectionMonitor.getState();
       reconnectProgress = { attempt: event.data.attempt, delay: event.data.delay };
       status = `Reconnecting... (attempt ${event.data.attempt})`;
       log(`Reconnecting in ${event.data.delay}ms (attempt ${event.data.attempt})`);
     });
 
-    const unsubscribeError = connectionMonitor.on('error', (event) => {
+    unsubscribeError = connectionMonitor.on('error', (event) => {
       connectionState = connectionMonitor.getState();
       log(`Connection error: ${event.data.message}`);
     });
 
-    const unsubscribeHeartbeat = connectionMonitor.on('heartbeat', (event) => {
+    unsubscribeHeartbeat = connectionMonitor.on('heartbeat', (_event) => {
       connectionState = connectionMonitor.getState();
+      updateAdaptiveMode(connectionState);
     });
 
     function initVSCode() {
@@ -141,11 +165,11 @@
 
   onDestroy(() => {
     connectionMonitor.destroy();
-    unsubscribeConnected();
-    unsubscribeDisconnected();
-    unsubscribeReconnecting();
-    unsubscribeError();
-    unsubscribeHeartbeat();
+    unsubscribeConnected?.();
+    unsubscribeDisconnected?.();
+    unsubscribeReconnecting?.();
+    unsubscribeError?.();
+    unsubscribeHeartbeat?.();
   });
 </script>
 
@@ -157,19 +181,30 @@
       Status: {status}
     </div>
 
+    <!-- Adaptive Mode Indicator -->
+    <div class="adaptive-mode" class:full={adaptiveMode === 'full'} class:reduced={adaptiveMode === 'reduced'} class:minimal={adaptiveMode === 'minimal'}>
+      UI Mode: {adaptiveMode} (optimized for {connectionState.bandwidth} bandwidth)
+    </div>
+
     <!-- Connection Status -->
     <div class="connection-status">
       <div class="connection-indicator" class:connected={connectionState.isConnected} class:disconnected={!connectionState.isConnected}>
         {connectionState.isConnected ? '🟢 Connected' : '🔴 Disconnected'}
       </div>
 
-      {#if connectionState.isConnected}
+      {#if connectionState.isConnected && adaptiveMode !== 'minimal'}
         <div class="quality-indicator" class:excellent={connectionState.connectionQuality === 'excellent'} class:good={connectionState.connectionQuality === 'good'} class:poor={connectionState.connectionQuality === 'poor'}>
           Quality: {connectionState.connectionQuality}
         </div>
 
-        <div class="latency-indicator">
-          Latency: {connectionState.latency}ms
+        {#if adaptiveMode === 'full'}
+          <div class="latency-indicator">
+            Latency: {connectionState.latency}ms
+          </div>
+        {/if}
+
+        <div class="bandwidth-indicator" class:high={connectionState.bandwidth === 'high'} class:medium={connectionState.bandwidth === 'medium'} class:low={connectionState.bandwidth === 'low'}>
+          Bandwidth: {connectionState.bandwidth}
         </div>
       {/if}
 
@@ -284,9 +319,47 @@
     border-color: var(--vscode-inputValidation-errorBorder, #be1100);
   }
 
-  .latency-indicator, .reconnect-indicator {
+  .latency-indicator, .reconnect-indicator, .bandwidth-indicator {
     background: var(--vscode-inputValidation-warningBackground, #664d00);
     border-color: var(--vscode-inputValidation-warningBorder, #ffcc00);
+  }
+
+  .bandwidth-indicator.high {
+    background: var(--vscode-inputValidation-infoBackground, #063b49);
+    border-color: var(--vscode-inputValidation-infoBorder, #007acc);
+  }
+
+  .bandwidth-indicator.medium {
+    background: var(--vscode-inputValidation-warningBackground, #664d00);
+    border-color: var(--vscode-inputValidation-warningBorder, #ffcc00);
+  }
+
+  .bandwidth-indicator.low {
+    background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+  }
+
+  .adaptive-mode {
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    border: 1px solid;
+    font-size: 14px;
+  }
+
+  .adaptive-mode.full {
+    background: var(--vscode-inputValidation-infoBackground, #063b49);
+    border-color: var(--vscode-inputValidation-infoBorder, #007acc);
+  }
+
+  .adaptive-mode.reduced {
+    background: var(--vscode-inputValidation-warningBackground, #664d00);
+    border-color: var(--vscode-inputValidation-warningBorder, #ffcc00);
+  }
+
+  .adaptive-mode.minimal {
+    background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    border-color: var(--vscode-inputValidation-errorBorder, #be1100);
   }
 
   .controls {

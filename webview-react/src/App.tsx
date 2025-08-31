@@ -33,10 +33,26 @@ function App() {
   const [isDark, setIsDark] = useState(true);
   const [connectionState, setConnectionState] = useState<ConnectionState>(connectionMonitor.getState());
   const [reconnectProgress, setReconnectProgress] = useState<{ attempt: number; delay: number } | null>(null);
+  const [adaptiveMode, setAdaptiveMode] = useState<'full' | 'reduced' | 'minimal'>('full');
 
   const log = (msg: string) => {
     const timestamp = new Date().toISOString();
     setLogs(prev => [...prev, `${timestamp} - ${msg}`]);
+  };
+
+  const updateAdaptiveMode = (state: ConnectionState) => {
+    if (!state.isConnected) {
+      setAdaptiveMode('minimal');
+      return;
+    }
+
+    if (state.bandwidth === 'low' || state.connectionQuality === 'poor') {
+      setAdaptiveMode('minimal');
+    } else if (state.bandwidth === 'medium' || state.connectionQuality === 'good') {
+      setAdaptiveMode('reduced');
+    } else {
+      setAdaptiveMode('full');
+    }
   };
 
   const sendMessage = () => {
@@ -90,7 +106,11 @@ function App() {
     });
 
     const unsubscribeHeartbeat = connectionMonitor.on('heartbeat', (_event: ConnectionEvent) => {
-      setConnectionState(connectionMonitor.getState());
+      const newState = connectionMonitor.getState();
+      setConnectionState(newState);
+
+      // Update adaptive mode based on connection quality and bandwidth
+      updateAdaptiveMode(newState);
     });
 
     const initVSCode = () => {
@@ -204,6 +224,19 @@ function App() {
             </div>
 
             {/* Connection Status */}
+            {/* Adaptive Mode Indicator */}
+            <div style={{
+              padding: '8px 12px',
+              borderRadius: '4px',
+              margin: '8px 0',
+              backgroundColor: adaptiveMode === 'full' ? '#063b49' :
+                             adaptiveMode === 'reduced' ? '#664d00' : '#5a1d1d',
+              border: `1px solid ${adaptiveMode === 'full' ? '#007acc' :
+                                 adaptiveMode === 'reduced' ? '#ffcc00' : '#be1100'}`
+            }}>
+              <Body1>UI Mode: {adaptiveMode} (optimized for {connectionState.bandwidth} bandwidth)</Body1>
+            </div>
+
             <div style={{ display: 'flex', gap: '12px', margin: '8px 0', flexWrap: 'wrap' }}>
               <div style={{
                 padding: '4px 8px',
@@ -214,7 +247,7 @@ function App() {
                 <Caption1>{connectionState.isConnected ? '🟢 Connected' : '🔴 Disconnected'}</Caption1>
               </div>
 
-              {connectionState.isConnected && (
+              {connectionState.isConnected && adaptiveMode !== 'minimal' && (
                 <>
                   <div style={{
                     padding: '4px 8px',
@@ -227,13 +260,26 @@ function App() {
                     <Caption1>Quality: {connectionState.connectionQuality}</Caption1>
                   </div>
 
+                  {adaptiveMode === 'full' && (
+                    <div style={{
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      backgroundColor: '#664d00',
+                      border: '1px solid #ffcc00'
+                    }}>
+                      <Caption1>Latency: {connectionState.latency}ms</Caption1>
+                    </div>
+                  )}
+
                   <div style={{
                     padding: '4px 8px',
                     borderRadius: '12px',
-                    backgroundColor: '#664d00',
-                    border: '1px solid #ffcc00'
+                    backgroundColor: connectionState.bandwidth === 'high' ? '#063b49' :
+                                   connectionState.bandwidth === 'medium' ? '#664d00' : '#5a1d1d',
+                    border: `1px solid ${connectionState.bandwidth === 'high' ? '#007acc' :
+                                       connectionState.bandwidth === 'medium' ? '#ffcc00' : '#be1100'}`
                   }}>
-                    <Caption1>Latency: {connectionState.latency}ms</Caption1>
+                    <Caption1>Bandwidth: {connectionState.bandwidth}</Caption1>
                   </div>
                 </>
               )}
