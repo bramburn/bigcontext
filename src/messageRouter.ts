@@ -13,12 +13,12 @@ import { WorkspaceManager } from './workspaceManager';
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
- * 
+ *
  * This file implements the core message routing logic that facilitates communication between
  * the extension's webview UI and the backend services. It acts as the central hub for all
  * webview-to-extension communication, providing a clean separation of concerns and ensuring
  * type-safe message handling.
- * 
+ *
  * Key responsibilities:
  * - Route incoming webview messages to appropriate handlers
  * - Integrate with various backend services (ContextService, IndexingService, etc.)
@@ -26,7 +26,7 @@ import { WorkspaceManager } from './workspaceManager';
  * - Manage configuration and state operations
  * - Provide search and context query functionality
  * - Handle error responses and logging
- * 
+ *
  * Architecture:
  * The MessageRouter follows a command pattern where each message type has a dedicated handler
  * method. This approach ensures maintainability and makes it easy to add new message types
@@ -48,7 +48,7 @@ export class MessageRouter {
 
     /**
      * Constructs a new MessageRouter instance with core services
-     * 
+     *
      * @param contextService - Service for handling context-related operations (file content, related files, etc.)
      * @param indexingService - Service for managing document indexing operations
      * @param context - VS Code extension context providing access to extension APIs and storage
@@ -66,11 +66,11 @@ export class MessageRouter {
 
     /**
      * Sets up advanced managers for enhanced functionality
-     * 
+     *
      * This method is called after initial construction to provide access to optional
      * advanced services that may not be available during initial startup or may require
      * additional initialization.
-     * 
+     *
      * @param searchManager - Advanced search management service with filtering and suggestions
      * @param legacyConfigurationManager - Legacy configuration management service
      * @param performanceManager - Performance monitoring and metrics collection service
@@ -91,11 +91,11 @@ export class MessageRouter {
 
     /**
      * Main message entry point - routes incoming webview messages to appropriate handlers
-     * 
+     *
      * This method serves as the central dispatcher for all webview communications. It implements
      * a try-catch pattern to ensure that errors in individual handlers don't crash the entire
      * message processing system.
-     * 
+     *
      * @param message - The incoming message object from the webview, must contain a 'command' property
      * @param webview - The VS Code webview instance that sent the message, used for responses
      */
@@ -177,6 +177,12 @@ export class MessageRouter {
                 case 'startIndexing':
                     await this.handleStartIndexing(webview);
                     break;
+                case 'retryIndexing':
+                    await this.handleStartIndexing(webview);
+                    break;
+                case 'openFile':
+                    await this.handleOpenFile(message, webview);
+                    break;
                 case 'pauseIndexing':
                     await this.handlePauseIndexing(webview);
                     break;
@@ -257,11 +263,11 @@ export class MessageRouter {
 
     /**
      * Handles ping messages for connection testing
-     * 
+     *
      * Simple ping-pong implementation used to verify that the webview-to-extension
      * communication channel is working properly. This is often used during initial
      * connection setup or as a heartbeat mechanism.
-     * 
+     *
      * @param message - The ping message, should contain requestId for correlation
      * @param webview - The webview to send the pong response to
      */
@@ -278,11 +284,11 @@ export class MessageRouter {
 
     /**
      * Checks if the workspace is properly configured for first-time setup
-     * 
+     *
      * This handler determines if the extension has been properly configured by checking:
      * 1. If a workspace folder is open
      * 2. If required services are connected and configured
-     * 
+     *
      * @param message - The check setup status message, should contain requestId
      * @param webview - The webview to send the response to
      */
@@ -330,11 +336,11 @@ export class MessageRouter {
 
     /**
      * Handles requests to start local database services
-     * 
+     *
      * This handler supports starting different types of local databases via Docker:
      * - Qdrant: Vector database for semantic search
      * - ChromaDB: Alternative vector database
-     * 
+     *
      * @param message - The start database message, should contain database type and config
      * @param webview - The webview to send status updates to
      */
@@ -369,10 +375,10 @@ export class MessageRouter {
 
     /**
      * Handles requests to validate cloud database connections
-     * 
+     *
      * This handler validates connections to cloud-based database services:
      * - Pinecone: Cloud vector database service
-     * 
+     *
      * @param message - The validate database message, should contain database type and config
      * @param webview - The webview to send validation results to
      */
@@ -404,11 +410,11 @@ export class MessageRouter {
 
     /**
      * Starts Qdrant vector database using Docker
-     * 
+     *
      * This method creates a new VS Code terminal and runs the Qdrant Docker container.
      * After starting the container, it initiates health checking to determine when
      * the database is ready to accept connections.
-     * 
+     *
      * @param webview - The webview to send status updates to
      */
     private async startQdrant(webview: vscode.Webview): Promise<void> {
@@ -429,10 +435,10 @@ export class MessageRouter {
 
     /**
      * Starts ChromaDB vector database using Docker
-     * 
+     *
      * This method creates a new VS Code terminal and runs the ChromaDB Docker container
      * with a configurable port. After starting the container, it initiates health checking.
-     * 
+     *
      * @param webview - The webview to send status updates to
      * @param config - Configuration object that may contain custom port settings
      */
@@ -455,11 +461,11 @@ export class MessageRouter {
 
     /**
      * Validates Pinecone cloud database connection
-     * 
+     *
      * This method tests the connection to Pinecone by attempting to list databases.
      * It handles various error scenarios including invalid API keys, permission issues,
      * and network timeouts.
-     * 
+     *
      * @param webview - The webview to send validation results to
      * @param config - Configuration object containing API key and environment settings
      * @throws Error if validation fails or connection times out
@@ -510,11 +516,11 @@ export class MessageRouter {
 
     /**
      * Polls database health endpoint to determine when service is ready
-     * 
+     *
      * This method implements a polling mechanism to check if a database service
      * has started successfully and is ready to accept connections. It will poll
      * for a maximum of 30 seconds before timing out.
-     * 
+     *
      * @param webview - The webview to send health status updates to
      * @param database - The type of database being checked ('qdrant' or 'chromadb')
      * @param config - Optional configuration for database-specific settings (like port)
@@ -589,16 +595,16 @@ export class MessageRouter {
 
     /**
      * Retrieves content of a specified file with optional related chunks
-     * 
+     *
      * This handler fetches the content of a file and can optionally include
      * semantically related code chunks for enhanced context understanding.
-     * 
+     *
      * @param message - The get file content message, should contain filePath and includeRelatedChunks flag
      * @param webview - The webview to send the file content response to
      */
     private async handleGetFileContent(message: any, webview: vscode.Webview): Promise<void> {
         const { filePath, includeRelatedChunks = false } = message;
-        
+
         // Validate required parameters
         if (!filePath) {
             await this.sendErrorResponse(webview, 'File path is required');
@@ -607,7 +613,7 @@ export class MessageRouter {
 
         // Retrieve file content from context service
         const result = await this.contextService.getFileContent(filePath, includeRelatedChunks);
-        
+
         // Send result back to webview
         await webview.postMessage({
             command: 'fileContentResponse',
@@ -615,20 +621,45 @@ export class MessageRouter {
             data: result
         });
     }
+    /**
+     * Opens a file in the editor at the specified location
+     * @param message - expects { filePath: string, lineNumber?: number, columnNumber?: number }
+     */
+    private async handleOpenFile(message: any, webview: vscode.Webview): Promise<void> {
+        const { filePath, lineNumber, columnNumber } = message;
+        try {
+            if (!filePath) {
+                await this.sendErrorResponse(webview, 'File path is required');
+                return;
+            }
+            const uri = vscode.Uri.file(filePath);
+            const options: vscode.TextDocumentShowOptions = {};
+            if (typeof lineNumber === 'number') {
+                const pos = new vscode.Position(Math.max(0, lineNumber - 1), Math.max(0, (columnNumber || 1) - 1));
+                const range = new vscode.Range(pos, pos);
+                options.selection = range;
+            }
+            await vscode.window.showTextDocument(uri, options);
+        } catch (err) {
+            console.error('MessageRouter: Failed to open file', err);
+            await this.sendErrorResponse(webview, err instanceof Error ? err.message : String(err));
+        }
+    }
+
 
     /**
      * Finds files related to a given query using semantic search
-     * 
+     *
      * This handler uses the context service to perform semantic search and find
      * files that are related to the provided query, with configurable similarity
      * thresholds and result limits.
-     * 
+     *
      * @param message - The find related files message, should contain query and optional parameters
      * @param webview - The webview to send the related files response to
      */
     private async handleFindRelatedFiles(message: any, webview: vscode.Webview): Promise<void> {
         const { query, currentFilePath, maxResults = 10, minSimilarity = 0.5 } = message;
-        
+
         // Validate required parameters
         if (!query) {
             await this.sendErrorResponse(webview, 'Query is required');
@@ -637,12 +668,12 @@ export class MessageRouter {
 
         // Perform semantic search for related files
         const result = await this.contextService.findRelatedFiles(
-            query, 
-            currentFilePath, 
-            maxResults, 
+            query,
+            currentFilePath,
+            maxResults,
             minSimilarity
         );
-        
+
         // Send results back to webview
         await webview.postMessage({
             command: 'relatedFilesResponse',
@@ -653,16 +684,16 @@ export class MessageRouter {
 
     /**
      * Performs advanced context queries with customizable parameters
-     * 
+     *
      * This handler allows for complex context queries with various filtering
      * and configuration options through the ContextQuery object.
-     * 
+     *
      * @param message - The query context message, should contain a ContextQuery object
      * @param webview - The webview to send the context query response to
      */
     private async handleQueryContext(message: any, webview: vscode.Webview): Promise<void> {
         const contextQuery: ContextQuery = message.contextQuery;
-        
+
         // Validate required parameters
         if (!contextQuery.query) {
             await this.sendErrorResponse(webview, 'Query is required');
@@ -671,7 +702,7 @@ export class MessageRouter {
 
         // Execute advanced context query
         const result = await this.contextService.queryContext(contextQuery);
-        
+
         // Send results back to webview
         await webview.postMessage({
             command: 'contextQueryResponse',
@@ -682,17 +713,17 @@ export class MessageRouter {
 
     /**
      * Performs basic search operations with default parameters
-     * 
+     *
      * This handler provides a simplified search interface that uses default
      * parameters for max results and similarity threshold. It internally
      * delegates to the context service's queryContext method.
-     * 
+     *
      * @param message - The search message, should contain the query string
      * @param webview - The webview to send the search response to
      */
     private async handleSearch(message: any, webview: vscode.Webview): Promise<void> {
         const { query } = message;
-        
+
         // Validate required parameters
         if (!query) {
             await this.sendErrorResponse(webview, 'Query is required');
@@ -705,7 +736,7 @@ export class MessageRouter {
             maxResults: 20,
             minSimilarity: 0.5
         });
-        
+
         // Send results back to webview
         await webview.postMessage({
             command: 'searchResponse',
@@ -716,17 +747,17 @@ export class MessageRouter {
 
     /**
      * Retrieves the current status of all core services
-     * 
+     *
      * This handler provides a comprehensive status overview of all services
      * managed by the context service, including database connections and
      * embedding provider status.
-     * 
+     *
      * @param webview - The webview to send the service status response to
      */
     private async handleGetServiceStatus(webview: vscode.Webview): Promise<void> {
         // Get current status from context service
         const status = await this.contextService.getStatus();
-        
+
         // Send status back to webview
         await webview.postMessage({
             command: 'serviceStatusResponse',
@@ -749,32 +780,43 @@ export class MessageRouter {
 
             // Check if indexing is already in progress
             if (this.stateManager.isIndexing()) {
-                const errorResponse = {
-                    command: 'startIndexing',
+                await webview.postMessage({
+                    command: 'indexingError',
                     error: 'Indexing is already in progress.'
-                };
-                webview.postMessage(errorResponse);
+                });
                 console.log('MessageRouter: Indexing already in progress, request rejected');
                 return;
             }
 
-            // Delegate to the existing VS Code command for indexing
-            await vscode.commands.executeCommand('code-context-engine.startIndexing');
+            // Start indexing with progress callback to stream updates to the webview
+            const indexingPromise = this.indexingService.startIndexing((progress) => {
+                const percent = progress.totalFiles > 0 ? Math.round((progress.processedFiles / progress.totalFiles) * 100) : 0;
+                webview.postMessage({
+                    command: 'indexingProgress',
+                    progress: percent,
+                    message: `Phase: ${progress.currentPhase} - ${progress.currentFile || ''}`,
+                    filesProcessed: progress.processedFiles,
+                    totalFiles: progress.totalFiles,
+                    currentFile: progress.currentFile,
+                });
+            });
 
-            const successResponse = {
-                command: 'startIndexing',
-                result: 'Indexing started successfully.'
-            };
-            webview.postMessage(successResponse);
-            console.log('MessageRouter: Indexing started successfully');
+            const result = await indexingPromise;
+
+            await webview.postMessage({
+                command: 'indexingComplete',
+                chunksCreated: result.chunks.length,
+                duration: result.duration,
+                errors: result.errors
+            });
+            console.log('MessageRouter: Indexing completed');
 
         } catch (error) {
-            console.error('MessageRouter: Error starting indexing:', error);
-            const errorResponse = {
-                command: 'startIndexing',
-                error: error instanceof Error ? error.message : 'An unknown error occurred while starting indexing.'
-            };
-            webview.postMessage(errorResponse);
+            console.error('MessageRouter: Error during indexing:', error);
+            await webview.postMessage({
+                command: 'indexingError',
+                error: error instanceof Error ? error.message : 'An unknown error occurred while indexing.'
+            });
         }
     }
 
@@ -942,11 +984,11 @@ export class MessageRouter {
 
     /**
      * Performs advanced search with customizable filters
-     * 
+     *
      * This handler provides enhanced search capabilities with filtering options
      * such as file types, date ranges, and other search criteria. It requires
      * the SearchManager to be available.
-     * 
+     *
      * @param message - The advanced search message, should contain query and optional filters
      * @param webview - The webview to send the advanced search response to
      */
@@ -958,7 +1000,7 @@ export class MessageRouter {
         }
 
         const { query, filters } = message;
-        
+
         // Validate required parameters
         if (!query) {
             await this.sendErrorResponse(webview, 'Query is required');
@@ -967,7 +1009,7 @@ export class MessageRouter {
 
         // Perform advanced search with filters
         const result = await this.searchManager.search(query, filters);
-        
+
         // Send results back to webview
         await webview.postMessage({
             command: 'advancedSearchResponse',
@@ -978,10 +1020,10 @@ export class MessageRouter {
 
     /**
      * Retrieves search suggestions based on partial query input
-     * 
+     *
      * This handler provides autocomplete suggestions as the user types
      * their search query. It requires the SearchManager to be available.
-     * 
+     *
      * @param message - The get search suggestions message, should contain partialQuery
      * @param webview - The webview to send the search suggestions response to
      */
@@ -995,7 +1037,7 @@ export class MessageRouter {
         const { partialQuery } = message;
         // Get suggestions based on partial query
         const suggestions = this.searchManager.getSuggestions(partialQuery);
-        
+
         // Send suggestions back to webview
         await webview.postMessage({
             command: 'searchSuggestionsResponse',
@@ -1006,11 +1048,11 @@ export class MessageRouter {
 
     /**
      * Retrieves the user's search history
-     * 
+     *
      * This handler returns a list of recent searches performed by the user,
      * enabling quick access to previous queries. It requires the SearchManager
      * to be available.
-     * 
+     *
      * @param webview - The webview to send the search history response to
      */
     private async handleGetSearchHistory(webview: vscode.Webview): Promise<void> {
@@ -1022,7 +1064,7 @@ export class MessageRouter {
 
         // Get search history from SearchManager
         const history = this.searchManager.getSearchHistory();
-        
+
         // Send history back to webview
         await webview.postMessage({
             command: 'searchHistoryResponse',
@@ -1032,16 +1074,16 @@ export class MessageRouter {
 
     /**
      * Retrieves available configuration presets
-     * 
+     *
      * This handler returns a list of predefined configuration presets that
      * users can apply to quickly configure the extension for different use cases.
-     * 
+     *
      * @param webview - The webview to send the configuration presets response to
      */
     private async handleGetConfigurationPresets(webview: vscode.Webview): Promise<void> {
         // Get configuration presets from legacy configuration manager
         const presets = this.legacyConfigurationManager?.getConfigurationPresets() || [];
-        
+
         // Send presets back to webview
         await webview.postMessage({
             command: 'configurationPresetsResponse',
@@ -1051,11 +1093,11 @@ export class MessageRouter {
 
     /**
      * Applies a configuration preset by name
-     * 
+     *
      * This handler applies a predefined configuration preset to quickly set up
      * the extension for a specific use case. It requires the legacy
      * ConfigurationManager to be available.
-     * 
+     *
      * @param message - The apply configuration preset message, should contain presetName
      * @param webview - The webview to send the application result to
      */
@@ -1067,11 +1109,11 @@ export class MessageRouter {
         }
 
         const { presetName } = message;
-        
+
         try {
             // Apply the specified preset
             await this.legacyConfigurationManager.applyPreset(presetName);
-            
+
             // Send success response
             await webview.postMessage({
                 command: 'configurationPresetAppliedResponse',
@@ -1086,11 +1128,11 @@ export class MessageRouter {
 
     /**
      * Retrieves current performance metrics
-     * 
+     *
      * This handler returns performance metrics collected by the PerformanceManager,
      * such as memory usage, response times, and other performance indicators.
      * It requires the PerformanceManager to be available.
-     * 
+     *
      * @param webview - The webview to send the performance metrics response to
      */
     private async handleGetPerformanceMetrics(webview: vscode.Webview): Promise<void> {
@@ -1102,7 +1144,7 @@ export class MessageRouter {
 
         // Get current metrics from PerformanceManager
         const metrics = this.performanceManager.getMetrics();
-        
+
         // Send metrics back to webview
         await webview.postMessage({
             command: 'performanceMetricsResponse',
@@ -1112,11 +1154,11 @@ export class MessageRouter {
 
     /**
      * Retrieves a preview of a file with surrounding context
-     * 
+     *
      * This handler provides a preview of a specific file at a given line number,
      * with optional surrounding context lines. It's useful for showing search results
      * or code references with context. It requires the SearchManager to be available.
-     * 
+     *
      * @param message - The get file preview message, should contain filePath, lineNumber, and optional contextLines
      * @param webview - The webview to send the file preview response to
      */
@@ -1128,7 +1170,7 @@ export class MessageRouter {
         }
 
         const { filePath, lineNumber, contextLines } = message;
-        
+
         // Validate required parameters
         if (!filePath || lineNumber === undefined) {
             await this.sendErrorResponse(webview, 'File path and line number are required');
@@ -1137,7 +1179,7 @@ export class MessageRouter {
 
         // Get file preview with context
         const preview = await this.searchManager.getFilePreview(filePath, lineNumber, contextLines);
-        
+
         // Send preview back to webview
         await webview.postMessage({
             command: 'filePreviewResponse',
@@ -1148,11 +1190,11 @@ export class MessageRouter {
 
     /**
      * Opens the VS Code settings UI filtered to this extension
-     * 
+     *
      * This handler opens the VS Code settings interface and filters it to show
      * only settings related to this extension, making it easy for users to
      * configure extension-specific options.
-     * 
+     *
      * @param webview - The webview (not used in this implementation but kept for consistency)
      */
     private async handleMapToSettings(webview: vscode.Webview): Promise<void> {
@@ -1162,16 +1204,16 @@ export class MessageRouter {
 
     /**
      * Retrieves a value from the extension's global state
-     * 
+     *
      * This handler fetches a value stored in the extension's global state
      * using the provided key. Global state persists across VS Code sessions.
-     * 
+     *
      * @param message - The get global state message, should contain the key to retrieve
      * @param webview - The webview to send the global state response to
      */
     private async handleGetGlobalState(message: any, webview: vscode.Webview): Promise<void> {
         const { key } = message;
-        
+
         // Validate required parameters
         if (!key) {
             await this.sendErrorResponse(webview, 'Key is required');
@@ -1180,7 +1222,7 @@ export class MessageRouter {
 
         // Get value from global state
         const value = this.context.globalState.get(key);
-        
+
         // Send value back to webview
         await webview.postMessage({
             command: 'globalStateResponse',
@@ -1191,16 +1233,16 @@ export class MessageRouter {
 
     /**
      * Sets a value in the extension's global state
-     * 
+     *
      * This handler stores a value in the extension's global state using the
      * provided key. Global state persists across VS Code sessions.
-     * 
+     *
      * @param message - The set global state message, should contain key and value
      * @param webview - The webview to send the update confirmation to
      */
     private async handleSetGlobalState(message: any, webview: vscode.Webview): Promise<void> {
         const { key, value } = message;
-        
+
         // Validate required parameters
         if (!key) {
             await this.sendErrorResponse(webview, 'Key is required');
@@ -1209,7 +1251,7 @@ export class MessageRouter {
 
         // Update global state with new value
         await this.context.globalState.update(key, value);
-        
+
         // Send confirmation back to webview
         await webview.postMessage({
             command: 'globalStateUpdatedResponse',
@@ -1220,24 +1262,24 @@ export class MessageRouter {
 
     /**
      * Checks if this is the first run of the extension and starts tour if needed
-     * 
+     *
      * This handler determines if the extension is being run for the first time
      * by checking a global state flag. If it's the first run, it sets the flag
      * and would typically trigger an onboarding tour or setup wizard.
-     * 
+     *
      * @param webview - The webview to send the first run check response to
      */
     private async handleCheckFirstRunAndStartTour(webview: vscode.Webview): Promise<void> {
         // Check if this is the first run by looking for the 'hasRunBefore' flag
         const isFirstRun = !this.context.globalState.get('hasRunBefore');
-        
+
         if (isFirstRun) {
             // Mark that the extension has been run before
             await this.context.globalState.update('hasRunBefore', true);
             // TODO: Implement tour start logic here
             // This would typically trigger an onboarding experience or guided tour
         }
-        
+
         // Send first run status back to webview
         await webview.postMessage({
             command: 'firstRunCheckResponse',
@@ -1247,10 +1289,10 @@ export class MessageRouter {
 
     /**
      * Sends a standardized error response to the webview
-     * 
+     *
      * This utility method provides a consistent way to send error messages
      * back to the webview, ensuring proper error handling and user feedback.
-     * 
+     *
      * @param webview - The webview to send the error response to
      * @param errorMessage - The error message to send
      */
@@ -1268,10 +1310,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for saving secret values
-     * 
+     *
      * This method is not yet implemented. When completed, it should use
      * VS Code's secret storage API to securely store sensitive information.
-     * 
+     *
      * @param message - The save secret value message
      * @param webview - The webview to send the response to
      */
@@ -1282,10 +1324,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for retrieving secret values
-     * 
+     *
      * This method is not yet implemented. When completed, it should use
      * VS Code's secret storage API to securely retrieve sensitive information.
-     * 
+     *
      * @param message - The get secret value message
      * @param webview - The webview to send the response to
      */
@@ -1296,11 +1338,11 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for running system validation
-     * 
+     *
      * This method is not yet implemented. When completed, it should run
      * comprehensive system validation checks to ensure all dependencies
      * and requirements are met.
-     * 
+     *
      * @param message - The run system validation message
      * @param webview - The webview to send the response to
      */
@@ -1311,10 +1353,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for retrieving troubleshooting guides
-     * 
+     *
      * This method is not yet implemented. When completed, it should return
      * available troubleshooting guides to help users resolve common issues.
-     * 
+     *
      * @param message - The get troubleshooting guides message
      * @param webview - The webview to send the response to
      */
@@ -1325,10 +1367,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for running automatic fixes
-     * 
+     *
      * This method is not yet implemented. When completed, it should automatically
      * detect and fix common configuration or setup issues.
-     * 
+     *
      * @param message - The run auto fix message
      * @param webview - The webview to send the response to
      */
@@ -1383,10 +1425,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for exporting configuration
-     * 
+     *
      * This method is not yet implemented. When completed, it should export
      * the current configuration to a file for backup or sharing purposes.
-     * 
+     *
      * @param message - The export configuration message
      * @param webview - The webview to send the response to
      */
@@ -1397,10 +1439,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for importing configuration
-     * 
+     *
      * This method is not yet implemented. When completed, it should import
      * configuration from a file, allowing users to restore or share settings.
-     * 
+     *
      * @param message - The import configuration message
      * @param webview - The webview to send the response to
      */
@@ -1411,10 +1453,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for retrieving configuration templates
-     * 
+     *
      * This method is not yet implemented. When completed, it should return
      * available configuration templates that users can use as starting points.
-     * 
+     *
      * @param message - The get configuration templates message
      * @param webview - The webview to send the response to
      */
@@ -1425,10 +1467,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for retrieving configuration backups
-     * 
+     *
      * This method is not yet implemented. When completed, it should return
      * a list of available configuration backups that users can restore from.
-     * 
+     *
      * @param message - The get configuration backups message
      * @param webview - The webview to send the response to
      */
@@ -1439,10 +1481,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for validating configuration
-     * 
+     *
      * This method is not yet implemented. When completed, it should validate
      * the current configuration to ensure all settings are correct and compatible.
-     * 
+     *
      * @param message - The validate configuration message
      * @param webview - The webview to send the response to
      */
@@ -1453,10 +1495,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for applying configuration templates
-     * 
+     *
      * This method is not yet implemented. When completed, it should apply
      * a selected configuration template to set up the extension for a specific use case.
-     * 
+     *
      * @param message - The apply configuration template message
      * @param webview - The webview to send the response to
      */
@@ -1467,10 +1509,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for creating configuration backups
-     * 
+     *
      * This method is not yet implemented. When completed, it should create
      * a backup of the current configuration that can be restored later.
-     * 
+     *
      * @param message - The create configuration backup message
      * @param webview - The webview to send the response to
      */
@@ -1481,10 +1523,10 @@ export class MessageRouter {
 
     /**
      * Placeholder handler for restoring configuration backups
-     * 
+     *
      * This method is not yet implemented. When completed, it should restore
      * the extension configuration from a previously created backup.
-     * 
+     *
      * @param message - The restore configuration backup message
      * @param webview - The webview to send the response to
      */
