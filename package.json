@@ -361,11 +361,7 @@
             "Show all messages including debug information"
           ]
         },
-        "code-context-engine.webview.basicTestMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Serve a minimal test HTML for the webview to verify VS Code API initialization and messaging. Enable for troubleshooting Remote SSH issues."
-        },
+
         "code-context-engine.webview.healthMonitoring.enabled": {
           "type": "boolean",
           "default": true,
@@ -385,11 +381,6 @@
           "type": "number",
           "default": 3,
           "description": "Reconnection attempts threshold. Alerts will be triggered when reconnection attempts exceed this value."
-        },
-        "code-context-engine.webview.routeOverride": {
-          "type": "string",
-          "default": "",
-          "description": "If set (e.g. '/test-basic'), the webview will client-navigate to this SvelteKit route on load to aid debugging."
         }
       }
     },
