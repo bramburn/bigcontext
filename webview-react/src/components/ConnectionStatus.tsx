@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Caption1, MessageBar, MessageBarBody, MessageBarTitle } from '@fluentui/react-components';
 import { connectionMonitor } from '../utils/connectionMonitor';
-import type { ConnectionStatus as ConnStatus } from '../utils/connectionMonitor';
+import type { ConnectionStatus as ConnectionStatusType } from '../utils/connectionMonitor';
 
-const statusText: Record<ConnStatus, string> = {
+const statusText: Record<ConnStatusType, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting to extension...',
   disconnected: 'Disconnected from extension. Trying to reconnect...'
 };
 
-export const ConnectionIndicator: React.FC = () => {
-  const [status, setStatus] = useState<ConnStatus>(connectionMonitor.getStatus());
+export const ConnectionStatus: React.FC = () => {
+  const [status, setStatus] = useState<ConnectionStatusType>(connectionMonitor.getStatus());
   const [latency, setLatency] = useState<number>(0);
   const [networkQuality, setNetworkQuality] = useState<'good' | 'poor'>('good');
 
   useEffect(() => {
-    const offStatus = connectionMonitor.on('statusChange', (next: ConnStatus) => setStatus(next));
+    const offStatus = connectionMonitor.on('statusChange', (next: ConnStatusType) => setStatus(next));
     const offHeartbeat = connectionMonitor.on('heartbeat', (e: any) => setLatency(e?.latency ?? 0));
     const offQuality = connectionMonitor.on('qualityChange', (e: any) => setNetworkQuality(e?.quality ?? 'good'));
     return () => { offStatus(); offHeartbeat(); offQuality(); };
@@ -55,5 +55,5 @@ export const ConnectionIndicator: React.FC = () => {
   );
 };
 
-export default ConnectionIndicator;
+export default ConnectionStatus;
 
