@@ -67,14 +67,46 @@ export class AstParser {
    */
   public parse(language: SupportedLanguage, code: string): Parser.Tree | null {
     try {
+      // Validate input parameters
+      if (!language) {
+        throw new Error('Language parameter is required');
+      }
+
+      if (code === null || code === undefined) {
+        throw new Error('Code parameter cannot be null or undefined');
+      }
+
+      if (typeof code !== 'string') {
+        throw new Error(`Code parameter must be a string, got ${typeof code}`);
+      }
+
+      // Check for binary data or invalid characters that might cause parsing issues
+      if (code.includes('\0')) {
+        throw new Error('Code contains null bytes - likely binary data');
+      }
+
       // Get the language grammar for the specified language
       const languageGrammar = this.languages.get(language);
       if (!languageGrammar) {
         throw new Error(`Unsupported language: ${language}`);
       }
 
+      // Validate the grammar object
+      if (typeof languageGrammar !== 'object' || languageGrammar === null) {
+        throw new Error(`Invalid language grammar for ${language}: ${typeof languageGrammar}`);
+      }
+
       // Configure the parser with the appropriate language grammar
-      this.parser.setLanguage(languageGrammar);
+      try {
+        this.parser.setLanguage(languageGrammar);
+        console.log(`AstParser: Language ${language} set successfully`);
+      } catch (setLanguageError) {
+        throw new Error(`Failed to set language ${language}: ${setLanguageError instanceof Error ? setLanguageError.message : String(setLanguageError)}`);
+      }
+
+      // Additional validation before parsing
+      console.log(`AstParser: Parsing ${language} code (${code.length} characters)`);
+
       const tree = this.parser.parse(code);
 
       if (!tree) {
@@ -84,6 +116,8 @@ export class AstParser {
       return tree;
     } catch (error) {
       console.error(`Error parsing code for language ${language}:`, error);
+      console.error(`Code sample (first 100 chars): "${code?.substring(0, 100)}..."`);
+      console.error(`Code type: ${typeof code}, length: ${code?.length}`);
       return null;
     }
   }
