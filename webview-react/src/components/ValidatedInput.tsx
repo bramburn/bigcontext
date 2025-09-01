@@ -60,7 +60,7 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
   const styles = useStyles();
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [hasBlurred, setHasBlurred] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [debounceTimer, setDebounceTimer] = useState<number | null>(null);
 
   // Validation function
   const validateValue = useCallback((val: string) => {

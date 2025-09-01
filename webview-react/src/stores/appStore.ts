@@ -13,7 +13,11 @@ import {
   ViewType,
   SearchResult,
   IndexingStats,
-  SearchStats
+  SearchStats,
+  DatabaseConfig,
+  ProviderConfig,
+  QdrantConfig,
+  OllamaConfig
 } from '../types';
 
 interface AppStore extends AppState, SetupState {
@@ -42,15 +46,17 @@ interface AppStore extends AppState, SetupState {
   setFirstRunComplete: (completed: boolean) => void;
 
   // Setup actions
-  setSelectedDatabase: (database: string) => void;
-  setSelectedProvider: (provider: string) => void;
+  setSelectedDatabase: (database: 'qdrant' | 'pinecone' | 'chroma') => void;
+  setSelectedProvider: (provider: 'ollama' | 'openai' | 'anthropic') => void;
   setDatabaseStatus: (status: SetupState['databaseStatus']) => void;
   setProviderStatus: (status: SetupState['providerStatus']) => void;
-  updateDatabaseConfig: (config: Partial<SetupState['databaseConfig']>) => void;
-  updateProviderConfig: (config: Partial<SetupState['providerConfig']>) => void;
+  updateDatabaseConfig: (config: Partial<DatabaseConfig>) => void;
+  updateProviderConfig: (config: Partial<ProviderConfig>) => void;
   setValidationError: (field: string, error: string) => void;
   clearValidationError: (field: string) => void;
   setSetupComplete: (complete: boolean) => void;
+  setAvailableModels: (models: string[]) => void;
+  setLoadingModels: (loading: boolean) => void;
 
   // Indexing actions
   setIndexing: (isIndexing: boolean) => void;
@@ -87,14 +93,17 @@ export const useAppStore = create<AppStore>()(
     databaseStatus: 'unknown',
     providerStatus: 'unknown',
     databaseConfig: {
-      connectionString: 'http://localhost:6333'
-    },
+      url: 'http://localhost:6333'
+    } as QdrantConfig,
     providerConfig: {
       model: 'nomic-embed-text',
       baseUrl: 'http://localhost:11434'
-    },
+    } as OllamaConfig,
     validationErrors: {},
     isSetupComplete: false,
+    availableModels: [],
+    isLoadingModels: false,
+    modelSuggestions: [],
 
     // Initial indexing state
     isIndexing: false,
@@ -132,8 +141,60 @@ export const useAppStore = create<AppStore>()(
     setFirstRunComplete: (completed) => set({ hasCompletedFirstRun: completed }),
 
     // Setup actions
-    setSelectedDatabase: (database) => set({ selectedDatabase: database }),
-    setSelectedProvider: (provider) => set({ selectedProvider: provider }),
+    setSelectedDatabase: (database) => set((state) => {
+      // Reset database config when switching providers
+      let newDatabaseConfig: DatabaseConfig;
+      switch (database) {
+        case 'qdrant':
+          newDatabaseConfig = { url: 'http://localhost:6333' } as QdrantConfig;
+          break;
+        case 'pinecone':
+          newDatabaseConfig = { apiKey: '', environment: '', indexName: '' } as any;
+          break;
+        case 'chroma':
+          newDatabaseConfig = { host: 'localhost' } as any;
+          break;
+        default:
+          newDatabaseConfig = state.databaseConfig;
+      }
+      return {
+        selectedDatabase: database,
+        databaseConfig: newDatabaseConfig,
+        databaseStatus: 'unknown'
+      };
+    }),
+    setSelectedProvider: (provider) => set((state) => {
+      // Reset provider config when switching providers
+      let newProviderConfig: ProviderConfig;
+      switch (provider) {
+        case 'ollama':
+          newProviderConfig = {
+            model: 'nomic-embed-text',
+            baseUrl: 'http://localhost:11434'
+          } as OllamaConfig;
+          break;
+        case 'openai':
+          newProviderConfig = {
+            apiKey: '',
+            model: 'text-embedding-3-small'
+          } as any;
+          break;
+        case 'anthropic':
+          newProviderConfig = {
+            apiKey: '',
+            model: 'claude-3-haiku-20240307'
+          } as any;
+          break;
+        default:
+          newProviderConfig = state.providerConfig;
+      }
+      return {
+        selectedProvider: provider,
+        providerConfig: newProviderConfig,
+        providerStatus: 'unknown',
+        availableModels: []
+      };
+    }),
     setDatabaseStatus: (status) => set({ databaseStatus: status }),
     setProviderStatus: (status) => set({ providerStatus: status }),
     updateDatabaseConfig: (config) => set((state) => ({
@@ -150,6 +211,8 @@ export const useAppStore = create<AppStore>()(
       return { validationErrors: rest };
     }),
     setSetupComplete: (complete) => set({ isSetupComplete: complete }),
+    setAvailableModels: (models) => set({ availableModels: models }),
+    setLoadingModels: (loading) => set({ isLoadingModels: loading }),
 
     // Indexing actions
     setIndexing: (isIndexing) => set({ isIndexing }),
@@ -210,7 +273,10 @@ export const useSetupState = () => useAppStore((state) => ({
   databaseConfig: state.databaseConfig,
   providerConfig: state.providerConfig,
   validationErrors: state.validationErrors,
-  isSetupComplete: state.isSetupComplete
+  isSetupComplete: state.isSetupComplete,
+  availableModels: state.availableModels,
+  isLoadingModels: state.isLoadingModels,
+  modelSuggestions: state.modelSuggestions
 }));
 export const useIndexingState = () => useAppStore((state) => ({
   isIndexing: state.isIndexing,

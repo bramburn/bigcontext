@@ -14,23 +14,69 @@ export interface AppState {
   hasCompletedFirstRun: boolean;
 }
 
+// Database configuration types
+export interface QdrantConfig {
+  url: string;
+  apiKey?: string;
+  collection?: string;
+  timeout?: number;
+}
+
+export interface PineconeConfig {
+  apiKey: string;
+  environment: string;
+  indexName: string;
+  namespace?: string;
+  timeout?: number;
+}
+
+export interface ChromaConfig {
+  host: string;
+  port?: number;
+  ssl?: boolean;
+  apiKey?: string;
+  timeout?: number;
+}
+
+export type DatabaseConfig = QdrantConfig | PineconeConfig | ChromaConfig;
+
+// AI Provider configuration types
+export interface OllamaConfig {
+  baseUrl: string;
+  model: string;
+  timeout?: number;
+  availableModels?: string[];
+}
+
+export interface OpenAIConfig {
+  apiKey: string;
+  model: string;
+  organization?: string;
+  timeout?: number;
+}
+
+export interface AnthropicConfig {
+  apiKey: string;
+  model: string;
+  timeout?: number;
+}
+
+export type ProviderConfig = OllamaConfig | OpenAIConfig | AnthropicConfig;
+
 // Setup state types
 export interface SetupState {
-  selectedDatabase: string;
-  selectedProvider: string;
+  selectedDatabase: 'qdrant' | 'pinecone' | 'chroma';
+  selectedProvider: 'ollama' | 'openai' | 'anthropic';
   databaseStatus: 'unknown' | 'connected' | 'error' | 'testing';
   providerStatus: 'unknown' | 'connected' | 'error' | 'testing';
-  databaseConfig: {
-    connectionString: string;
-    apiKey?: string;
-  };
-  providerConfig: {
-    model: string;
-    apiKey?: string;
-    baseUrl?: string;
-  };
+  databaseConfig: DatabaseConfig;
+  providerConfig: ProviderConfig;
   validationErrors: Record<string, string>;
   isSetupComplete: boolean;
+  // New fields for enhanced UX
+  availableModels: string[];
+  isLoadingModels: boolean;
+  modelSuggestions: string[];
 }
 
 // Indexing state types
