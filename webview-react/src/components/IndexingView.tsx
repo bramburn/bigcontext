@@ -1,6 +1,6 @@
 /**
  * IndexingView Component
- * 
+ *
  * Displays indexing progress with real-time updates.
  * Shows progress bar, current file being processed, and statistics.
  */
@@ -14,14 +14,20 @@ import {
   Caption1,
   ProgressBar,
   Spinner,
+  Badge,
+  Divider,
   makeStyles,
-  tokens
+  tokens,
+  mergeClasses
 } from '@fluentui/react-components';
 import {
   DocumentSearch24Regular,
   Stop24Regular,
   CheckmarkCircle24Regular,
-  ErrorCircle24Regular
+  ErrorCircle24Regular,
+  DocumentBulletList24Regular,
+  Clock24Regular,
+  Warning24Regular
 } from '@fluentui/react-icons';
 import { useAppStore, useIndexingState } from '../stores/appStore';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
@@ -29,82 +35,173 @@ import { postMessage, onMessageCommand } from '../utils/vscodeApi';
 const useStyles = makeStyles({
   container: {
     padding: tokens.spacingVerticalXL,
-    maxWidth: '800px',
-    margin: '0 auto'
+    maxWidth: '900px',
+    margin: '0 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalL
   },
   header: {
-    marginBottom: tokens.spacingVerticalXL,
-    textAlign: 'center'
+    textAlign: 'center',
+    padding: tokens.spacingVerticalL
+  },
+  headerIcon: {
+    fontSize: '32px',
+    marginBottom: tokens.spacingVerticalS,
+    color: tokens.colorBrandForeground1
   },
   title: {
-    marginBottom: tokens.spacingVerticalS
+    marginBottom: tokens.spacingVerticalS,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: tokens.spacingHorizontalS
   },
   description: {
-    color: tokens.colorNeutralForeground2
+    color: tokens.colorNeutralForeground2,
+    maxWidth: '600px',
+    margin: '0 auto'
   },
-  card: {
-    padding: tokens.spacingVerticalL,
-    marginBottom: tokens.spacingVerticalL
+  mainCard: {
+    padding: tokens.spacingVerticalXL
   },
   progressSection: {
-    marginBottom: tokens.spacingVerticalL
+    marginBottom: tokens.spacingVerticalXL
   },
   progressHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: tokens.spacingVerticalS
-  },
-  progressBar: {
     marginBottom: tokens.spacingVerticalM
   },
-  currentFile: {
+  progressBadge: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  progressBar: {
+    marginBottom: tokens.spacingVerticalM,
+    height: '8px'
+  },
+  statusMessage: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
-    marginBottom: tokens.spacingVerticalM,
-    padding: tokens.spacingVerticalS,
+    color: tokens.colorNeutralForeground2
+  },
+  currentFileSection: {
+    padding: tokens.spacingVerticalM,
     backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusSmall
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    marginBottom: tokens.spacingVerticalL
+  },
+  currentFileHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    marginBottom: tokens.spacingVerticalS
   },
   fileName: {
     fontFamily: tokens.fontFamilyMonospace,
     fontSize: tokens.fontSizeBase200,
-    wordBreak: 'break-all'
+    wordBreak: 'break-all',
+    backgroundColor: tokens.colorNeutralBackground1,
+    padding: tokens.spacingVerticalXS,
+    borderRadius: tokens.borderRadiusSmall,
+    border: `1px solid ${tokens.colorNeutralStroke2}`
   },
-  stats: {
+  statsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-    gap: tokens.spacingHorizontalM,
-    marginBottom: tokens.spacingVerticalL
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: tokens.spacingHorizontalL,
+    marginBottom: tokens.spacingVerticalXL
   },
-  statItem: {
+  statCard: {
+    padding: tokens.spacingVerticalL,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
     textAlign: 'center',
-    padding: tokens.spacingVerticalM,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusSmall
+    transition: 'all 0.2s ease-in-out',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+      transform: 'translateY(-2px)',
+      boxShadow: tokens.shadow8
+    }
+  },
+  statIcon: {
+    fontSize: '20px',
+    marginBottom: tokens.spacingVerticalS,
+    color: tokens.colorBrandForeground1
   },
   statValue: {
     fontSize: tokens.fontSizeBase600,
     fontWeight: tokens.fontWeightSemibold,
-    marginBottom: tokens.spacingVerticalXS
+    marginBottom: tokens.spacingVerticalXS,
+    color: tokens.colorNeutralForeground1
   },
   statLabel: {
     color: tokens.colorNeutralForeground2,
     fontSize: tokens.fontSizeBase200
   },
+  completionSection: {
+    textAlign: 'center',
+    padding: tokens.spacingVerticalL,
+    marginBottom: tokens.spacingVerticalL
+  },
+  completionIcon: {
+    fontSize: '48px',
+    marginBottom: tokens.spacingVerticalM
+  },
+  successIcon: {
+    color: tokens.colorPaletteGreenForeground1
+  },
+  errorIcon: {
+    color: tokens.colorPaletteRedForeground1
+  },
+  warningIcon: {
+    color: tokens.colorPaletteYellowForeground1
+  },
+  completionMessage: {
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  errorDetails: {
+    marginTop: tokens.spacingVerticalL,
+    padding: tokens.spacingVerticalL,
+    backgroundColor: tokens.colorPaletteRedBackground1,
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorPaletteRedBorder1}`
+  },
+  errorHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    marginBottom: tokens.spacingVerticalM,
+    color: tokens.colorPaletteRedForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  errorList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS
+  },
+  errorItem: {
+    padding: tokens.spacingVerticalS,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusSmall,
+    color: tokens.colorPaletteRedForeground1,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200
+  },
   actions: {
     display: 'flex',
     justifyContent: 'center',
-    gap: tokens.spacingHorizontalM
+    gap: tokens.spacingHorizontalL,
+    paddingTop: tokens.spacingVerticalL
   },
-  completedIcon: {
-    color: tokens.colorPaletteGreenForeground1,
-    fontSize: '24px'
-  },
-  errorIcon: {
-    color: tokens.colorPaletteRedForeground1,
-    fontSize: '24px'
+  divider: {
+    margin: `${tokens.spacingVerticalL} 0`
   }
 });
 
@@ -179,59 +276,75 @@ export const IndexingView: React.FC = () => {
 
   return (
     <div className={styles.container}>
+      {/* Header Section */}
       <div className={styles.header}>
+        <div className={styles.headerIcon}>
+          <DocumentSearch24Regular />
+        </div>
         <Text size={800} weight="bold" className={styles.title}>
-          <DocumentSearch24Regular style={{ marginRight: tokens.spacingHorizontalS }} />
           {isCompleted ? 'Indexing Complete' : 'Indexing Workspace'}
         </Text>
         <Body1 className={styles.description}>
-          {isCompleted 
+          {isCompleted
             ? 'Your workspace has been successfully indexed and is ready for intelligent search.'
             : 'Processing your workspace files to create a searchable index...'
           }
         </Body1>
       </div>
 
-      <Card className={styles.card}>
+      {/* Main Content Card */}
+      <Card className={styles.mainCard}>
         {/* Progress Section */}
         <div className={styles.progressSection}>
           <div className={styles.progressHeader}>
             <Text size={500} weight="semibold">
-              Progress
+              Indexing Progress
             </Text>
-            <Text size={400}>
+            <Badge
+              appearance="filled"
+              color={isCompleted ? 'success' : 'brand'}
+              className={styles.progressBadge}
+            >
               {Math.round(indexingState.progress)}%
-            </Text>
+            </Badge>
           </div>
-          
-          <ProgressBar 
+
+          <ProgressBar
             value={indexingState.progress / 100}
             className={styles.progressBar}
+            color={isCompleted ? 'success' : 'brand'}
           />
 
           {indexingState.message && (
-            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-              {indexingState.message}
-            </Caption1>
+            <div className={styles.statusMessage}>
+              <Clock24Regular />
+              <Caption1>{indexingState.message}</Caption1>
+            </div>
           )}
         </div>
 
-        {/* Current File */}
+        {/* Current File Processing */}
         {indexingState.isIndexing && indexingState.currentFile && (
-          <div className={styles.currentFile}>
-            <Spinner size="small" />
-            <div>
-              <Caption1>Processing:</Caption1>
+          <>
+            <div className={styles.currentFileSection}>
+              <div className={styles.currentFileHeader}>
+                <Spinner size="small" />
+                <Text size={400} weight="semibold">Currently Processing</Text>
+              </div>
               <div className={styles.fileName}>
                 {indexingState.currentFile}
               </div>
             </div>
-          </div>
+            <Divider className={styles.divider} />
+          </>
         )}
 
-        {/* Statistics */}
-        <div className={styles.stats}>
-          <div className={styles.statItem}>
+        {/* Statistics Grid */}
+        <div className={styles.statsGrid}>
+          <div className={styles.statCard}>
+            <div className={styles.statIcon}>
+              <DocumentBulletList24Regular />
+            </div>
             <div className={styles.statValue}>
               {indexingState.filesProcessed}
             </div>
@@ -239,8 +352,11 @@ export const IndexingView: React.FC = () => {
               Files Processed
             </div>
           </div>
-          
-          <div className={styles.statItem}>
+
+          <div className={styles.statCard}>
+            <div className={styles.statIcon}>
+              <DocumentSearch24Regular />
+            </div>
             <div className={styles.statValue}>
               {indexingState.totalFiles}
             </div>
@@ -248,8 +364,11 @@ export const IndexingView: React.FC = () => {
               Total Files
             </div>
           </div>
-          
-          <div className={styles.statItem}>
+
+          <div className={styles.statCard}>
+            <div className={styles.statIcon}>
+              <DocumentBulletList24Regular />
+            </div>
             <div className={styles.statValue}>
               {indexingState.stats.chunksCreated}
             </div>
@@ -257,9 +376,12 @@ export const IndexingView: React.FC = () => {
               Chunks Created
             </div>
           </div>
-          
+
           {indexingState.stats.duration > 0 && (
-            <div className={styles.statItem}>
+            <div className={styles.statCard}>
+              <div className={styles.statIcon}>
+                <Clock24Regular />
+              </div>
               <div className={styles.statValue}>
                 {formatDuration(indexingState.stats.duration)}
               </div>
@@ -272,61 +394,67 @@ export const IndexingView: React.FC = () => {
 
         {/* Completion Status */}
         {isCompleted && (
-          <div style={{ textAlign: 'center', marginBottom: tokens.spacingVerticalL }}>
-            {hasErrors ? (
-              <div>
-                <ErrorCircle24Regular className={styles.errorIcon} />
-                <Text size={500} style={{ marginLeft: tokens.spacingHorizontalS }}>
-                  Completed with {indexingState.stats.errors.length} error(s)
-                </Text>
-              </div>
-            ) : (
-              <div>
-                <CheckmarkCircle24Regular className={styles.completedIcon} />
-                <Text size={500} style={{ marginLeft: tokens.spacingHorizontalS }}>
-                  Successfully completed!
-                </Text>
-              </div>
-            )}
-          </div>
+          <>
+            <Divider className={styles.divider} />
+            <div className={styles.completionSection}>
+              {hasErrors ? (
+                <>
+                  <div className={mergeClasses(styles.completionIcon, styles.warningIcon)}>
+                    <Warning24Regular />
+                  </div>
+                  <Text className={styles.completionMessage}>
+                    Completed with {indexingState.stats.errors.length} warning(s)
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <div className={mergeClasses(styles.completionIcon, styles.successIcon)}>
+                    <CheckmarkCircle24Regular />
+                  </div>
+                  <Text className={styles.completionMessage}>
+                    Successfully completed!
+                  </Text>
+                </>
+              )}
+            </div>
+          </>
         )}
 
         {/* Error Details */}
         {hasErrors && (
-          <div style={{ 
-            marginTop: tokens.spacingVerticalM,
-            padding: tokens.spacingVerticalM,
-            backgroundColor: tokens.colorPaletteRedBackground1,
-            borderRadius: tokens.borderRadiusSmall
-          }}>
-            <Text size={400} weight="semibold" style={{ color: tokens.colorPaletteRedForeground1 }}>
-              Errors encountered:
-            </Text>
-            {indexingState.stats.errors.map((error, index) => (
-              <div key={index} style={{ marginTop: tokens.spacingVerticalXS }}>
-                <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
+          <div className={styles.errorDetails}>
+            <div className={styles.errorHeader}>
+              <ErrorCircle24Regular />
+              <Text>Issues encountered during indexing:</Text>
+            </div>
+            <div className={styles.errorList}>
+              {indexingState.stats.errors.map((error, index) => (
+                <div key={index} className={styles.errorItem}>
                   {error}
-                </Caption1>
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Card>
 
-      {/* Actions */}
+      {/* Action Buttons */}
       <div className={styles.actions}>
         {indexingState.isIndexing ? (
           <Button
             appearance="secondary"
+            size="large"
             icon={<Stop24Regular />}
             onClick={handleStopIndexing}
           >
-            Stop Indexing
+            Pause Indexing
           </Button>
         ) : isCompleted ? (
           <>
             <Button
               appearance="primary"
+              size="large"
+              icon={<DocumentSearch24Regular />}
               onClick={handleGoToQuery}
             >
               Start Searching
@@ -334,6 +462,7 @@ export const IndexingView: React.FC = () => {
             {hasErrors && (
               <Button
                 appearance="secondary"
+                size="large"
                 onClick={handleRetryIndexing}
               >
                 Retry Indexing
@@ -343,6 +472,7 @@ export const IndexingView: React.FC = () => {
         ) : (
           <Button
             appearance="primary"
+            size="large"
             onClick={handleRetryIndexing}
           >
             Retry Indexing
