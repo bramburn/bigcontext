@@ -221,15 +221,27 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             // For all other messages, delegate to the MessageRouter to ensure consistency
             if (webview && message.command) {
                 console.log('WebviewManager: Delegating sidebar message to MessageRouter:', message.command);
+
+                // Create MessageRouter with the same pattern as other webviews
                 const messageRouter = new MessageRouter(
-                    this.contextService,
-                    this.indexingService,
-                    this.searchManager,
-                    this.legacyConfigurationManager,
-                    this.performanceManager,
+                    this.extensionManager.getContextService(),
+                    this.extensionManager.getIndexingService(),
                     this.context,
-                    this.loggingService
+                    this.extensionManager.getStateManager()
                 );
+
+                // Set up advanced managers if available
+                try {
+                    messageRouter.setAdvancedManagers(
+                        this.extensionManager.getSearchManager(),
+                        this.extensionManager.getConfigurationManager(),
+                        this.extensionManager.getPerformanceManager(),
+                        this.extensionManager.getXmlFormatterService()
+                    );
+                } catch (error) {
+                    console.warn('WebviewManager: Some advanced managers not available for sidebar:', error);
+                }
+
                 messageRouter.handleMessage(message, webview);
             } else {
                 this.loggingService.debug('Unhandled sidebar message', { type: message.type, command: message.command }, 'WebviewManager');
