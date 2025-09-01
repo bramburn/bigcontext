@@ -50,6 +50,8 @@ interface PendingRequest {
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
   timestamp: number;
+  retryCount: number;
+  originalMessage: RequestMessage;
 }
 
 /**
@@ -64,6 +66,34 @@ export interface CommunicationConfig {
   enableValidation: boolean;
   /** Whether to log all messages */
   enableMessageLogging: boolean;
+  /** Maximum number of retry attempts */
+  maxRetries: number;
+  /** Delay between retry attempts (in milliseconds) */
+  retryDelay: number;
+  /** Whether to enable communication metrics */
+  enableMetrics: boolean;
+}
+
+/**
+ * Event subscription information
+ */
+interface EventSubscription {
+  event: string;
+  handler: (payload: any) => void;
+  once: boolean;
+}
+
+/**
+ * Communication metrics
+ */
+interface CommunicationMetrics {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  averageResponseTime: number;
+  totalEvents: number;
+  retryCount: number;
+  lastResetTime: number;
 }
 
 /**
@@ -74,9 +104,11 @@ export class TypeSafeCommunicationService {
   private messageHandlers: Map<string, MessageHandler> = new Map();
   private eventHandlers: Map<string, Set<EventHandler>> = new Map();
   private pendingRequests: Map<string, PendingRequest> = new Map();
+  private eventSubscriptions: Map<string, Set<EventSubscription>> = new Map();
   private config: CommunicationConfig;
   private loggingService?: CentralizedLoggingService;
   private isDisposed: boolean = false;
+  private metrics: CommunicationMetrics;
 
   constructor(
     config?: Partial<CommunicationConfig>,
@@ -87,9 +119,28 @@ export class TypeSafeCommunicationService {
       maxPendingRequests: 100,
       enableValidation: true,
       enableMessageLogging: false,
+      maxRetries: 3,
+      retryDelay: 1000,
+      enableMetrics: true,
       ...config,
     };
     this.loggingService = loggingService;
+    this.metrics = this.initializeMetrics();
+  }
+
+  /**
+   * Initialize metrics
+   */
+  private initializeMetrics(): CommunicationMetrics {
+    return {
+      totalRequests: 0,
+      successfulRequests: 0,
+      failedRequests: 0,
+      averageResponseTime: 0,
+      totalEvents: 0,
+      retryCount: 0,
+      lastResetTime: Date.now(),
+    };
   }
 
   /**
