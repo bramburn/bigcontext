@@ -18,9 +18,9 @@ import {
 } from '@fluentui/react-components';
 import { Settings24Regular, Play24Regular } from '@fluentui/react-icons';
 import { useAppStore, useSetupState } from '../stores/appStore';
-import { ValidatedInput } from './ValidatedInput';
-import { ConnectionTester } from './ConnectionTester';
-import { ValidationResult, ConnectionTestResult } from '../types';
+import { DatabaseConfigForm } from './database/DatabaseConfigForm';
+import { ProviderConfigForm } from './provider/ProviderConfigForm';
+import { ConnectionTestResult } from '../types';
 import { postMessage } from '../utils/vscodeApi';
 
 const useStyles = makeStyles({
@@ -87,109 +87,165 @@ export const SetupView: React.FC = () => {
     setSelectedProvider,
     updateDatabaseConfig,
     updateProviderConfig,
-    setCurrentView
+    setCurrentView,
+    setAvailableModels,
+    setLoadingModels
   } = useAppStore();
 
-  // Validation functions
-  const validateConnectionString = useCallback((value: string): ValidationResult => {
-    if (!value.trim()) {
-      return { isValid: false, message: 'Connection string is required' };
-    }
-    
-    try {
-      new URL(value);
-      return { isValid: true, message: 'Valid URL format' };
-    } catch {
-      return { 
-        isValid: false, 
-        message: 'Invalid URL format',
-        suggestions: ['Use format: http://localhost:6333', 'Include protocol (http:// or https://)']
-      };
-    }
-  }, []);
+  // Model detection for Ollama
+  const handleLoadModels = useCallback(async () => {
+    if (setupState.selectedProvider !== 'ollama') return;
 
-  const validateApiKey = useCallback((value: string): ValidationResult => {
-    if (!value.trim()) {
-      return { isValid: false, message: 'API key is required' };
+    setLoadingModels(true);
+    try {
+      // Import the service dynamically to avoid issues with SSR
+      const { OllamaService } = await import('../services/apiService');
+      const ollamaService = new OllamaService((setupState.providerConfig as any).baseUrl);
+
+      // First check if Ollama is running
+      const isRunning = await ollamaService.isRunning();
+      if (!isRunning) {
+        console.error('Ollama is not running or not accessible');
+        setAvailableModels([]);
+        return;
+      }
+
+      // Get embedding models specifically
+      const models = await ollamaService.getEmbeddingModels();
+      const modelNames = models.map(model => model.name);
+      setAvailableModels(modelNames);
+
+      // If no embedding models found, get all models
+      if (modelNames.length === 0) {
+        const allModels = await ollamaService.getModels();
+        const allModelNames = allModels.map(model => model.name);
+        setAvailableModels(allModelNames);
+      }
+    } catch (error) {
+      console.error('Error fetching Ollama models:', error);
+      setAvailableModels([]);
+    } finally {
+      setLoadingModels(false);
     }
-    
-    if (value.length < 10) {
-      return { 
-        isValid: false, 
-        message: 'API key seems too short',
-        suggestions: ['Check that you copied the complete API key']
-      };
-    }
-    
-    return { isValid: true, message: 'API key format looks valid' };
-  }, []);
+  }, [setupState.selectedProvider, setupState.providerConfig, setAvailableModels, setLoadingModels]);
 
   // Test functions
   const testDatabaseConnection = useCallback(async (): Promise<ConnectionTestResult> => {
-    const startTime = Date.now();
-    
     try {
-      // Send test request to extension
-      postMessage('testDatabaseConnection', {
-        database: setupState.selectedDatabase,
-        config: setupState.databaseConfig
-      });
+      // Import the service dynamically
+      const { DatabaseService } = await import('../services/apiService');
 
-      // For now, simulate the test (in real implementation, this would wait for response)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const latency = Date.now() - startTime;
-      
-      return {
-        success: true,
-        message: `Successfully connected to ${setupState.selectedDatabase}`,
-        latency,
-        details: {
-          database: setupState.selectedDatabase,
-          endpoint: setupState.databaseConfig.connectionString,
-          status: 'Connected'
-        }
-      };
+      // Test connection based on database type
+      switch (setupState.selectedDatabase) {
+        case 'qdrant':
+          return await DatabaseService.testQdrant(setupState.databaseConfig as any);
+        case 'pinecone':
+          return await DatabaseService.testPinecone(setupState.databaseConfig as any);
+        case 'chroma':
+          return await DatabaseService.testChroma(setupState.databaseConfig as any);
+        default:
+          return {
+            success: false,
+            message: 'Unsupported database type'
+          };
+      }
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Connection failed',
-        latency: Date.now() - startTime
+        message: error instanceof Error ? error.message : 'Connection test failed'
       };
     }
   }, [setupState.selectedDatabase, setupState.databaseConfig]);
 
   const testProviderConnection = useCallback(async (): Promise<ConnectionTestResult> => {
-    const startTime = Date.now();
-    
     try {
-      // Send test request to extension
-      postMessage('testProviderConnection', {
-        provider: setupState.selectedProvider,
-        config: setupState.providerConfig
-      });
+      // Test connection based on provider type
+      switch (setupState.selectedProvider) {
+        case 'ollama': {
+          const { OllamaService } = await import('../services/apiService');
+          const ollamaConfig = setupState.providerConfig as any;
+          const ollamaService = new OllamaService(ollamaConfig.baseUrl);
 
-      // For now, simulate the test (in real implementation, this would wait for response)
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const latency = Date.now() - startTime;
-      
-      return {
-        success: true,
-        message: `Successfully connected to ${setupState.selectedProvider}`,
-        latency,
-        details: {
-          provider: setupState.selectedProvider,
-          model: setupState.providerConfig.model,
-          endpoint: setupState.providerConfig.baseUrl,
-          status: 'Connected'
+          // Test embedding generation with the configured model
+          return await ollamaService.testEmbedding(ollamaConfig.model);
         }
-      };
+        case 'openai': {
+          // For OpenAI, we'll test by making a simple API call
+          const openaiConfig = setupState.providerConfig as any;
+          const startTime = Date.now();
+
+          try {
+            const response = await fetch('https://api.openai.com/v1/models', {
+              headers: {
+                'Authorization': `Bearer ${openaiConfig.apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(10000),
+            });
+
+            const latency = Date.now() - startTime;
+
+            if (!response.ok) {
+              return {
+                success: false,
+                message: `OpenAI API error: ${response.status} ${response.statusText}`,
+                latency
+              };
+            }
+
+            return {
+              success: true,
+              message: 'Successfully connected to OpenAI API',
+              latency,
+              details: { provider: 'openai', model: openaiConfig.model }
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message: error instanceof Error ? error.message : 'OpenAI connection failed',
+              latency: Date.now() - startTime
+            };
+          }
+        }
+        case 'anthropic': {
+          // For Anthropic, we'll test by making a simple API call
+          const anthropicConfig = setupState.providerConfig as any;
+          const startTime = Date.now();
+
+          try {
+            // Anthropic doesn't have a simple health check endpoint, so we'll just validate the API key format
+            if (!anthropicConfig.apiKey.startsWith('sk-ant-')) {
+              return {
+                success: false,
+                message: 'Invalid Anthropic API key format (should start with sk-ant-)',
+                latency: Date.now() - startTime
+              };
+            }
+
+            return {
+              success: true,
+              message: 'Anthropic API key format is valid',
+              latency: Date.now() - startTime,
+              details: { provider: 'anthropic', model: anthropicConfig.model }
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message: error instanceof Error ? error.message : 'Anthropic validation failed',
+              latency: Date.now() - startTime
+            };
+          }
+        }
+        default:
+          return {
+            success: false,
+            message: 'Unsupported provider type'
+          };
+      }
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Connection failed',
-        latency: Date.now() - startTime
+        message: error instanceof Error ? error.message : 'Provider test failed'
       };
     }
   }, [setupState.selectedProvider, setupState.providerConfig]);
@@ -205,10 +261,37 @@ export const SetupView: React.FC = () => {
   };
 
   const isSetupValid = () => {
-    return setupState.databaseConfig.connectionString && 
-           setupState.providerConfig.model &&
-           (setupState.selectedProvider !== 'openai' || setupState.providerConfig.apiKey) &&
-           (setupState.selectedProvider !== 'anthropic' || setupState.providerConfig.apiKey);
+    // Database validation
+    const dbValid = (() => {
+      switch (setupState.selectedDatabase) {
+        case 'qdrant':
+          return !!(setupState.databaseConfig as any).url;
+        case 'pinecone':
+          const pineconeConfig = setupState.databaseConfig as any;
+          return !!(pineconeConfig.apiKey && pineconeConfig.environment && pineconeConfig.indexName);
+        case 'chroma':
+          return !!(setupState.databaseConfig as any).host;
+        default:
+          return false;
+      }
+    })();
+
+    // Provider validation
+    const providerValid = (() => {
+      switch (setupState.selectedProvider) {
+        case 'ollama':
+          const ollamaConfig = setupState.providerConfig as any;
+          return !!(ollamaConfig.baseUrl && ollamaConfig.model);
+        case 'openai':
+        case 'anthropic':
+          const apiConfig = setupState.providerConfig as any;
+          return !!(apiConfig.apiKey && apiConfig.model);
+        default:
+          return false;
+      }
+    })();
+
+    return dbValid && providerValid;
   };
 
   return (
@@ -234,7 +317,7 @@ export const SetupView: React.FC = () => {
               placeholder="Select database"
               value={setupState.selectedDatabase}
               selectedOptions={[setupState.selectedDatabase]}
-              onOptionSelect={(_, data) => setSelectedDatabase(data.optionValue as string)}
+              onOptionSelect={(_, data) => setSelectedDatabase(data.optionValue as 'qdrant' | 'pinecone' | 'chroma')}
             >
               {DATABASE_OPTIONS.map(option => (
                 <Option key={option.value} value={option.value}>
@@ -244,19 +327,11 @@ export const SetupView: React.FC = () => {
             </Dropdown>
           </div>
 
-          <ValidatedInput
-            label="Connection String"
-            value={setupState.databaseConfig.connectionString}
-            onChange={(value) => updateDatabaseConfig({ connectionString: value })}
-            validator={validateConnectionString}
-            placeholder="http://localhost:6333"
-            required
-          />
-
-          <ConnectionTester
-            title="Database Connection"
-            description="Test your database connection to ensure it's working properly."
-            testFunction={testDatabaseConnection}
+          <DatabaseConfigForm
+            databaseType={setupState.selectedDatabase}
+            config={setupState.databaseConfig}
+            onConfigChange={updateDatabaseConfig}
+            onTest={testDatabaseConnection}
           />
         </Card>
       </div>
@@ -272,7 +347,7 @@ export const SetupView: React.FC = () => {
               placeholder="Select AI provider"
               value={setupState.selectedProvider}
               selectedOptions={[setupState.selectedProvider]}
-              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as string)}
+              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as 'ollama' | 'openai' | 'anthropic')}
             >
               {PROVIDER_OPTIONS.map(option => (
                 <Option key={option.value} value={option.value}>
@@ -282,40 +357,14 @@ export const SetupView: React.FC = () => {
             </Dropdown>
           </div>
 
-          <ValidatedInput
-            label="Model"
-            value={setupState.providerConfig.model}
-            onChange={(value) => updateProviderConfig({ model: value })}
-            placeholder="nomic-embed-text"
-            required
-          />
-
-          {setupState.selectedProvider === 'ollama' && (
-            <ValidatedInput
-              label="Base URL"
-              value={setupState.providerConfig.baseUrl || ''}
-              onChange={(value) => updateProviderConfig({ baseUrl: value })}
-              validator={validateConnectionString}
-              placeholder="http://localhost:11434"
-            />
-          )}
-
-          {(setupState.selectedProvider === 'openai' || setupState.selectedProvider === 'anthropic') && (
-            <ValidatedInput
-              label="API Key"
-              type="password"
-              value={setupState.providerConfig.apiKey || ''}
-              onChange={(value) => updateProviderConfig({ apiKey: value })}
-              validator={validateApiKey}
-              placeholder="Enter your API key"
-              required
-            />
-          )}
-
-          <ConnectionTester
-            title="AI Provider Connection"
-            description="Test your AI provider connection and model availability."
-            testFunction={testProviderConnection}
+          <ProviderConfigForm
+            providerType={setupState.selectedProvider}
+            config={setupState.providerConfig}
+            availableModels={setupState.availableModels}
+            isLoadingModels={setupState.isLoadingModels}
+            onConfigChange={updateProviderConfig}
+            onLoadModels={handleLoadModels}
+            onTest={testProviderConnection}
           />
         </Card>
       </div>
