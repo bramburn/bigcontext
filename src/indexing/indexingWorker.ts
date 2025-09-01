@@ -140,34 +140,71 @@ async function processFile(
   const errors: string[] = [];
 
   try {
+    console.log(`IndexingWorker: Processing file: ${filePath}`);
+
+    // Check if file exists first
+    try {
+      const fs = require('fs');
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File does not exist: ${filePath}`);
+      }
+    } catch (fsError) {
+      throw new Error(`File access error for ${filePath}: ${fsError instanceof Error ? fsError.message : String(fsError)}`);
+    }
+
     // Read file content
     const content = readFileSync(filePath, "utf-8");
     const lineCount = content.split("\n").length;
     const byteCount = Buffer.byteLength(content, "utf8");
+    console.log(`IndexingWorker: File read successfully, ${lineCount} lines, ${byteCount} bytes`);
 
     // Determine language
     const language = getLanguage(filePath);
     if (!language) {
       throw new Error(`Unsupported file type: ${filePath}`);
     }
+    console.log(`IndexingWorker: Detected language: ${language}`);
+
+    // Check if AST parser is initialized
+    if (!astParser) {
+      throw new Error(`AST parser not initialized`);
+    }
 
     // Parse AST
+    console.log(`IndexingWorker: Starting AST parsing for ${language}`);
     const parseResult = astParser.parseWithErrorRecovery(language, content);
     if (parseResult.errors.length > 0) {
+      console.log(`IndexingWorker: AST parsing had ${parseResult.errors.length} errors`);
       errors.push(...parseResult.errors.map((err) => `${filePath}: ${err}`));
     }
 
     if (!parseResult.tree) {
-      throw new Error(`Failed to parse AST for ${filePath}`);
+      throw new Error(`Failed to parse AST for ${filePath} - parser returned null tree`);
+    }
+    console.log(`IndexingWorker: AST parsing successful`);
+
+    // Check if chunker is initialized
+    if (!chunker) {
+      throw new Error(`Chunker not initialized`);
     }
 
     // Create chunks
+    console.log(`IndexingWorker: Starting chunking process`);
     const chunks = chunker.chunk(filePath, parseResult.tree, content, language);
+    console.log(`IndexingWorker: Created ${chunks.length} chunks`);
+
+    // Check if embedding provider is initialized
+    if (!embeddingProvider) {
+      throw new Error(`Embedding provider not initialized`);
+    }
 
     // Generate embeddings for chunks
     const chunkContents = chunks.map((chunk) => chunk.content);
+    console.log(`IndexingWorker: Generating embeddings for ${chunkContents.length} chunks`);
+
     const embeddings =
       await embeddingProvider.generateEmbeddings(chunkContents);
+    console.log(`IndexingWorker: Generated ${embeddings.length} embeddings`);
 
     if (embeddings.length !== chunks.length) {
       throw new Error(
@@ -185,9 +222,20 @@ async function processFile(
       errors,
     };
   } catch (error) {
-    throw new Error(
-      `Failed to process ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.error(`IndexingWorker: Error processing ${filePath}:`, error);
+
+    // Provide more specific error information
+    let errorMessage = `Failed to process ${filePath}`;
+    if (error instanceof Error) {
+      errorMessage += `: ${error.message}`;
+      if (error.stack) {
+        console.error(`IndexingWorker: Error stack:`, error.stack);
+      }
+    } else {
+      errorMessage += `: ${String(error)}`;
+    }
+
+    throw new Error(errorMessage);
   }
 }
 

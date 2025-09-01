@@ -5,7 +5,7 @@
  * Allows users to select and configure their preferred services.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   Card,
   Button,
@@ -21,7 +21,7 @@ import { useAppStore, useSetupState } from '../stores/appStore';
 import { DatabaseConfigForm } from './database/DatabaseConfigForm';
 import { ProviderConfigForm } from './provider/ProviderConfigForm';
 import { ConnectionTestResult } from '../types';
-import { postMessage } from '../utils/vscodeApi';
+import { postMessage, onMessageCommand } from '../utils/vscodeApi';
 
 const useStyles = makeStyles({
   container: {
@@ -131,124 +131,94 @@ export const SetupView: React.FC = () => {
 
   // Test functions
   const testDatabaseConnection = useCallback(async (): Promise<ConnectionTestResult> => {
-    try {
-      // Import the service dynamically
-      const { DatabaseService } = await import('../services/apiService');
+    return new Promise((resolve) => {
+      // Send test request to extension
+      postMessage('testDatabaseConnection', {
+        database: setupState.selectedDatabase,
+        config: setupState.databaseConfig
+      });
 
-      // Test connection based on database type
-      switch (setupState.selectedDatabase) {
-        case 'qdrant':
-          return await DatabaseService.testQdrant(setupState.databaseConfig as any);
-        case 'pinecone':
-          return await DatabaseService.testPinecone(setupState.databaseConfig as any);
-        case 'chroma':
-          return await DatabaseService.testChroma(setupState.databaseConfig as any);
-        default:
-          return {
-            success: false,
-            message: 'Unsupported database type'
-          };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Connection test failed'
+      // Listen for response
+      const handleResponse = (event: MessageEvent) => {
+        const message = event.data;
+        if (message.command === 'databaseConnectionTestResult') {
+          window.removeEventListener('message', handleResponse);
+          resolve({
+            success: message.success,
+            message: message.data.message,
+            details: message.data.details,
+            latency: message.data.latency
+          });
+        }
       };
-    }
+
+      window.addEventListener('message', handleResponse);
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        window.removeEventListener('message', handleResponse);
+        resolve({
+          success: false,
+          message: 'Connection test timed out'
+        });
+      }, 30000);
+    });
   }, [setupState.selectedDatabase, setupState.databaseConfig]);
 
   const testProviderConnection = useCallback(async (): Promise<ConnectionTestResult> => {
-    try {
-      // Test connection based on provider type
-      switch (setupState.selectedProvider) {
-        case 'ollama': {
-          const { OllamaService } = await import('../services/apiService');
-          const ollamaConfig = setupState.providerConfig as any;
-          const ollamaService = new OllamaService(ollamaConfig.baseUrl);
+    return new Promise((resolve) => {
+      // Send test request to extension
+      postMessage('testProviderConnection', {
+        provider: setupState.selectedProvider,
+        config: setupState.providerConfig
+      });
 
-          // Test embedding generation with the configured model
-          return await ollamaService.testEmbedding(ollamaConfig.model);
+      // Listen for response
+      const handleResponse = (event: MessageEvent) => {
+        const message = event.data;
+        if (message.command === 'providerConnectionTestResult') {
+          window.removeEventListener('message', handleResponse);
+          resolve({
+            success: message.success,
+            message: message.data.message,
+            details: message.data.details,
+            latency: message.data.latency
+          });
         }
-        case 'openai': {
-          // For OpenAI, we'll test by making a simple API call
-          const openaiConfig = setupState.providerConfig as any;
-          const startTime = Date.now();
-
-          try {
-            const response = await fetch('https://api.openai.com/v1/models', {
-              headers: {
-                'Authorization': `Bearer ${openaiConfig.apiKey}`,
-                'Content-Type': 'application/json',
-              },
-              signal: AbortSignal.timeout(10000),
-            });
-
-            const latency = Date.now() - startTime;
-
-            if (!response.ok) {
-              return {
-                success: false,
-                message: `OpenAI API error: ${response.status} ${response.statusText}`,
-                latency
-              };
-            }
-
-            return {
-              success: true,
-              message: 'Successfully connected to OpenAI API',
-              latency,
-              details: { provider: 'openai', model: openaiConfig.model }
-            };
-          } catch (error) {
-            return {
-              success: false,
-              message: error instanceof Error ? error.message : 'OpenAI connection failed',
-              latency: Date.now() - startTime
-            };
-          }
-        }
-        case 'anthropic': {
-          // For Anthropic, we'll test by making a simple API call
-          const anthropicConfig = setupState.providerConfig as any;
-          const startTime = Date.now();
-
-          try {
-            // Anthropic doesn't have a simple health check endpoint, so we'll just validate the API key format
-            if (!anthropicConfig.apiKey.startsWith('sk-ant-')) {
-              return {
-                success: false,
-                message: 'Invalid Anthropic API key format (should start with sk-ant-)',
-                latency: Date.now() - startTime
-              };
-            }
-
-            return {
-              success: true,
-              message: 'Anthropic API key format is valid',
-              latency: Date.now() - startTime,
-              details: { provider: 'anthropic', model: anthropicConfig.model }
-            };
-          } catch (error) {
-            return {
-              success: false,
-              message: error instanceof Error ? error.message : 'Anthropic validation failed',
-              latency: Date.now() - startTime
-            };
-          }
-        }
-        default:
-          return {
-            success: false,
-            message: 'Unsupported provider type'
-          };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Provider test failed'
       };
-    }
+
+      window.addEventListener('message', handleResponse);
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        window.removeEventListener('message', handleResponse);
+        resolve({
+          success: false,
+          message: 'Connection test timed out'
+        });
+      }, 30000);
+    });
   }, [setupState.selectedProvider, setupState.providerConfig]);
+
+  // Set up message listeners for setup completion
+  useEffect(() => {
+    const unsubscribeSetupComplete = onMessageCommand('setupComplete', (data) => {
+      console.log('Setup completed successfully:', data);
+      // The view change is already handled by the button click,
+      // but we could add additional logic here if needed
+    });
+
+    const unsubscribeSetupError = onMessageCommand('setupError', (data) => {
+      console.error('Setup error:', data.error);
+      // Show error to user and stay on setup view
+      alert(`Setup failed: ${data.error}`);
+    });
+
+    return () => {
+      unsubscribeSetupComplete();
+      unsubscribeSetupError();
+    };
+  }, []);
 
   const handleStartIndexing = () => {
     postMessage('startSetup', {

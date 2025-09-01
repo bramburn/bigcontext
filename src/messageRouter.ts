@@ -260,6 +260,18 @@ export class MessageRouter {
                 case 'getState':
                     await this.handleGetState(message, webview);
                     break;
+                case 'testDatabaseConnection':
+                    await this.handleTestDatabaseConnection(message, webview);
+                    break;
+                case 'testProviderConnection':
+                    await this.handleTestProviderConnection(message, webview);
+                    break;
+                case 'openExternalLink':
+                    await this.handleOpenExternalLink(message, webview);
+                    break;
+                case 'startSetup':
+                    await this.handleStartSetup(message, webview);
+                    break;
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
@@ -775,6 +787,62 @@ export class MessageRouter {
             command: 'serviceStatusResponse',
             data: status
         });
+    }
+
+    /**
+     * Handles the setup completion and configuration from the startup form
+     *
+     * This handler processes the setup configuration submitted from the startup form,
+     * saves the configuration, and initiates the indexing process. It acts as the
+     * bridge between the setup form and the indexing workflow.
+     *
+     * @param message - The setup message containing database and provider configuration
+     * @param webview - The webview to send responses to
+     */
+    private async handleStartSetup(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling start setup request', message);
+
+            const { database, provider, databaseConfig, providerConfig } = message;
+
+            // Validate required configuration
+            if (!database || !provider) {
+                await webview.postMessage({
+                    command: 'setupError',
+                    error: 'Database and provider selection are required'
+                });
+                return;
+            }
+
+            // Log the configuration for now - in a full implementation,
+            // this would save to VS Code settings or a configuration file
+            console.log('MessageRouter: Setup configuration received:', {
+                database,
+                provider,
+                databaseConfig,
+                providerConfig
+            });
+
+            // Notify webview that setup is complete and indexing will start
+            await webview.postMessage({
+                command: 'setupComplete',
+                data: {
+                    database,
+                    provider,
+                    message: 'Setup completed successfully. Starting indexing...'
+                }
+            });
+
+            // Start indexing automatically after setup
+            await this.handleStartIndexing(webview);
+
+        } catch (error) {
+            console.error('MessageRouter: Error during setup:', error);
+            await webview.postMessage({
+                command: 'setupError',
+                error: error instanceof Error ? error.message : 'An unknown error occurred during setup.'
+            });
+        }
     }
 
     /**
@@ -1791,6 +1859,389 @@ export class MessageRouter {
         } catch (error) {
             console.error('MessageRouter: Error getting workspace stats:', error);
             await this.sendErrorResponse(webview, `Failed to get workspace stats: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Handles database connection testing requests
+     */
+    private async handleTestDatabaseConnection(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { database, config } = message;
+            console.log('MessageRouter: Testing database connection:', database, config);
+
+            let testResult;
+            const startTime = Date.now();
+
+            // Route to appropriate database test method based on type
+            switch (database) {
+                case 'qdrant':
+                    testResult = await this.testQdrantConnection(config);
+                    break;
+                case 'pinecone':
+                    testResult = await this.testPineconeConnection(config);
+                    break;
+                case 'chroma':
+                    testResult = await this.testChromaConnection(config);
+                    break;
+                default:
+                    throw new Error(`Unsupported database type for testing: ${database}`);
+            }
+
+            const latency = Date.now() - startTime;
+
+            await webview.postMessage({
+                command: 'databaseConnectionTestResult',
+                success: testResult.success,
+                data: {
+                    ...testResult,
+                    latency,
+                    database
+                }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error testing database connection:', error);
+            await webview.postMessage({
+                command: 'databaseConnectionTestResult',
+                success: false,
+                data: {
+                    success: false,
+                    message: error instanceof Error ? error.message : 'Connection test failed',
+                    database: message.database
+                }
+            });
+        }
+    }
+
+    /**
+     * Handles AI provider connection testing requests
+     */
+    private async handleTestProviderConnection(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { provider, config } = message;
+            console.log('MessageRouter: Testing provider connection:', provider, config);
+
+            let testResult;
+            const startTime = Date.now();
+
+            // Route to appropriate provider test method based on type
+            switch (provider) {
+                case 'ollama':
+                    testResult = await this.testOllamaConnection(config);
+                    break;
+                case 'openai':
+                    testResult = await this.testOpenAIConnection(config);
+                    break;
+                case 'anthropic':
+                    testResult = await this.testAnthropicConnection(config);
+                    break;
+                default:
+                    throw new Error(`Unsupported provider type for testing: ${provider}`);
+            }
+
+            const latency = Date.now() - startTime;
+
+            await webview.postMessage({
+                command: 'providerConnectionTestResult',
+                success: testResult.success,
+                data: {
+                    ...testResult,
+                    latency,
+                    provider
+                }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error testing provider connection:', error);
+            await webview.postMessage({
+                command: 'providerConnectionTestResult',
+                success: false,
+                data: {
+                    success: false,
+                    message: error instanceof Error ? error.message : 'Connection test failed',
+                    provider: message.provider
+                }
+            });
+        }
+    }
+
+    /**
+     * Test Qdrant database connection
+     */
+    private async testQdrantConnection(config: any): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            const url = config.url || 'http://localhost:6333';
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (config.apiKey) {
+                headers['api-key'] = config.apiKey;
+            }
+
+            const response = await fetch(`${url}/collections`, {
+                method: 'GET',
+                headers,
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    message: `Qdrant connection failed: ${response.status} ${response.statusText}`
+                };
+            }
+
+            const data = await response.json();
+
+            return {
+                success: true,
+                message: 'Successfully connected to Qdrant',
+                details: {
+                    collections: data.result?.collections || [],
+                    version: response.headers.get('server') || 'unknown'
+                }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Connection failed'
+            };
+        }
+    }
+
+    /**
+     * Test Pinecone database connection
+     */
+    private async testPineconeConnection(config: any): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            const response = await fetch(`https://${config.indexName}-${config.environment}.svc.pinecone.io/describe_index_stats`, {
+                method: 'POST',
+                headers: {
+                    'Api-Key': config.apiKey,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    message: `Pinecone connection failed: ${response.status} ${response.statusText}`
+                };
+            }
+
+            const data = await response.json();
+
+            return {
+                success: true,
+                message: 'Successfully connected to Pinecone',
+                details: {
+                    indexStats: data,
+                    environment: config.environment,
+                    indexName: config.indexName
+                }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Connection failed'
+            };
+        }
+    }
+
+    /**
+     * Test ChromaDB connection
+     */
+    private async testChromaConnection(config: any): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            const protocol = config.ssl ? 'https' : 'http';
+            const port = config.port ? `:${config.port}` : '';
+            const baseUrl = `${protocol}://${config.host}${port}`;
+
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (config.apiKey) {
+                headers['Authorization'] = `Bearer ${config.apiKey}`;
+            }
+
+            const response = await fetch(`${baseUrl}/api/v1/heartbeat`, {
+                method: 'GET',
+                headers,
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    message: `ChromaDB connection failed: ${response.status} ${response.statusText}`
+                };
+            }
+
+            const data = await response.json();
+
+            return {
+                success: true,
+                message: 'Successfully connected to ChromaDB',
+                details: {
+                    heartbeat: data,
+                    endpoint: baseUrl
+                }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Connection failed'
+            };
+        }
+    }
+
+    /**
+     * Test Ollama provider connection
+     */
+    private async testOllamaConnection(config: any): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            const baseUrl = config.baseUrl || 'http://localhost:11434';
+
+            // First check if Ollama is running
+            const healthResponse = await fetch(`${baseUrl}/api/version`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(5000),
+            });
+
+            if (!healthResponse.ok) {
+                return {
+                    success: false,
+                    message: `Ollama is not running or not accessible at ${baseUrl}`
+                };
+            }
+
+            // Test embedding generation with the configured model
+            const embeddingResponse = await fetch(`${baseUrl}/api/embeddings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: config.model,
+                    prompt: 'test',
+                }),
+                signal: AbortSignal.timeout(30000),
+            });
+
+            if (!embeddingResponse.ok) {
+                const errorText = await embeddingResponse.text();
+                return {
+                    success: false,
+                    message: `Failed to generate embedding: ${embeddingResponse.status} ${embeddingResponse.statusText}`,
+                    details: { error: errorText, model: config.model }
+                };
+            }
+
+            const data = await embeddingResponse.json();
+
+            return {
+                success: true,
+                message: `Successfully generated embedding with ${config.model}`,
+                details: {
+                    model: config.model,
+                    embeddingLength: data.embedding?.length || 0
+                }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Connection failed'
+            };
+        }
+    }
+
+    /**
+     * Test OpenAI provider connection
+     */
+    private async testOpenAIConnection(config: any): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            const response = await fetch('https://api.openai.com/v1/models', {
+                headers: {
+                    'Authorization': `Bearer ${config.apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    message: `OpenAI API error: ${response.status} ${response.statusText}`
+                };
+            }
+
+            return {
+                success: true,
+                message: 'Successfully connected to OpenAI API',
+                details: { provider: 'openai', model: config.model }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Connection failed'
+            };
+        }
+    }
+
+    /**
+     * Test Anthropic provider connection
+     */
+    private async testAnthropicConnection(config: any): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            // Anthropic doesn't have a simple health check endpoint, so we'll just validate the API key format
+            if (!config.apiKey.startsWith('sk-ant-')) {
+                return {
+                    success: false,
+                    message: 'Invalid Anthropic API key format (should start with sk-ant-)'
+                };
+            }
+
+            return {
+                success: true,
+                message: 'Anthropic API key format is valid',
+                details: { provider: 'anthropic', model: config.model }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Validation failed'
+            };
+        }
+    }
+
+    /**
+     * Handles requests to open external links
+     */
+    private async handleOpenExternalLink(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { url } = message;
+            console.log('MessageRouter: Opening external link:', url);
+
+            if (!url || typeof url !== 'string') {
+                throw new Error('Invalid URL provided');
+            }
+
+            // Use VS Code's built-in command to open external links
+            await vscode.env.openExternal(vscode.Uri.parse(url));
+
+        } catch (error) {
+            console.error('MessageRouter: Error opening external link:', error);
+            await webview.postMessage({
+                command: 'linkOpenError',
+                success: false,
+                data: {
+                    message: error instanceof Error ? error.message : 'Failed to open link'
+                }
+            });
         }
     }
 }

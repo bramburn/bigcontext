@@ -8,6 +8,7 @@
 import React from 'react';
 import { ValidatedInput } from '../ValidatedInput';
 import { ConnectionTester } from '../ConnectionTester';
+import { DatabaseSetupGuide } from '../common/DatabaseSetupGuide';
 import { QdrantConfig, PineconeConfig, ChromaConfig, ValidationResult } from '../../types';
 
 interface DatabaseConfigFormProps {
@@ -192,10 +193,12 @@ export const DatabaseConfigForm: React.FC<DatabaseConfigFormProps> = ({
 
   return (
     <>
+      <DatabaseSetupGuide databaseType={databaseType} />
+
       {databaseType === 'qdrant' && renderQdrantConfig(config as QdrantConfig)}
       {databaseType === 'pinecone' && renderPineconeConfig(config as PineconeConfig)}
       {databaseType === 'chroma' && renderChromaConfig(config as ChromaConfig)}
-      
+
       <ConnectionTester
         title="Database Connection"
         description={getConnectionDescription()}

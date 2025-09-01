@@ -18,6 +18,7 @@ import {
 import { ArrowClockwise24Regular, CheckmarkCircle24Regular } from '@fluentui/react-icons';
 import { ValidatedInput } from '../ValidatedInput';
 import { ConnectionTester } from '../ConnectionTester';
+import { ProviderSetupGuide } from '../common/ProviderSetupGuide';
 import { OllamaConfig, OpenAIConfig, AnthropicConfig, ValidationResult } from '../../types';
 
 const useStyles = makeStyles({
@@ -268,10 +269,12 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
 
   return (
     <>
+      <ProviderSetupGuide providerType={providerType} />
+
       {providerType === 'ollama' && renderOllamaConfig(config as OllamaConfig)}
       {providerType === 'openai' && renderOpenAIConfig(config as OpenAIConfig)}
       {providerType === 'anthropic' && renderAnthropicConfig(config as AnthropicConfig)}
-      
+
       <ConnectionTester
         title="AI Provider Connection"
         description={getConnectionDescription()}
