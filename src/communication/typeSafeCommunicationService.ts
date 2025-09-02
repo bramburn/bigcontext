@@ -584,8 +584,13 @@ export class TypeSafeCommunicationService {
   /**
    * Public wrapper for validateMessage for test usage
    */
-  public validateMessage(message: any): void {
-    this._validateMessageInternal(message);
+  public validateMessage(message: any): boolean {
+    try {
+      this._validateMessageInternal(message);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private _validateMessageInternal(message: any): void {

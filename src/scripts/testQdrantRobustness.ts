@@ -15,7 +15,7 @@
 import { QdrantService, QdrantServiceConfig } from '../db/qdrantService';
 import { QdrantHealthMonitor } from '../db/qdrantHealthMonitor';
 import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
-import { CodeChunk } from '../parsing/chunker';
+import { CodeChunk, ChunkType } from '../parsing/chunker';
 
 class QdrantRobustnessTest {
   private qdrantService: QdrantService;
@@ -24,7 +24,19 @@ class QdrantRobustnessTest {
   private testCollectionName: string;
 
   constructor() {
-    this.loggingService = new CentralizedLoggingService();
+    // Create a mock ConfigService for testing
+    const mockConfigService = {
+      getFullConfig: () => ({
+        logging: {
+          level: 'Info',
+          enableFileLogging: true,
+          enableConsoleLogging: true,
+          enableOutputChannel: true,
+        }
+      })
+    } as any;
+
+    this.loggingService = new CentralizedLoggingService(mockConfigService);
     this.testCollectionName = `robustness_test_${Date.now()}`;
     
     const config: QdrantServiceConfig = {
@@ -120,7 +132,7 @@ class QdrantRobustnessTest {
       content: 'test',
       startLine: 1,
       endLine: 1,
-      type: 'test',
+      type: ChunkType.FUNCTION,
       language: 'typescript',
     } as CodeChunk;
     
@@ -150,7 +162,7 @@ class QdrantRobustnessTest {
         content: `export function func${i}() { return ${i}; }`,
         startLine: i * 5,
         endLine: i * 5 + 2,
-        type: 'function',
+        type: ChunkType.FUNCTION,
         name: `func${i}`,
         language: 'typescript',
       });
