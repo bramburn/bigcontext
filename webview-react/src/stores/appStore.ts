@@ -21,6 +21,10 @@ import {
 } from '../types';
 
 interface AppStore extends AppState, SetupState {
+  // Navigation state
+  selectedNavItem: string;
+  selectedSearchTab: 'query' | 'saved';
+
   // Indexing state
   isIndexing: boolean;
   isPaused: boolean;
@@ -39,6 +43,11 @@ interface AppStore extends AppState, SetupState {
   searchStats: SearchStats;
   hasMore: boolean;
   currentPage: number;
+  savedSearches: Array<{id: string; name: string; query: string; timestamp: Date}>;
+  // Navigation actions
+  setSelectedNavItem: (item: string) => void;
+  setSelectedSearchTab: (tab: 'query' | 'saved') => void;
+
   // App actions
   setCurrentView: (view: ViewType) => void;
   setWorkspaceOpen: (isOpen: boolean) => void;
@@ -78,10 +87,16 @@ interface AppStore extends AppState, SetupState {
   setSearchStats: (stats: Partial<SearchStats>) => void;
   setHasMore: (hasMore: boolean) => void;
   setCurrentPage: (page: number) => void;
+  addSavedSearch: (name: string, query: string) => void;
+  removeSavedSearch: (id: string) => void;
 }
 
 export const useAppStore = create<AppStore>()(
   subscribeWithSelector((set) => ({
+    // Initial navigation state
+    selectedNavItem: 'search',
+    selectedSearchTab: 'query',
+
     // Initial app state
     isWorkspaceOpen: false,
     currentView: 'setup',
@@ -135,6 +150,11 @@ export const useAppStore = create<AppStore>()(
     },
     hasMore: false,
     currentPage: 1,
+    savedSearches: [],
+
+    // Navigation actions
+    setSelectedNavItem: (item) => set({ selectedNavItem: item }),
+    setSelectedSearchTab: (tab) => set({ selectedSearchTab: tab }),
 
     // App actions
     setCurrentView: (view) => set({ currentView: view }),
@@ -264,7 +284,18 @@ export const useAppStore = create<AppStore>()(
       searchStats: { ...state.searchStats, ...stats }
     })),
     setHasMore: (hasMore) => set({ hasMore }),
-    setCurrentPage: (page) => set({ currentPage: page })
+    setCurrentPage: (page) => set({ currentPage: page }),
+    addSavedSearch: (name, query) => set((state) => ({
+      savedSearches: [...state.savedSearches, {
+        id: Date.now().toString(),
+        name,
+        query,
+        timestamp: new Date()
+      }]
+    })),
+    removeSavedSearch: (id) => set((state) => ({
+      savedSearches: state.savedSearches.filter(search => search.id !== id)
+    }))
   }))
 );
 

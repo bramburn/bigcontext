@@ -87,6 +87,135 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(healthCheckCommand);
 
+        // Register Sprint 18 command palette commands
+        const showSearchCommand = vscode.commands.registerCommand('code-context-engine.showSearch', async () => {
+            try {
+                const webviewManager = manager.getWebviewManager();
+                await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
+                // Send message to webview to navigate to search
+                webviewManager.sendMessageToWebview('navigateToView', { view: 'search' });
+            } catch (error) {
+                console.error('Failed to show search:', error);
+                vscode.window.showErrorMessage('Failed to open search view');
+            }
+        });
+
+        const showIndexingCommand = vscode.commands.registerCommand('code-context-engine.showIndexing', async () => {
+            try {
+                const webviewManager = manager.getWebviewManager();
+                await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
+                webviewManager.sendMessageToWebview('navigateToView', { view: 'indexing' });
+            } catch (error) {
+                console.error('Failed to show indexing:', error);
+                vscode.window.showErrorMessage('Failed to open indexing view');
+            }
+        });
+
+        const showHelpCommand = vscode.commands.registerCommand('code-context-engine.showHelp', async () => {
+            try {
+                const webviewManager = manager.getWebviewManager();
+                await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
+                webviewManager.sendMessageToWebview('navigateToView', { view: 'help' });
+            } catch (error) {
+                console.error('Failed to show help:', error);
+                vscode.window.showErrorMessage('Failed to open help view');
+            }
+        });
+
+        const reindexCommand = vscode.commands.registerCommand('code-context-engine.reindex', async () => {
+            try {
+                const indexingService = manager.getIndexingService();
+                await indexingService.startIndexing();
+                vscode.window.showInformationMessage('Indexing started');
+            } catch (error) {
+                console.error('Failed to start indexing:', error);
+                vscode.window.showErrorMessage('Failed to start indexing');
+            }
+        });
+
+        const pauseIndexingCommand = vscode.commands.registerCommand('code-context-engine.pauseIndexing', async () => {
+            try {
+                const indexingService = manager.getIndexingService();
+                await indexingService.pauseIndexing();
+                vscode.window.showInformationMessage('Indexing paused');
+            } catch (error) {
+                console.error('Failed to pause indexing:', error);
+                vscode.window.showErrorMessage('Failed to pause indexing');
+            }
+        });
+
+        const resumeIndexingCommand = vscode.commands.registerCommand('code-context-engine.resumeIndexing', async () => {
+            try {
+                const indexingService = manager.getIndexingService();
+                await indexingService.resumeIndexing();
+                vscode.window.showInformationMessage('Indexing resumed');
+            } catch (error) {
+                console.error('Failed to resume indexing:', error);
+                vscode.window.showErrorMessage('Failed to resume indexing');
+            }
+        });
+
+        const clearIndexCommand = vscode.commands.registerCommand('code-context-engine.clearIndex', async () => {
+            try {
+                const result = await vscode.window.showWarningMessage(
+                    'Are you sure you want to clear the entire index? This action cannot be undone.',
+                    { modal: true },
+                    'Clear Index'
+                );
+                if (result === 'Clear Index') {
+                    const indexingService = manager.getIndexingService();
+                    await indexingService.clearIndex();
+                    vscode.window.showInformationMessage('Index cleared successfully');
+                }
+            } catch (error) {
+                console.error('Failed to clear index:', error);
+                vscode.window.showErrorMessage('Failed to clear index');
+            }
+        });
+
+        const searchCodeCommand = vscode.commands.registerCommand('code-context-engine.searchCode', async () => {
+            try {
+                const query = await vscode.window.showInputBox({
+                    prompt: 'Enter your search query',
+                    placeHolder: 'e.g., function that handles authentication'
+                });
+                if (query) {
+                    const webviewManager = manager.getWebviewManager();
+                    await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
+                    webviewManager.sendMessageToWebview('navigateToView', { view: 'search' });
+                    webviewManager.sendMessageToWebview('setQuery', { query });
+                }
+            } catch (error) {
+                console.error('Failed to search code:', error);
+                vscode.window.showErrorMessage('Failed to perform search');
+            }
+        });
+
+        const showSavedSearchesCommand = vscode.commands.registerCommand('code-context-engine.showSavedSearches', async () => {
+            try {
+                const webviewManager = manager.getWebviewManager();
+                await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
+                webviewManager.sendMessageToWebview('navigateToView', { view: 'search' });
+                webviewManager.sendMessageToWebview('setSearchTab', { tab: 'saved' });
+            } catch (error) {
+                console.error('Failed to show saved searches:', error);
+                vscode.window.showErrorMessage('Failed to open saved searches');
+            }
+        });
+
+        // Register all new commands
+        context.subscriptions.push(
+            showSearchCommand,
+            showIndexingCommand,
+            showHelpCommand,
+            reindexCommand,
+            pauseIndexingCommand,
+            resumeIndexingCommand,
+            clearIndexCommand,
+            searchCodeCommand,
+            showSavedSearchesCommand
+        );
+
     } catch (error) {
         console.error('Failed to initialize ExtensionManager:', error);
         vscode.window.showErrorMessage('Code Context Engine failed to initialize. Please check the logs.');

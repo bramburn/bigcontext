@@ -212,6 +212,15 @@ export class MessageRouter {
                 case 'trackTelemetry':
                     await this.handleTrackTelemetry(message, webview);
                     break;
+                case 'navigateToView':
+                    await this.handleNavigateToView(message, webview);
+                    break;
+                case 'setQuery':
+                    await this.handleSetQuery(message, webview);
+                    break;
+                case 'setSearchTab':
+                    await this.handleSetSearchTab(message, webview);
+                    break;
                 case 'switchWorkspace':
                     await this.handleSwitchWorkspace(message, webview);
                     break;
@@ -2256,6 +2265,66 @@ export class MessageRouter {
                     message: error instanceof Error ? error.message : 'Failed to open link'
                 }
             });
+        }
+    }
+
+    /**
+     * Handle navigate to view command from command palette
+     */
+    private async handleNavigateToView(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { view } = message.data || {};
+            console.log('MessageRouter: Navigating to view:', view);
+
+            // Send navigation command to webview
+            await webview.postMessage({
+                command: 'navigateToView',
+                data: { view }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error navigating to view:', error);
+            await this.sendErrorResponse(webview, 'Failed to navigate to view');
+        }
+    }
+
+    /**
+     * Handle set query command from command palette
+     */
+    private async handleSetQuery(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { query } = message.data || {};
+            console.log('MessageRouter: Setting query:', query);
+
+            // Send query to webview
+            await webview.postMessage({
+                command: 'setQuery',
+                data: { query }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error setting query:', error);
+            await this.sendErrorResponse(webview, 'Failed to set query');
+        }
+    }
+
+    /**
+     * Handle set search tab command from command palette
+     */
+    private async handleSetSearchTab(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { tab } = message.data || {};
+            console.log('MessageRouter: Setting search tab:', tab);
+
+            // Send tab selection to webview
+            await webview.postMessage({
+                command: 'setSearchTab',
+                data: { tab }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error setting search tab:', error);
+            await this.sendErrorResponse(webview, 'Failed to set search tab');
         }
     }
 

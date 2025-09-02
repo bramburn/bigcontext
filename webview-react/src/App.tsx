@@ -13,17 +13,13 @@ import {
   makeStyles,
   tokens
 } from '@fluentui/react-components';
-import { useAppStore, useCurrentView, useIsWorkspaceOpen } from './stores/appStore';
+import { useAppStore, useIsWorkspaceOpen } from './stores/appStore';
 import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
 import { connectionMonitor } from './utils/connectionMonitor';
 import ConnectionIndicator from './components/ConnectionStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 import NoWorkspaceView from './components/NoWorkspaceView';
-import SetupView from './components/SetupView';
-import IndexingView from './components/IndexingView';
-import QueryView from './components/QueryView';
-import DiagnosticsView from './components/DiagnosticsView';
-import SettingsView from './components/SettingsView';
+import Layout from './components/Layout';
 import { useVscodeTheme } from './hooks/useVscodeTheme';
 
 const useStyles = makeStyles({
@@ -37,7 +33,6 @@ const useStyles = makeStyles({
 
 function App() {
   const styles = useStyles();
-  const currentView = useCurrentView();
   const isWorkspaceOpen = useIsWorkspaceOpen();
   const { setWorkspaceOpen, setCurrentView, setFirstRunComplete } = useAppStore();
 
@@ -73,6 +68,34 @@ function App() {
       setFirstRunComplete(true);
     });
 
+    // Handle navigation messages from command palette
+    const unsubscribeNavigate = onMessageCommand('navigateToView', (data) => {
+      console.log('App: Navigate to view:', data);
+      const { view } = data?.data || {};
+      if (view) {
+        useAppStore.getState().setSelectedNavItem(view);
+      }
+    });
+
+    const unsubscribeSetQuery = onMessageCommand('setQuery', (data) => {
+      console.log('App: Set query:', data);
+      const { query } = data?.data || {};
+      if (query) {
+        useAppStore.getState().setQuery(query);
+        useAppStore.getState().setSelectedNavItem('search');
+        useAppStore.getState().setSelectedSearchTab('query');
+      }
+    });
+
+    const unsubscribeSetSearchTab = onMessageCommand('setSearchTab', (data) => {
+      console.log('App: Set search tab:', data);
+      const { tab } = data?.data || {};
+      if (tab) {
+        useAppStore.getState().setSelectedSearchTab(tab);
+        useAppStore.getState().setSelectedNavItem('search');
+      }
+    });
+
     // Handle initial state message from extension
     const unsubscribeInitial = onMessageCommand('initialState', (data) => {
       console.log('Frontend: Received initialState message:', data);
@@ -103,6 +126,9 @@ function App() {
       unsubscribeView();
       unsubscribeFirstRun();
       unsubscribeInitial();
+      unsubscribeNavigate();
+      unsubscribeSetQuery();
+      unsubscribeSetSearchTab();
     };
   }, [setWorkspaceOpen, setCurrentView, setFirstRunComplete]);
 
@@ -117,20 +143,8 @@ function App() {
       return <NoWorkspaceView />;
     }
 
-    switch (currentView) {
-      case 'setup':
-        return <SetupView />;
-      case 'indexing':
-        return <IndexingView />;
-      case 'query':
-        return <QueryView />;
-      case 'diagnostics':
-        return <DiagnosticsView />;
-      case 'settings':
-        return <SettingsView />;
-      default:
-        return <SetupView />;
-    }
+    // Use the new Layout component for workspace views
+    return <Layout />;
   };
 
   return (
