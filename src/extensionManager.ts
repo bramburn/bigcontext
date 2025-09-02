@@ -139,7 +139,18 @@ export class ExtensionManager {
 
             // Step 3: Initialize QdrantService with configuration
             // QdrantService requires the database connection string from ConfigService and logging service
-            this.qdrantService = new QdrantService(this.configService.getQdrantConnectionString(), this.loggingService);
+            const qdrantConfig = {
+                connectionString: this.configService.getQdrantConnectionString(),
+                retryConfig: {
+                    maxRetries: 3,
+                    baseDelayMs: 1000,
+                    maxDelayMs: 10000,
+                    backoffMultiplier: 2,
+                },
+                batchSize: 100,
+                healthCheckIntervalMs: 30000,
+            };
+            this.qdrantService = new QdrantService(qdrantConfig, this.loggingService);
             this.loggingService.info('QdrantService initialized', {}, 'ExtensionManager');
 
             // Step 4: Initialize EmbeddingProvider using factory and configuration

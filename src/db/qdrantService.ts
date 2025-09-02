@@ -19,6 +19,20 @@ export interface QdrantPoint {
   };
 }
 
+export interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+}
+
+export interface QdrantServiceConfig {
+  connectionString: string;
+  retryConfig?: RetryConfig;
+  batchSize?: number;
+  healthCheckIntervalMs?: number;
+}
+
 export interface SearchResult {
   id: string | number;
   score: number;
@@ -29,20 +43,34 @@ export class QdrantService {
   private client: QdrantClient;
   private connectionString: string;
   private loggingService: CentralizedLoggingService;
+  private retryConfig: RetryConfig;
+  private batchSize: number;
+  private healthCheckIntervalMs: number;
+  private isHealthy: boolean = false;
+  private lastHealthCheck: number = 0;
 
   /**
-   * Constructor now accepts connectionString and loggingService as required parameters
+   * Constructor now accepts configuration object for better flexibility
    * This enables dependency injection and removes direct VS Code configuration access
    */
   constructor(
-    connectionString: string,
+    config: QdrantServiceConfig,
     loggingService: CentralizedLoggingService,
   ) {
-    this.connectionString = connectionString;
+    this.connectionString = config.connectionString;
     this.loggingService = loggingService;
+    this.retryConfig = config.retryConfig || {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 10000,
+      backoffMultiplier: 2,
+    };
+    this.batchSize = config.batchSize || 100;
+    this.healthCheckIntervalMs = config.healthCheckIntervalMs || 30000; // 30 seconds
+
     this.client = new QdrantClient({
-      host: this.extractHost(connectionString),
-      port: this.extractPort(connectionString),
+      host: this.extractHost(config.connectionString),
+      port: this.extractPort(config.connectionString),
     });
   }
 
@@ -65,13 +93,76 @@ export class QdrantService {
   }
 
   /**
-   * Check if Qdrant service is accessible
+   * Retry wrapper for operations with exponential backoff
    */
-  async healthCheck(): Promise<boolean> {
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (attempt === this.retryConfig.maxRetries) {
+          this.loggingService.error(
+            `${operationName} failed after ${this.retryConfig.maxRetries} retries`,
+            { error: lastError.message, attempt },
+            "QdrantService",
+          );
+          throw lastError;
+        }
+
+        const delay = Math.min(
+          this.retryConfig.baseDelayMs * Math.pow(this.retryConfig.backoffMultiplier, attempt),
+          this.retryConfig.maxDelayMs,
+        );
+
+        this.loggingService.warn(
+          `${operationName} failed, retrying in ${delay}ms (attempt ${attempt + 1}/${this.retryConfig.maxRetries})`,
+          { error: lastError.message, delay, attempt },
+          "QdrantService",
+        );
+
+        await this.delay(delay);
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * Utility method for delays
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check if Qdrant service is accessible with caching
+   */
+  async healthCheck(forceCheck: boolean = false): Promise<boolean> {
+    const now = Date.now();
+
+    // Use cached result if recent and not forcing check
+    if (!forceCheck && this.isHealthy && (now - this.lastHealthCheck) < this.healthCheckIntervalMs) {
+      return this.isHealthy;
+    }
+
     try {
-      await this.client.getCollections();
+      await this.withRetry(
+        () => this.client.getCollections(),
+        "Health check",
+      );
+      this.isHealthy = true;
+      this.lastHealthCheck = now;
       return true;
     } catch (error) {
+      this.isHealthy = false;
+      this.lastHealthCheck = now;
       this.loggingService.error(
         "Qdrant health check failed",
         { error: error instanceof Error ? error.message : String(error) },
@@ -82,7 +173,26 @@ export class QdrantService {
   }
 
   /**
-   * Create a collection if it doesn't exist
+   * Validate collection name according to Qdrant requirements
+   */
+  private validateCollectionName(collectionName: string): void {
+    if (!collectionName || collectionName.length === 0) {
+      throw new Error("Collection name cannot be empty");
+    }
+
+    if (collectionName.length > 255) {
+      throw new Error("Collection name cannot exceed 255 characters");
+    }
+
+    // Qdrant collection names should only contain alphanumeric characters, hyphens, and underscores
+    const validNameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!validNameRegex.test(collectionName)) {
+      throw new Error("Collection name can only contain alphanumeric characters, hyphens, and underscores");
+    }
+  }
+
+  /**
+   * Create a collection if it doesn't exist with robust error handling
    */
   async createCollectionIfNotExists(
     collectionName: string,
@@ -90,11 +200,24 @@ export class QdrantService {
     distance: "Cosine" | "Dot" | "Euclid" = "Cosine",
   ): Promise<boolean> {
     try {
-      console.log(`QdrantService: Checking if collection '${collectionName}' exists...`);
+      // Validate inputs
+      this.validateCollectionName(collectionName);
 
-      // Check if collection exists
-      const collections = await this.client.getCollections();
-      console.log(`QdrantService: Found ${collections.collections?.length || 0} existing collections`);
+      if (vectorSize <= 0 || vectorSize > 65536) {
+        throw new Error(`Invalid vector size: ${vectorSize}. Must be between 1 and 65536`);
+      }
+
+      // Check health first
+      const isHealthy = await this.healthCheck();
+      if (!isHealthy) {
+        throw new Error("Qdrant service is not healthy");
+      }
+
+      // Check if collection exists with retry
+      const collections = await this.withRetry(
+        () => this.client.getCollections(),
+        "Get collections",
+      );
 
       const existingCollection = collections.collections?.find(
         (col) => col.name === collectionName,
@@ -103,24 +226,25 @@ export class QdrantService {
       if (existingCollection) {
         this.loggingService.info(
           `Collection '${collectionName}' already exists`,
-          { vectorSize: existingCollection.config?.params?.vectors },
+          {},
           "QdrantService",
         );
-        console.log(`QdrantService: Collection '${collectionName}' already exists`);
+
+        // Note: Some Qdrant client types for getCollections may not include config details.
+        // We skip vector size validation here to maintain compatibility across versions.
         return true;
       }
 
-      console.log(`QdrantService: Creating collection '${collectionName}' with vector size ${vectorSize} and distance ${distance}`);
-
-      // Create new collection
-      const createResult = await this.client.createCollection(collectionName, {
-        vectors: {
-          size: vectorSize,
-          distance: distance,
-        },
-      });
-
-      console.log(`QdrantService: Collection creation result:`, createResult);
+      // Create new collection with retry
+      await this.withRetry(
+        () => this.client.createCollection(collectionName, {
+          vectors: {
+            size: vectorSize,
+            distance: distance,
+          },
+        }),
+        "Create collection",
+      );
 
       this.loggingService.info(
         `Collection '${collectionName}' created successfully`,
@@ -129,14 +253,12 @@ export class QdrantService {
       );
       return true;
     } catch (error) {
-      console.error(`QdrantService: Failed to create collection '${collectionName}':`, error);
       this.loggingService.error(
         `Failed to create collection '${collectionName}'`,
         {
           error: error instanceof Error ? error.message : String(error),
           vectorSize,
           distance,
-          stack: error instanceof Error ? error.stack : undefined
         },
         "QdrantService",
       );
@@ -145,25 +267,75 @@ export class QdrantService {
   }
 
   /**
-   * Convert CodeChunk to QdrantPoint format
+   * Validate vector data
+   */
+  private validateVector(vector: number[], expectedSize?: number): void {
+    if (!Array.isArray(vector)) {
+      throw new Error("Vector must be an array");
+    }
+
+    if (vector.length === 0) {
+      throw new Error("Vector cannot be empty");
+    }
+
+    if (expectedSize && vector.length !== expectedSize) {
+      throw new Error(`Vector size mismatch: expected ${expectedSize}, got ${vector.length}`);
+    }
+
+    // Check for invalid values
+    for (let i = 0; i < vector.length; i++) {
+      const value = vector[i];
+      if (typeof value !== 'number' || !isFinite(value)) {
+        throw new Error(`Invalid vector value at index ${i}: ${value}`);
+      }
+    }
+  }
+
+  /**
+   * Validate CodeChunk data
+   */
+  private validateChunk(chunk: CodeChunk): void {
+    if (!chunk) {
+      throw new Error("Chunk cannot be null or undefined");
+    }
+
+    if (!chunk.filePath || typeof chunk.filePath !== 'string') {
+      throw new Error("Chunk must have a valid filePath");
+    }
+
+    if (!chunk.content || typeof chunk.content !== 'string') {
+      throw new Error("Chunk must have valid content");
+    }
+
+    if (typeof chunk.startLine !== 'number' || chunk.startLine < 0) {
+      throw new Error("Chunk must have a valid startLine");
+    }
+
+    if (typeof chunk.endLine !== 'number' || chunk.endLine < chunk.startLine) {
+      throw new Error("Chunk must have a valid endLine");
+    }
+
+    if (!chunk.type || typeof chunk.type !== 'string') {
+      throw new Error("Chunk must have a valid type");
+    }
+
+    if (!chunk.language || typeof chunk.language !== 'string') {
+      throw new Error("Chunk must have a valid language");
+    }
+  }
+
+  /**
+   * Convert CodeChunk to QdrantPoint format with validation
    */
   private chunkToPoint(
     chunk: CodeChunk,
     vector: number[],
     index: number,
   ): QdrantPoint {
-    // Validate vector data
-    if (!Array.isArray(vector) || vector.length === 0) {
-      throw new Error(`Invalid vector for chunk ${chunk.filePath}:${chunk.startLine}-${chunk.endLine}`);
-    }
+    this.validateChunk(chunk);
+    this.validateVector(vector);
 
-    // Check for NaN or infinite values
-    if (vector.some(v => !isFinite(v))) {
-      throw new Error(`Vector contains NaN or infinite values for chunk ${chunk.filePath}:${chunk.startLine}-${chunk.endLine}`);
-    }
-
-    // Create payload with only defined values to avoid undefined in JSON
-    const payload: any = {
+    let payload: QdrantPoint["payload"] = {
       filePath: chunk.filePath,
       content: chunk.content,
       startLine: chunk.startLine,
@@ -172,7 +344,6 @@ export class QdrantService {
       language: chunk.language,
     };
 
-    // Only add optional fields if they are defined
     if (chunk.name !== undefined) {
       payload.name = chunk.name;
     }
@@ -194,7 +365,7 @@ export class QdrantService {
   }
 
   /**
-   * Upsert chunks with their vectors into the collection
+   * Upsert chunks with their vectors into the collection with robust error handling
    */
   async upsertChunks(
     collectionName: string,
@@ -202,69 +373,108 @@ export class QdrantService {
     vectors: number[][],
   ): Promise<boolean> {
     try {
+      // Validate inputs
+      this.validateCollectionName(collectionName);
+
+      if (!Array.isArray(chunks) || !Array.isArray(vectors)) {
+        throw new Error("Chunks and vectors must be arrays");
+      }
+
+      if (chunks.length === 0) {
+        this.loggingService.info("No chunks to upsert", {}, "QdrantService");
+        return true;
+      }
+
       if (chunks.length !== vectors.length) {
         throw new Error(
           `Chunks count (${chunks.length}) doesn't match vectors count (${vectors.length})`,
         );
       }
 
-      // Convert chunks to points
-      const points = chunks.map((chunk, index) =>
-        this.chunkToPoint(chunk, vectors[index], index),
+      // Check health first
+      const isHealthy = await this.healthCheck();
+      if (!isHealthy) {
+        throw new Error("Qdrant service is not healthy");
+      }
+
+      // Convert chunks to points with validation
+      const points = chunks.map((chunk, index) => {
+        try {
+          return this.chunkToPoint(chunk, vectors[index], index);
+        } catch (error) {
+          throw new Error(`Failed to convert chunk ${index}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
+
+      this.loggingService.info(
+        `Starting upsert of ${points.length} points to collection '${collectionName}'`,
+        { totalPoints: points.length, batchSize: this.batchSize },
+        "QdrantService",
       );
 
       // Upsert points in batches to avoid memory issues
-      const batchSize = 100;
-      for (let i = 0; i < points.length; i += batchSize) {
-        const batch = points.slice(i, i + batchSize);
+      let successfulBatches = 0;
+      const totalBatches = Math.ceil(points.length / this.batchSize);
+
+      for (let i = 0; i < points.length; i += this.batchSize) {
+        const batch = points.slice(i, i + this.batchSize);
+        const batchNumber = Math.floor(i / this.batchSize) + 1;
 
         try {
-          // Log the first point for debugging
-          if (i === 0) {
-            console.log("First point structure:", JSON.stringify(batch[0], null, 2));
-            console.log("Vector length:", batch[0].vector.length);
-            console.log("Vector sample:", batch[0].vector.slice(0, 5));
-          }
+          await this.withRetry(
+            () => this.client.upsert(collectionName, {
+              wait: true,
+              points: batch,
+            }),
+            `Upsert batch ${batchNumber}`,
+          );
 
-          await this.client.upsert(collectionName, {
-            wait: true,
-            points: batch,
-          });
-
-          console.log(
-            `Upserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(points.length / batchSize)} (${batch.length} points)`,
+          successfulBatches++;
+          this.loggingService.debug(
+            `Upserted batch ${batchNumber}/${totalBatches} (${batch.length} points)`,
+            { batchNumber, totalBatches, batchSize: batch.length },
+            "QdrantService",
           );
         } catch (error) {
-          console.error(
-            `Failed to upsert batch ${Math.floor(i / batchSize) + 1}:`,
-            error,
+          this.loggingService.error(
+            `Failed to upsert batch ${batchNumber}/${totalBatches}`,
+            {
+              error: error instanceof Error ? error.message : String(error),
+              batchNumber,
+              batchSize: batch.length,
+            },
+            "QdrantService",
           );
-          console.error("Sample point from failed batch:", JSON.stringify(batch[0], null, 2));
-          console.error("Vector details:", {
-            length: batch[0].vector.length,
-            sample: batch[0].vector.slice(0, 10),
-            hasNaN: batch[0].vector.some(v => isNaN(v)),
-            hasInfinity: batch[0].vector.some(v => !isFinite(v))
-          });
           throw error;
         }
       }
 
-      console.log(
+      this.loggingService.info(
         `Successfully upserted ${points.length} chunks to collection '${collectionName}'`,
+        {
+          totalPoints: points.length,
+          successfulBatches,
+          totalBatches,
+        },
+        "QdrantService",
       );
       return true;
     } catch (error) {
-      console.error(
-        `Failed to upsert chunks to collection '${collectionName}':`,
-        error,
+      this.loggingService.error(
+        `Failed to upsert chunks to collection '${collectionName}'`,
+        {
+          error: error instanceof Error ? error.message : String(error),
+          chunksCount: chunks.length,
+          vectorsCount: vectors.length,
+        },
+        "QdrantService",
       );
       return false;
     }
   }
 
   /**
-   * Search for similar vectors in the collection
+   * Search for similar vectors in the collection with robust error handling
    */
   async search(
     collectionName: string,
@@ -273,20 +483,87 @@ export class QdrantService {
     filter?: any,
   ): Promise<SearchResult[]> {
     try {
-      const searchResult = await this.client.search(collectionName, {
-        vector: queryVector,
-        limit: limit,
-        with_payload: true,
-        filter: filter,
-      });
+      // Validate inputs
+      this.validateCollectionName(collectionName);
 
-      return searchResult.map((point) => ({
+      if (limit <= 0 || limit > 10000) {
+        throw new Error(`Invalid limit: ${limit}. Must be between 1 and 10000`);
+      }
+
+      // Validate query vector if provided (empty vector is allowed for filter-only searches)
+      if (queryVector.length > 0) {
+        this.validateVector(queryVector);
+      }
+
+      // Check health first
+      const isHealthy = await this.healthCheck();
+      if (!isHealthy) {
+        throw new Error("Qdrant service is not healthy");
+      }
+
+      // Verify collection exists
+      const collections = await this.withRetry(
+        () => this.client.getCollections(),
+        "Get collections for search",
+      );
+
+      const collectionExists = collections.collections?.some(
+        (col) => col.name === collectionName,
+      );
+
+      if (!collectionExists) {
+        throw new Error(`Collection '${collectionName}' does not exist`);
+      }
+
+      this.loggingService.debug(
+        `Searching in collection '${collectionName}'`,
+        {
+          limit,
+          hasFilter: !!filter,
+          vectorSize: queryVector.length,
+        },
+        "QdrantService",
+      );
+
+      // Perform search with retry
+      const searchResult = await this.withRetry(
+        () => this.client.search(collectionName, {
+          vector: queryVector,
+          limit: limit,
+          with_payload: true,
+          filter: filter,
+        }),
+        "Search operation",
+      );
+
+      const results = searchResult.map((point) => ({
         id: point.id,
         score: point.score || 0,
         payload: point.payload as QdrantPoint["payload"],
       }));
+
+      this.loggingService.debug(
+        `Search completed in collection '${collectionName}'`,
+        {
+          resultsCount: results.length,
+          limit,
+          hasFilter: !!filter,
+        },
+        "QdrantService",
+      );
+
+      return results;
     } catch (error) {
-      console.error(`Search failed in collection '${collectionName}':`, error);
+      this.loggingService.error(
+        `Search failed in collection '${collectionName}'`,
+        {
+          error: error instanceof Error ? error.message : String(error),
+          limit,
+          vectorSize: queryVector.length,
+          hasFilter: !!filter,
+        },
+        "QdrantService",
+      );
       return [];
     }
   }

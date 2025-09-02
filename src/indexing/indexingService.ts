@@ -148,10 +148,16 @@ export class IndexingService {
   private loggingService: CentralizedLoggingService;
   /** Flag to track if indexing is currently paused */
   private isPaused: boolean = false;
+  /** Flag to track if indexing should be cancelled */
+  private isCancelled: boolean = false;
+  /** Flag to track if indexing should be stopped */
+  private isStopped: boolean = false;
   /** Queue of remaining files to process (used for pause/resume functionality) */
   private remainingFiles: string[] = [];
   /** Current indexing progress callback */
   private currentProgressCallback?: (progress: IndexingProgress) => void;
+  /** Abort controller for cancelling operations */
+  private abortController?: AbortController;
   /** Worker pool for parallel processing */
   private workerPool: Worker[] = [];
   /** Queue of files waiting to be processed */
@@ -543,6 +549,12 @@ export class IndexingService {
    * ensuring continuous utilization of all available workers.
    */
   private processNextFile(): void {
+    // Do not dispatch new work when paused
+    if (this.isPaused) {
+      console.log("IndexingService: Paused - not dispatching new files");
+      return;
+    }
+
     if (this.fileQueue.length === 0) {
       // Check if all workers are idle
       if (this.activeWorkers === 0) {
@@ -662,7 +674,11 @@ export class IndexingService {
       },
     };
 
-    // Set indexing state to true
+    // Set indexing state to true and reset cancellation flags
+    this.isCancelled = false;
+    this.isStopped = false;
+    this.isPaused = false;
+    this.abortController = new AbortController();
     this.stateManager.setIndexing(true, "Starting indexing process");
 
     try {
@@ -730,6 +746,28 @@ export class IndexingService {
           result,
           progressCallback,
         );
+
+        // If paused during sequential processing, wait for resume and continue
+        if (this.isPaused) {
+          console.log("IndexingService: Sequential processing paused, waiting to resume...");
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (!this.isPaused) {
+                resolve();
+              } else {
+                setTimeout(check, 250);
+              }
+            };
+            check();
+          });
+
+          if (this.remainingFiles.length > 0) {
+            const remaining = [...this.remainingFiles];
+            this.remainingFiles = [];
+            console.log(`IndexingService: Resuming sequential processing of ${remaining.length} files`);
+            await this.processFilesSequentially(remaining, result, progressCallback);
+          }
+        }
       }
 
       // Phase 4: Handle embeddings and storage
@@ -827,8 +865,10 @@ export class IndexingService {
       console.error(errorMessage);
       this.stateManager.setError(errorMessage);
     } finally {
-      // Always reset the indexing state, regardless of success or failure
-      this.stateManager.setIndexing(false);
+      // Only clear indexing flag if not paused
+      if (!this.isPaused) {
+        this.stateManager.setIndexing(false);
+      }
     }
 
     result.duration = Date.now() - startTime;
@@ -959,14 +999,22 @@ export class IndexingService {
     progressCallback?: (progress: IndexingProgress) => void,
   ): Promise<void> {
     for (let i = 0; i < codeFiles.length; i++) {
-      // Check for pause flag before processing each file
-      // This enables the pause/resume functionality by saving our current state
+      // Check for pause, cancel, or stop flags before processing each file
       if (this.isPaused) {
         console.log(
           "IndexingService: Indexing paused, saving remaining files...",
         );
         this.remainingFiles = codeFiles.slice(i); // Save remaining files for later resumption
         result.success = false; // Mark as incomplete due to pause
+        return;
+      }
+
+      if (this.isCancelled || this.isStopped) {
+        console.log(
+          `IndexingService: Indexing ${this.isCancelled ? 'cancelled' : 'stopped'}, aborting...`,
+        );
+        result.success = false;
+        result.errors.push(`Indexing ${this.isCancelled ? 'cancelled' : 'stopped'} by user`);
         return;
       }
 
@@ -1525,12 +1573,15 @@ export class IndexingService {
     this.stateManager.setIndexingMessage("Resuming indexing...");
 
     // Continue processing from where we left off
-    if (this.remainingFiles.length > 0) {
+    if (this.useParallelProcessing && this.workerPool.length > 0) {
       await this.continueIndexing();
     } else {
-      console.log("IndexingService: No remaining files to process");
-      this.stateManager.setIndexing(false);
-      this.stateManager.setIndexingMessage(null);
+      // In sequential mode, startIndexing's control flow will continue after pause
+      if (this.remainingFiles.length === 0) {
+        console.log("IndexingService: No remaining files to process");
+        this.stateManager.setIndexing(false);
+        this.stateManager.setIndexingMessage(null);
+      }
     }
   }
 
@@ -1541,21 +1592,182 @@ export class IndexingService {
    * processing the remaining files in the queue.
    */
   private async continueIndexing(): Promise<void> {
-    // This method would continue the indexing process
-    // For now, we'll implement a basic version that processes remaining files
     console.log(
-      `IndexingService: Continuing indexing with ${this.remainingFiles.length} remaining files`,
+      `IndexingService: Continuing indexing. Parallel=${this.useParallelProcessing && this.workerPool.length > 0}, queue=${this.fileQueue.length}, remainingFiles=${this.remainingFiles.length}`,
     );
 
-    // Note: In a full implementation, this would continue the exact same
-    // indexing pipeline from where it left off, including embedding generation
-    // and storage. For now, we'll just clear the remaining files and mark as complete.
+    // Parallel mode: resume scheduling files to idle workers
+    if (this.useParallelProcessing && this.workerPool.length > 0) {
+      // Kick the scheduler to fill idle workers
+      const idleCount = this.workerPool.filter((w) => {
+        const s = this.workerStates.get(w);
+        return s && !s.busy;
+      }).length;
+      const dispatchCount = Math.min(idleCount, this.fileQueue.length);
+      for (let i = 0; i < dispatchCount; i++) {
+        this.processNextFile();
+      }
+      return;
+    }
 
+    // Sequential fallback (basic): process remaining files sequentially
+    if (this.remainingFiles.length > 0) {
+      try {
+        // Reuse current progress callback if available
+        const dummyResult: IndexingResult = {
+          success: false,
+          chunks: [],
+          totalFiles: this.remainingFiles.length,
+          processedFiles: 0,
+          errors: [],
+          duration: 0,
+          stats: {
+            filesByLanguage: {},
+            chunksByType: {} as Record<ChunkType, number>,
+            totalLines: 0,
+            totalBytes: 0,
+            totalEmbeddings: 0,
+            vectorDimensions: 0,
+          },
+        };
+        await this.processFilesSequentially(
+          this.remainingFiles,
+          dummyResult,
+          this.currentProgressCallback,
+        );
+      } finally {
+        this.remainingFiles = [];
+      }
+    }
+
+    // Note: embeddings and storage will be handled by the original startIndexing flow
+  }
+
+  /**
+   * Stops the current indexing operation gracefully
+   *
+   * This method stops the indexing process, allowing current operations to complete
+   * but preventing new files from being processed. Unlike cancel, this preserves
+   * any work that has been completed.
+   */
+  public stop(): void {
+    if (!this.stateManager.isIndexing()) {
+      console.warn(
+        "IndexingService: Cannot stop - no indexing operation in progress",
+      );
+      return;
+    }
+
+    console.log("IndexingService: Stopping indexing operation...");
+    this.isStopped = true;
+    this.isPaused = false;
+    this.stateManager.setIndexingMessage("Stopping indexing...");
+
+    // Signal abort to any ongoing operations
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+
+    // Terminate worker threads gracefully
+    this.terminateWorkers();
+
+    console.log("IndexingService: Indexing stop requested");
+  }
+
+  /**
+   * Cancels the current indexing operation immediately
+   *
+   * This method immediately cancels the indexing process, discarding any
+   * work in progress and cleaning up resources. This is more aggressive
+   * than stop() and should be used when immediate termination is required.
+   */
+  public cancel(): void {
+    if (!this.stateManager.isIndexing()) {
+      console.warn(
+        "IndexingService: Cannot cancel - no indexing operation in progress",
+      );
+      return;
+    }
+
+    console.log("IndexingService: Cancelling indexing operation...");
+    this.isCancelled = true;
+    this.isPaused = false;
+    this.isStopped = false;
+    this.stateManager.setIndexingMessage("Cancelling indexing...");
+
+    // Signal abort to any ongoing operations
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+
+    // Terminate worker threads immediately
+    this.terminateWorkers();
+
+    // Clear any remaining work
     this.remainingFiles = [];
+
+    // Reset state
     this.stateManager.setIndexing(false);
+    this.stateManager.setPaused(false);
     this.stateManager.setIndexingMessage(null);
 
-    console.log("IndexingService: Indexing resumed and completed");
+    console.log("IndexingService: Indexing cancelled");
+  }
+
+  /**
+   * Terminate all worker threads
+   */
+  private terminateWorkers(): void {
+    if (this.workerPool.length > 0) {
+      console.log(`IndexingService: Terminating ${this.workerPool.length} worker threads...`);
+
+      this.workerPool.forEach(worker => {
+        try {
+          worker.terminate();
+        } catch (error) {
+          console.warn("IndexingService: Error terminating worker:", error);
+        }
+      });
+
+      this.workerPool = [];
+      this.workerStates.clear();
+      this.fileQueue = [];
+
+      console.log("IndexingService: All worker threads terminated");
+    }
+  }
+
+  /**
+   * Check if indexing is in a cancellable state
+   */
+  public isCancellable(): boolean {
+    return this.stateManager.isIndexing() && !this.isCancelled && !this.isStopped;
+  }
+
+  /**
+   * Check if indexing is in a stoppable state
+   */
+  public isStoppable(): boolean {
+    return this.stateManager.isIndexing() && !this.isCancelled && !this.isStopped;
+  }
+
+  /**
+   * Get current indexing operation status
+   */
+  public getIndexingStatus(): {
+    isIndexing: boolean;
+    isPaused: boolean;
+    isCancelled: boolean;
+    isStopped: boolean;
+    remainingFiles: number;
+  } {
+    return {
+      isIndexing: this.stateManager.isIndexing(),
+      isPaused: this.isPaused,
+      isCancelled: this.isCancelled,
+      isStopped: this.isStopped,
+      remainingFiles: this.remainingFiles.length,
+    };
   }
 
   /**
@@ -1575,6 +1787,8 @@ export class IndexingService {
         // Reset any indexing state
         this.remainingFiles = [];
         this.isPaused = false;
+        this.isCancelled = false;
+        this.isStopped = false;
         this.stateManager.setIndexing(false);
         this.stateManager.setPaused(false);
         this.stateManager.setIndexingMessage(null);
