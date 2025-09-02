@@ -104,7 +104,8 @@ suite('ContextService Tests', () => {
             mockEmbeddingProvider as any,
             mockIndexingService as IndexingService,
             mockConfigService as any,
-            {} as any // mockLoggingService
+            {} as any, // mockLoggingService
+            {} as any  // mockWorkspaceManager
         );
     });
 

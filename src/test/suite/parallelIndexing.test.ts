@@ -58,7 +58,7 @@ suite('Parallel Indexing Tests', () => {
         const fileWalker = new FileWalker(tempWorkspaceDir);
         const astParser = new AstParser();
         const chunker = new Chunker();
-        const qdrantService = new QdrantService(configService.getQdrantConnectionString(), mockLoggingService);
+        const qdrantService = new QdrantService({ connectionString: configService.getQdrantConnectionString() }, mockLoggingService);
         const embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(configService);
         const lspService = new LSPService(tempWorkspaceDir, mockLoggingService);
 
@@ -155,7 +155,7 @@ suite('Parallel Indexing Tests', () => {
         const fileWalker = new FileWalker(invalidWorkspaceDir);
         const astParser = new AstParser();
         const chunker = new Chunker();
-        const qdrantService = new QdrantService(configService.getQdrantConnectionString(), {} as any);
+        const qdrantService = new QdrantService({ connectionString: configService.getQdrantConnectionString() }, {} as any);
         const embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(configService);
         const lspService = new LSPService(invalidWorkspaceDir, {} as any);
 

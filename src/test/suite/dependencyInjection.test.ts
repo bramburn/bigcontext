@@ -40,9 +40,9 @@ suite('Dependency Injection Tests', () => {
     test('should create QdrantService with injected connection string', () => {
         // Test that QdrantService can be instantiated with a connection string
         // This verifies the basic dependency injection pattern for database services
-        const connectionString = 'http://test:6333';
-        const qdrantService = new QdrantService(connectionString, {} as any);
-        
+        const config = { connectionString: 'http://test:6333' };
+        const qdrantService = new QdrantService(config, {} as any);
+
         assert.ok(qdrantService);
         // QdrantService should be created without throwing
         // This confirms that the service properly accepts and stores the connection string
@@ -84,7 +84,8 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockIndexingService,
             {} as any, // mockConfigService
-            {} as any  // mockLoggingService
+            {} as any, // mockLoggingService
+            {} as any  // mockWorkspaceManager
         );
 
         assert.ok(contextService);
