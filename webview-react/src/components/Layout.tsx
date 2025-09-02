@@ -34,6 +34,7 @@ import IndexingView from './IndexingView';
 import DiagnosticsView from './DiagnosticsView';
 import SearchContainer from './SearchContainer';
 import HelpView from './HelpView';
+import SettingsView from './SettingsView';
 
 const useStyles = makeStyles({
   layout: {
@@ -96,6 +97,11 @@ const navigationItems: NavigationItem[] = [
   {
     id: 'setup',
     label: 'Setup & Configuration',
+    icon: <Settings20Regular />
+  },
+  {
+    id: 'settings',
+    label: 'Extension Settings',
     icon: <Settings20Regular />
   },
   {
@@ -173,6 +179,8 @@ export default function Layout() {
         return <IndexingView />;
       case 'setup':
         return <SetupView />;
+      case 'settings':
+        return <SettingsView />;
       case 'diagnostics':
         return <DiagnosticsView />;
       case 'help':

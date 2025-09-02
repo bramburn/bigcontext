@@ -218,7 +218,19 @@ export const QueryView: React.FC = () => {
     setQuery(inputValue);
     setSearching(true);
     addToHistory(inputValue);
-    
+
+    // Track search action in UI
+    postMessage({
+      command: 'trackTelemetry',
+      data: {
+        eventName: 'search_performed',
+        metadata: {
+          source: 'ui',
+          queryLength: inputValue.trim().length
+        }
+      }
+    });
+
     postMessage('search', {
       query: inputValue
     });
@@ -253,73 +265,91 @@ export const QueryView: React.FC = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <Text size={800} weight="bold" className={styles.title}>
-          <Search24Regular style={{ marginRight: tokens.spacingHorizontalS }} />
+    <div className={styles.container} role="main" aria-label="Code Context Search">
+      <header className={styles.header}>
+        <Text size={800} weight="bold" className={styles.title} as="h1">
+          <Search24Regular style={{ marginRight: tokens.spacingHorizontalS }} aria-hidden="true" />
           Search Your Code
         </Text>
         <Body1 className={styles.description}>
           Use natural language to search through your indexed codebase.
         </Body1>
-      </div>
+      </header>
 
       {/* Search Input */}
-      <div className={styles.searchSection}>
-        <Card className={styles.searchCard}>
+      <section className={styles.searchSection} aria-labelledby="search-heading">
+        <Card className={styles.searchCard} role="search">
+          <label htmlFor="search-input" className="sr-only">Search query</label>
           <Input
+            id="search-input"
             size="large"
             placeholder="Describe what you're looking for..."
             value={inputValue}
             onChange={(_, data) => setInputValue(data.value)}
             onKeyPress={handleKeyPress}
             className={styles.searchInput}
+            aria-label="Search query input"
+            aria-describedby="search-description"
           />
+          <div id="search-description" className="sr-only">
+            Enter a natural language description of the code you want to find
+          </div>
           <div className={styles.searchActions}>
             <Button
               appearance="primary"
-              icon={<Search24Regular />}
+              icon={<Search24Regular aria-hidden="true" />}
               disabled={!inputValue.trim() || searchState.isSearching}
               onClick={handleSearch}
+              aria-describedby="search-status"
             >
               {searchState.isSearching ? 'Searching...' : 'Search'}
             </Button>
-            {searchState.isSearching && <Spinner size="small" />}
+            {searchState.isSearching && <Spinner size="small" aria-label="Searching in progress" />}
           </div>
         </Card>
-      </div>
+      </section>
 
       {/* Search History */}
       {searchState.history.length > 0 && (
-        <div className={styles.historySection}>
+        <section className={styles.historySection} aria-labelledby="history-heading">
           <Card className={styles.historyCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text size={400} weight="semibold">
-                <History24Regular style={{ marginRight: tokens.spacingHorizontalXS }} />
+              <Text size={400} weight="semibold" as="h2" id="history-heading">
+                <History24Regular style={{ marginRight: tokens.spacingHorizontalXS }} aria-hidden="true" />
                 Recent Searches
               </Text>
               <Button
                 appearance="subtle"
                 size="small"
-                icon={<Dismiss24Regular />}
+                icon={<Dismiss24Regular aria-hidden="true" />}
                 onClick={handleClearHistory}
+                aria-label="Clear search history"
               >
                 Clear
               </Button>
             </div>
-            <div className={styles.historyItems}>
+            <div className={styles.historyItems} role="list" aria-label="Recent search queries">
               {searchState.history.map((query, index) => (
                 <div
                   key={index}
                   className={styles.historyItem}
                   onClick={() => handleHistoryClick(query)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleHistoryClick(query);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="listitem button"
+                  aria-label={`Search for: ${query}`}
                 >
                   {query}
                 </div>
               ))}
             </div>
           </Card>
-        </div>
+        </section>
       )}
 
       {/* Search Results */}

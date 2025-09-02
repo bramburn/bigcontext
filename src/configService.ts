@@ -494,4 +494,31 @@ export class ConfigService {
     public getIndexingIntensity(): 'High' | 'Medium' | 'Low' {
         return this.config.get<'High' | 'Medium' | 'Low'>('indexingIntensity') || 'High';
     }
+
+    /**
+     * Get telemetry enabled setting
+     *
+     * Determines whether anonymous usage telemetry is enabled. This setting
+     * controls whether the extension collects anonymous usage data to help
+     * improve the product. Users can opt-out at any time.
+     *
+     * @returns Whether telemetry is enabled, defaulting to true (opt-out model)
+     */
+    public getTelemetryEnabled(): boolean {
+        return this.config.get<boolean>('enableTelemetry') ?? true;
+    }
+
+    /**
+     * Update telemetry enabled setting
+     *
+     * Updates the telemetry preference in VS Code settings. This method
+     * provides a programmatic way to change the telemetry setting.
+     *
+     * @param enabled - Whether to enable telemetry
+     * @returns Promise that resolves when the setting is updated
+     */
+    public async setTelemetryEnabled(enabled: boolean): Promise<void> {
+        await this.config.update('enableTelemetry', enabled, vscode.ConfigurationTarget.Global);
+        this.refresh(); // Refresh cached configuration
+    }
 }
