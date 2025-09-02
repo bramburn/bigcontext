@@ -14,6 +14,7 @@ import { WorkspaceManager } from './workspaceManager';
 import { FeedbackService } from './feedback/feedbackService';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { ConfigService } from './configService';
+import { HealthCheckService } from './validation/healthCheckService';
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
@@ -47,12 +48,12 @@ export class MessageRouter {
     private troubleshootingSystem: TroubleshootingSystem;
     private configurationManager: ConfigurationManager;
     private stateManager: StateManager;
+    private healthCheckService?: HealthCheckService;
+
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
-<<<<<<< HEAD
     private feedbackService: FeedbackService;
     private telemetryService?: TelemetryService;
->>>>>>> 647ca7f2331a8f38515f1ca7b9bd6cef9de6e3c7
 
     /**
      * Constructs a new MessageRouter instance with core services
@@ -66,6 +67,8 @@ export class MessageRouter {
         this.contextService = contextService;
         this.indexingService = indexingService;
         this.context = context;
+        this.healthCheckService = new HealthCheckService(this.contextService);
+
         this.stateManager = stateManager;
         this.systemValidator = new SystemValidator(context);
         this.troubleshootingSystem = new TroubleshootingSystem();
@@ -144,6 +147,9 @@ export class MessageRouter {
                     break;
                 case 'getTroubleshootingGuides':
                     await this.handleGetTroubleshootingGuides(message, webview);
+                    break;
+                case 'runHealthChecks':
+                    await this.handleRunHealthChecks(webview);
                     break;
                 case 'runAutoFix':
                     await this.handleRunAutoFix(message, webview);
@@ -797,31 +803,8 @@ export class MessageRouter {
             return;
         }
 
-        // Build context query with filters
-        const contextQuery: any = {
-            query,
-            maxResults: 20,
-            minSimilarity: 0.5
-        };
-
-        // Add filters if provided
-        if (filters) {
-            if (filters.fileType) {
-                contextQuery.fileType = filters.fileType;
-            }
-            if (filters.dateRange) {
-                contextQuery.dateRange = filters.dateRange;
-            }
-            if (filters.maxResults) {
-                contextQuery.maxResults = filters.maxResults;
-            }
-            if (filters.minSimilarity) {
-                contextQuery.minSimilarity = filters.minSimilarity;
-            }
-        }
-
         // Perform search with filters
-        const result = await this.contextService.queryContext(contextQuery);
+        const result = await this.searchManager.search(query, filters);
 
         // Send results back to webview
         await webview.postMessage({
@@ -849,6 +832,25 @@ export class MessageRouter {
             command: 'serviceStatusResponse',
             data: status
         });
+    }
+
+    /**
+     * Runs health checks for critical services and returns results to webview
+     */
+    private async handleRunHealthChecks(webview: vscode.Webview): Promise<void> {
+        try {
+            const results = await this.healthCheckService?.runAllChecks();
+            await webview.postMessage({
+                command: 'healthCheckResponse',
+                data: results ?? []
+            });
+        } catch (error) {
+            await webview.postMessage({
+                command: 'healthCheckResponse',
+                data: [],
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
     }
 
     /**
