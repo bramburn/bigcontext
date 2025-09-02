@@ -18,6 +18,7 @@ import { QdrantService, SearchResult } from "../db/qdrantService";
 import { IEmbeddingProvider } from "../embeddings/embeddingProvider";
 import { ConfigService } from "../configService";
 import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import { WorkspaceManager } from "../workspaceManager";
 
 /**
  * Represents the result of a file content retrieval operation
@@ -121,6 +122,7 @@ export class ContextService {
   private embeddingProvider: IEmbeddingProvider;
   private configService: ConfigService;
   private loggingService: CentralizedLoggingService;
+  private workspaceManager: WorkspaceManager;
 
   // Configuration constants
   private readonly DEFAULT_CHUNK_LIMIT = 50;
@@ -164,6 +166,7 @@ export class ContextService {
    * @param indexingService - Injected IndexingService instance
    * @param configService - Injected ConfigService instance
    * @param loggingService - Injected CentralizedLoggingService instance
+   * @param workspaceManager - Injected WorkspaceManager instance for consistent collection naming
    */
   constructor(
     workspaceRoot: string,
@@ -172,6 +175,7 @@ export class ContextService {
     indexingService: IndexingService,
     configService: ConfigService,
     loggingService: CentralizedLoggingService,
+    workspaceManager: WorkspaceManager,
   ) {
     this.workspaceRoot = workspaceRoot;
     this.qdrantService = qdrantService;
@@ -179,31 +183,20 @@ export class ContextService {
     this.indexingService = indexingService;
     this.configService = configService;
     this.loggingService = loggingService;
+    this.workspaceManager = workspaceManager;
   }
 
   /**
    * Generates a unique collection name for the current workspace
    *
-   * The collection name is derived from the workspace folder name,
-   * sanitized to ensure compatibility with Qdrant naming requirements.
+   * Uses the WorkspaceManager to ensure consistent collection naming
+   * across all services (IndexingService, ContextService, etc.).
+   * This ensures that indexing and search operations use the same collection.
    *
-   * @returns A sanitized collection name string
-   */
-  /**
-   * Generates a unique collection name for the current workspace
-   *
-   * The collection name is derived from the workspace folder name,
-   * sanitized to ensure compatibility with Qdrant naming requirements.
-   * Uses path module for cross-platform compatibility.
-   *
-   * @returns A sanitized collection name string
+   * @returns A unique collection name string for the current workspace
    */
   private generateCollectionName(): string {
-    const workspaceName = path.basename(this.workspaceRoot) || "workspace";
-    const sanitizedName = workspaceName
-      .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .toLowerCase();
-    return `code_context_${sanitizedName}`;
+    return this.workspaceManager.generateCollectionName();
   }
 
   /**

@@ -90,8 +90,12 @@ export class QdrantService {
     distance: "Cosine" | "Dot" | "Euclid" = "Cosine",
   ): Promise<boolean> {
     try {
+      console.log(`QdrantService: Checking if collection '${collectionName}' exists...`);
+
       // Check if collection exists
       const collections = await this.client.getCollections();
+      console.log(`QdrantService: Found ${collections.collections?.length || 0} existing collections`);
+
       const existingCollection = collections.collections?.find(
         (col) => col.name === collectionName,
       );
@@ -99,30 +103,41 @@ export class QdrantService {
       if (existingCollection) {
         this.loggingService.info(
           `Collection '${collectionName}' already exists`,
-          {},
+          { vectorSize: existingCollection.config?.params?.vectors },
           "QdrantService",
         );
+        console.log(`QdrantService: Collection '${collectionName}' already exists`);
         return true;
       }
 
+      console.log(`QdrantService: Creating collection '${collectionName}' with vector size ${vectorSize} and distance ${distance}`);
+
       // Create new collection
-      await this.client.createCollection(collectionName, {
+      const createResult = await this.client.createCollection(collectionName, {
         vectors: {
           size: vectorSize,
           distance: distance,
         },
       });
 
+      console.log(`QdrantService: Collection creation result:`, createResult);
+
       this.loggingService.info(
         `Collection '${collectionName}' created successfully`,
-        {},
+        { vectorSize, distance },
         "QdrantService",
       );
       return true;
     } catch (error) {
+      console.error(`QdrantService: Failed to create collection '${collectionName}':`, error);
       this.loggingService.error(
         `Failed to create collection '${collectionName}'`,
-        { error: error instanceof Error ? error.message : String(error) },
+        {
+          error: error instanceof Error ? error.message : String(error),
+          vectorSize,
+          distance,
+          stack: error instanceof Error ? error.stack : undefined
+        },
         "QdrantService",
       );
       return false;
@@ -137,21 +152,44 @@ export class QdrantService {
     vector: number[],
     index: number,
   ): QdrantPoint {
+    // Validate vector data
+    if (!Array.isArray(vector) || vector.length === 0) {
+      throw new Error(`Invalid vector for chunk ${chunk.filePath}:${chunk.startLine}-${chunk.endLine}`);
+    }
+
+    // Check for NaN or infinite values
+    if (vector.some(v => !isFinite(v))) {
+      throw new Error(`Vector contains NaN or infinite values for chunk ${chunk.filePath}:${chunk.startLine}-${chunk.endLine}`);
+    }
+
+    // Create payload with only defined values to avoid undefined in JSON
+    const payload: any = {
+      filePath: chunk.filePath,
+      content: chunk.content,
+      startLine: chunk.startLine,
+      endLine: chunk.endLine,
+      type: chunk.type,
+      language: chunk.language,
+    };
+
+    // Only add optional fields if they are defined
+    if (chunk.name !== undefined) {
+      payload.name = chunk.name;
+    }
+    if (chunk.signature !== undefined) {
+      payload.signature = chunk.signature;
+    }
+    if (chunk.docstring !== undefined) {
+      payload.docstring = chunk.docstring;
+    }
+    if (chunk.metadata !== undefined) {
+      payload.metadata = chunk.metadata;
+    }
+
     return {
       id: `${chunk.filePath}:${chunk.startLine}-${chunk.endLine}:${index}`,
       vector: vector,
-      payload: {
-        filePath: chunk.filePath,
-        content: chunk.content,
-        startLine: chunk.startLine,
-        endLine: chunk.endLine,
-        type: chunk.type,
-        name: chunk.name,
-        signature: chunk.signature,
-        docstring: chunk.docstring,
-        language: chunk.language,
-        metadata: chunk.metadata,
-      },
+      payload: payload,
     };
   }
 
@@ -180,14 +218,36 @@ export class QdrantService {
       for (let i = 0; i < points.length; i += batchSize) {
         const batch = points.slice(i, i + batchSize);
 
-        await this.client.upsert(collectionName, {
-          wait: true,
-          points: batch,
-        });
+        try {
+          // Log the first point for debugging
+          if (i === 0) {
+            console.log("First point structure:", JSON.stringify(batch[0], null, 2));
+            console.log("Vector length:", batch[0].vector.length);
+            console.log("Vector sample:", batch[0].vector.slice(0, 5));
+          }
 
-        console.log(
-          `Upserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(points.length / batchSize)} (${batch.length} points)`,
-        );
+          await this.client.upsert(collectionName, {
+            wait: true,
+            points: batch,
+          });
+
+          console.log(
+            `Upserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(points.length / batchSize)} (${batch.length} points)`,
+          );
+        } catch (error) {
+          console.error(
+            `Failed to upsert batch ${Math.floor(i / batchSize) + 1}:`,
+            error,
+          );
+          console.error("Sample point from failed batch:", JSON.stringify(batch[0], null, 2));
+          console.error("Vector details:", {
+            length: batch[0].vector.length,
+            sample: batch[0].vector.slice(0, 10),
+            hasNaN: batch[0].vector.some(v => isNaN(v)),
+            hasInfinity: batch[0].vector.some(v => !isFinite(v))
+          });
+          throw error;
+        }
       }
 
       console.log(

@@ -186,7 +186,8 @@ export class ExtensionManager {
                     this.embeddingProvider,
                     this.indexingService,
                     this.configService,
-                    this.loggingService
+                    this.loggingService,
+                    this.workspaceManager
                 );
                 this.loggingService.info('ExtensionManager: ContextService initialized');
 
