@@ -1279,7 +1279,7 @@ export class MessageRouter {
      */
     private async handleMapToSettings(webview: vscode.Webview): Promise<void> {
         // Open VS Code settings filtered to this extension
-        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bramburn.code-context-engine');
+        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:icelabz.code-context-engine');
     }
 
     /**

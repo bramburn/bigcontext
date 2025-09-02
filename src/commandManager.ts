@@ -1,17 +1,17 @@
 /**
  * CommandManager.ts - Central Command Management for Code Context Engine Extension
- * 
+ *
  * This file serves as the command registration and handling hub for the VS Code extension.
  * It implements a clean separation of concerns by centralizing all command-related logic
  * in one place, making it easier to maintain and extend the extension's functionality.
- * 
+ *
  * Key Responsibilities:
  * - Command registration with VS Code's command system
  * - Command callback implementations with proper error handling
  * - Integration with core services (IndexingService, WebviewManager)
  * - Resource management through proper disposal of command registrations
  * - User feedback through notifications and progress indicators
- * 
+ *
  * Architecture:
  * This class follows the singleton pattern within the extension lifecycle and is
  * instantiated during extension activation. It depends on other core services
@@ -26,7 +26,7 @@ import { NotificationService } from './notifications/notificationService';
 /**
  * CommandManager class responsible for registering and managing all VS Code commands
  * for the Code Context Engine extension.
- * 
+ *
  * This class centralizes command registration and provides a clean separation between
  * command handling logic and the main extension activation. It handles:
  * - Registration of all extension commands
@@ -62,21 +62,21 @@ export class CommandManager {
 
     /**
      * Registers all extension commands and returns their disposables
-     * 
+     *
      * This method is called during extension activation to register all commands
      * that the extension responds to. Each command is registered with a unique
      * identifier and a callback handler method.
-     * 
+     *
      * The method returns an array of Disposable objects that should be disposed
      * during extension deactivation to clean up resources and prevent memory leaks.
-     * 
+     *
      * Registered Commands:
      * - code-context-engine.openMainPanel: Opens the main extension panel
      * - code-context-engine.startIndexing: Initiates the code indexing process
      * - code-context-engine.openSettings: Opens extension settings
      * - code-context-engine.setupProject: Launches the project setup wizard
      * - code-context-engine.openDiagnostics: Opens the diagnostics panel
-     * 
+     *
      * @returns Array of disposables for the registered commands
      */
     registerCommands(): vscode.Disposable[] {
@@ -193,23 +193,23 @@ export class CommandManager {
 
     /**
      * Handles the 'code-context-engine.startIndexing' command
-     * 
+     *
      * This is a complex command that initiates the code indexing process. It:
      * 1. Validates prerequisites (service availability, workspace folder)
      * 2. Shows progress notification to keep users informed
      * 3. Delegates to IndexingService for the actual indexing work
      * 4. Provides real-time progress updates during indexing
      * 5. Shows completion status with statistics
-     * 
+     *
      * The indexing process can be lengthy, so it's important to provide good
      * user feedback throughout the operation.
-     * 
+     *
      * Error Handling:
      * - Validates service availability before starting
      * - Checks for workspace folder existence
      * - Handles indexing errors gracefully
      * - Provides detailed error messages to users
-     * 
+     *
      * @returns Promise that resolves when indexing completes or rejects on error
      */
     private async handleStartIndexing(): Promise<void> {
@@ -243,9 +243,9 @@ export class CommandManager {
                 const result = await this.indexingService.startIndexing((progressInfo) => {
                     // Calculate progress percentage based on processed vs total files
                     const progressPercentage = (progressInfo.processedFiles / progressInfo.totalFiles) * 100;
-                    
+
                     // Update progress with current phase and file being processed
-                    progress.report({ 
+                    progress.report({
                         message: `${progressInfo.currentPhase}: ${progressInfo.currentFile}`,
                         increment: progressPercentage
                     });
@@ -255,11 +255,18 @@ export class CommandManager {
                 if (result.success) {
                     // Show final success message
                     progress.report({ message: 'Indexing completed successfully!' });
-                    
+
                     // Show detailed completion statistics in an information message
                     this.notificationService.success(
                         `Indexing completed! Processed ${result.processedFiles} files with ${result.chunks.length} code chunks.`
                     );
+
+                    // Open the main panel and trigger first-run guidance
+                    const isWorkspaceOpen = !!vscode.workspace.workspaceFolders?.length;
+                    this.webviewManager.showMainPanel({ isWorkspaceOpen });
+                    // Switch to the query view and mark first run complete in the webview
+                    this.webviewManager.postMessage('codeContextMain', { type: 'changeView', view: 'query' });
+                    this.webviewManager.postMessage('codeContextMain', { type: 'firstRunComplete' });
                 } else {
                     // Handle indexing failure with error details
                     throw new Error(`Indexing failed with ${result.errors.length} errors`);
@@ -270,7 +277,7 @@ export class CommandManager {
         } catch (error) {
             // Log detailed error for debugging
             console.error('CommandManager: Failed to start indexing:', error);
-            
+
             // Show user-friendly error message with error details
             vscode.window.showErrorMessage(`Failed to start indexing: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -294,43 +301,40 @@ export class CommandManager {
      */
     private async handleOpenSettings(): Promise<void> {
         try {
-            console.log('CommandManager: Opening settings panel...');
+            console.log('CommandManager: Opening native VS Code settings for Code Context Engine...');
 
-            // Use WebviewManager to show the settings panel
-            // This creates a custom webview-based settings interface
-            this.webviewManager.showSettingsPanel();
-
-            console.log('CommandManager: Settings panel opened successfully');
+            // Open VS Code Settings scoped to this extension (aligns with PRD)
+            await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:icelabz.code-context-engine');
         } catch (error) {
             // Log detailed error for debugging
-            console.error('CommandManager: Failed to open settings panel:', error);
+            console.error('CommandManager: Failed to open settings:', error);
             // Show user-friendly error message
-            vscode.window.showErrorMessage('Failed to open Code Context Engine settings panel');
+            vscode.window.showErrorMessage('Failed to open Code Context Engine settings');
         }
     }
 
     /**
      * Handles the 'code-context-engine.setupProject' command
-     * 
+     *
      * This command serves as an onboarding wizard for new users or projects.
      * It guides users through the initial setup process by presenting options
      * for common first-time tasks.
-     * 
+     *
      * Current Implementation:
      * - Validates workspace availability
      * - Shows a welcome message with action choices
      * - Routes to appropriate commands based on user selection
-     * 
+     *
      * Future Enhancements:
      * - Multi-step setup wizard
      * - Project type detection and configuration
      * - Integration with project templates
-     * 
+     *
      * Error Handling:
      * - Validates workspace folder existence
      * - Handles user cancellation gracefully
      * - Provides error feedback for setup failures
-     * 
+     *
      * @returns Promise that resolves when setup is completed or rejects on error
      */
     private async handleSetupProject(): Promise<void> {
@@ -380,20 +384,20 @@ export class CommandManager {
 
     /**
      * Handles the 'code-context-engine.openDiagnostics' command
-     * 
+     *
      * This command provides access to the diagnostics panel, which offers:
      * - System status information
      * - Connection testing capabilities
      * - Performance metrics
      * - Troubleshooting tools
-     * 
+     *
      * The diagnostics panel is implemented as a webview and managed by the
      * WebviewManager, following the same pattern as other UI panels.
-     * 
+     *
      * Error Handling:
      * - Catches and logs any exceptions during diagnostics panel opening
      * - Shows user-friendly error message via VS Code notification system
-     * 
+     *
      * @returns Promise that resolves when diagnostics panel is opened or rejects on error
      */
     private async handleOpenDiagnostics(): Promise<void> {

@@ -64,8 +64,9 @@ function App() {
       }
     });
 
-    const unsubscribeView = onMessageCommand('changeView', (data) => {
-      setCurrentView(data.view);
+    const unsubscribeView = onMessageCommand('changeView', (msg) => {
+      const view = msg.data?.view ?? msg.view;
+      if (view) setCurrentView(view);
     });
 
     const unsubscribeFirstRun = onMessageCommand('firstRunComplete', () => {
