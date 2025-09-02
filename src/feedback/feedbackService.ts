@@ -53,8 +53,8 @@ export class FeedbackService {
                 timestamp: new Date().toISOString(),
             };
 
-            // Log to the centralized logging service with FEEDBACK prefix
-            this.logger.log('FEEDBACK', JSON.stringify(feedbackEntry));
+            // Log to the centralized logging service with INFO level
+            this.logger.info(`FEEDBACK: ${JSON.stringify(feedbackEntry)}`);
             
             // Increment feedback counter
             this.feedbackCount++;

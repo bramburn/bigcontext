@@ -11,6 +11,8 @@ import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { WorkspaceManager } from './workspaceManager';
 import { FeedbackService } from './feedback/feedbackService';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
+import { ConfigService } from './configService';
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
@@ -64,7 +66,11 @@ export class MessageRouter {
         this.systemValidator = new SystemValidator(context);
         this.troubleshootingSystem = new TroubleshootingSystem();
         this.configurationManager = new ConfigurationManager(context);
-        this.feedbackService = new FeedbackService(contextService.getLoggingService());
+
+        // Create a logging service for the feedback service
+        const configService = new ConfigService();
+        const loggingService = new CentralizedLoggingService(configService);
+        this.feedbackService = new FeedbackService(loggingService);
     }
 
     /**

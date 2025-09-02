@@ -1344,6 +1344,26 @@ export class WebviewManager implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Focus the main panel if it exists
+     */
+    focusMainPanel(): void {
+        const mainPanel = this.panels.get('main');
+        if (mainPanel) {
+            mainPanel.panel.reveal();
+        }
+    }
+
+    /**
+     * Post a message to the main panel
+     */
+    postMessageToMainPanel(message: any): void {
+        const mainPanel = this.panels.get('main');
+        if (mainPanel) {
+            mainPanel.panel.webview.postMessage(message);
+        }
+    }
+
+    /**
      * Disposes of the WebviewManager and all associated resources
      *
      * This method performs a complete cleanup of all resources managed

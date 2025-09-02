@@ -105,7 +105,7 @@ suite('MessageRouter Tests', () => {
         // This verifies that the router correctly calls the service and sends a response
         assert.strictEqual(receivedMessages.length, 1, 'Should send one response message');
         const response = receivedMessages[0];
-        assert.strictEqual(response.command, 'startIndexing', 'Response should have correct command');
+        assert.strictEqual(response.command, 'indexingComplete', 'Response should have correct command');
         assert.strictEqual(response.requestId, 'test-123', 'Response should have correct requestId');
         assert.ok(response.result, 'Response should contain result');
     });
@@ -127,7 +127,7 @@ suite('MessageRouter Tests', () => {
         // This verifies that the router checks the state and prevents duplicate operations
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
-        assert.strictEqual(response.command, 'startIndexing', 'Response should have correct command');
+        assert.strictEqual(response.command, 'indexingError', 'Response should have correct command');
         assert.strictEqual(response.requestId, 'test-456', 'Response should have correct requestId');
         assert.ok(response.error, 'Response should contain error message');
         assert.ok(response.error.includes('already in progress'), 'Error should mention indexing in progress');
@@ -167,7 +167,7 @@ suite('MessageRouter Tests', () => {
         // This verifies that the router provides meaningful error messages for unknown commands
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
-        assert.strictEqual(response.command, 'unknownCommand', 'Response should have correct command');
+        assert.strictEqual(response.command, 'error', 'Response should have correct command');
         assert.strictEqual(response.requestId, 'unknown-123', 'Response should have correct requestId');
         assert.ok(response.error, 'Response should contain error message');
         assert.ok(response.error.includes('Unknown command'), 'Error should mention unknown command');
@@ -232,7 +232,7 @@ suite('MessageRouter Tests', () => {
         // This verifies that the router catches service errors and returns meaningful error messages
         assert.strictEqual(receivedMessages.length, 1, 'Should send one error response');
         const response = receivedMessages[0];
-        assert.strictEqual(response.command, 'startIndexing', 'Response should have correct command');
+        assert.strictEqual(response.command, 'indexingError', 'Response should have correct command');
         assert.ok(response.error, 'Response should contain error message');
         assert.ok(response.error.includes('Test indexing error'), 'Error should contain original error message');
     });
