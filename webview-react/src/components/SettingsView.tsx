@@ -11,21 +11,64 @@ import {
   Button,
   Text,
   Body1,
+  Caption1,
   Switch,
-  makeStyles,
-  tokens,
-  Divider,
-  Field,
   Input,
   Dropdown,
-  Option
+  Option,
+  Divider,
+  Badge,
+  makeStyles,
+  tokens,
+  Field
 } from '@fluentui/react-components';
-import { Settings24Regular, Save24Regular, Shield24Regular } from '@fluentui/react-icons';
+import {
+  Settings24Regular,
+  Search24Regular,
+  Brain24Regular,
+  NumberSymbol24Regular,
+  Save24Regular,
+  Dismiss24Regular
+} from '@fluentui/react-icons';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
+
+/**
+ * Interface for advanced search configuration
+ */
+interface AdvancedSearchConfig {
+  queryExpansion: {
+    enabled: boolean;
+    maxExpandedTerms: number;
+    useSemanticSimilarity: boolean;
+  };
+  resultLimit: number;
+  aiModel: {
+    embedding: string;
+    llm: string;
+  };
+  searchBehavior: {
+    minSimilarity: number;
+    includeComments: boolean;
+    includeTests: boolean;
+  };
+}
+
+/**
+ * Available AI models for selection
+ */
+interface AIModel {
+  id: string;
+  name: string;
+  description: string;
+  type: 'embedding' | 'llm';
+}
 
 const useStyles = makeStyles({
   container: {
-    padding: tokens.spacingVerticalXL,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalL,
+    padding: tokens.spacingVerticalL,
     maxWidth: '800px',
     margin: '0 auto'
   },
@@ -33,20 +76,63 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalM,
-    marginBottom: tokens.spacingVerticalXL
+    marginBottom: tokens.spacingVerticalL
+  },
+  headerIcon: {
+    color: tokens.colorBrandBackground
+  },
+  title: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  headerDescription: {
+    color: tokens.colorNeutralForeground2,
+    marginTop: tokens.spacingVerticalXS
   },
   section: {
-    marginBottom: tokens.spacingVerticalXL
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalM
   },
   sectionTitle: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
-    marginBottom: tokens.spacingVerticalM,
-    fontWeight: tokens.fontWeightSemibold
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: tokens.spacingVerticalS
   },
   card: {
     padding: tokens.spacingVerticalL
+  },
+  formRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    marginBottom: tokens.spacingVerticalM
+  },
+  formRowHorizontal: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+    marginBottom: tokens.spacingVerticalM
+  },
+  label: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightMedium
+  },
+  description: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200
+  },
+  actions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalM,
+    justifyContent: 'flex-end',
+    marginTop: tokens.spacingVerticalL
+  },
+  badge: {
+    marginLeft: tokens.spacingHorizontalXS
   },
   settingRow: {
     display: 'flex',
@@ -66,208 +152,449 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     marginTop: tokens.spacingVerticalXS
   },
-  actions: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: tokens.spacingHorizontalM,
-    marginTop: tokens.spacingVerticalXL
-  },
   privacySection: {
     backgroundColor: tokens.colorNeutralBackground2,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: tokens.borderRadiusMedium
   }
 });
+=======
+  Switch,
+  makeStyles,
+  tokens,
+  Divider,
+  Field,
+  Input,
+  Dropdown,
+  Option
+} from '@fluentui/react-components';
+import { Settings24Regular, Save24Regular, Shield24Regular } from '@fluentui/react-icons';
+import { postMessage, onMessageCommand } from '../utils/vscodeApi';
 
-interface SettingsConfig {
-  enableTelemetry: boolean;
-  maxResults: number;
-  minSimilarity: number;
-  indexingIntensity: 'low' | 'medium' | 'high';
-  autoIndex: boolean;
-  compactMode: boolean;
-  showAdvancedOptions: boolean;
-}
+const useStyles = makeStyles({
+  container: {
+    padding: tokens.spacingVerticalXL,
+>>>>>>> master
+    maxWidth: '800px',
+    margin: '0 auto'
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+<<<<<<< HEAD
+    marginBottom: tokens.spacingVerticalL
+  },
+  headerIcon: {
+    color: tokens.colorBrandBackground
+  },
+  title: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  headerDescription: {
+    color: tokens.colorNeutralForeground2,
+    marginTop: tokens.spacingVerticalXS
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalM
+=======
+    marginBottom: tokens.spacingVerticalXL
+  },
+  section: {
+    marginBottom: tokens.spacingVerticalXL
+>>>>>>> master
+  },
+  sectionTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+<<<<<<< HEAD
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: tokens.spacingVerticalS
+=======
+    marginBottom: tokens.spacingVerticalM,
+    fontWeight: tokens.fontWeightSemibold
+>>>>>>> master
+  },
+  card: {
+    padding: tokens.spacingVerticalL
+  },
+<<<<<<< HEAD
+  formRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    marginBottom: tokens.spacingVerticalM
+  },
+  formRowHorizontal: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+    marginBottom: tokens.spacingVerticalM
+  },
+  label: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightMedium
+  },
+  description: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200
+  },
+  actions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalM,
+    justifyContent: 'flex-end',
+    marginTop: tokens.spacingVerticalL
+  },
+  badge: {
+    marginLeft: tokens.spacingHorizontalXS
+  }
+});
 
 export const SettingsView: React.FC = () => {
   const styles = useStyles();
-  const [settings, setSettings] = useState<SettingsConfig>({
-    enableTelemetry: true, // Default to opt-out (true means enabled)
-    maxResults: 20,
-    minSimilarity: 0.5,
-    indexingIntensity: 'medium',
-    autoIndex: false,
-    compactMode: false,
-    showAdvancedOptions: false
+  
+  // State for configuration
+  const [config, setConfig] = useState<AdvancedSearchConfig>({
+    queryExpansion: {
+      enabled: false,
+      maxExpandedTerms: 3,
+      useSemanticSimilarity: true
+    },
+    resultLimit: 20,
+    aiModel: {
+      embedding: 'text-embedding-ada-002',
+      llm: 'gpt-3.5-turbo'
+    },
+    searchBehavior: {
+      minSimilarity: 0.5,
+      includeComments: true,
+      includeTests: false
+    }
   });
-  const [isLoading, setIsLoading] = useState(true);
+
+  // State for available models
+  const [availableModels] = useState<AIModel[]>([
+    { id: 'text-embedding-ada-002', name: 'OpenAI Ada-002', description: 'High-quality embeddings', type: 'embedding' },
+    { id: 'nomic-embed-text', name: 'Nomic Embed', description: 'Open source embeddings', type: 'embedding' },
+    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast and efficient', type: 'llm' },
+    { id: 'gpt-4', name: 'GPT-4', description: 'Most capable model', type: 'llm' }
+  ]);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load settings on component mount
+  // Load configuration on mount
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        postMessage({
-          command: 'getSettings'
-        });
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-        setIsLoading(false);
+    postMessage('getConfiguration');
+    
+    const unsubscribe = onMessageCommand('configurationResponse', (data) => {
+      if (data.success && data.config) {
+        setConfig(prevConfig => ({
+          ...prevConfig,
+          ...data.config.advancedSearch
+        }));
       }
-    };
-
-    loadSettings();
-
-    // Listen for settings response
-    const handleMessage = onMessageCommand('settingsLoaded', (data: SettingsConfig) => {
-      setSettings(data);
-      setIsLoading(false);
     });
 
-    return () => {
-      if (handleMessage) {
-        handleMessage();
+    return unsubscribe;
+  }, []);
+
+  // Handle configuration changes
+  const handleConfigChange = useCallback((updates: Partial<AdvancedSearchConfig>) => {
+    setConfig(prev => ({ ...prev, ...updates }));
+    setHasChanges(true);
+  }, []);
+
+  // Handle query expansion toggle
+  const handleQueryExpansionToggle = useCallback((enabled: boolean) => {
+    handleConfigChange({
+      queryExpansion: { ...config.queryExpansion, enabled }
+    });
+  }, [config.queryExpansion, handleConfigChange]);
+
+  // Handle result limit change
+  const handleResultLimitChange = useCallback((value: string) => {
+    const limit = parseInt(value, 10);
+    if (!isNaN(limit) && limit > 0 && limit <= 100) {
+      handleConfigChange({ resultLimit: limit });
+    }
+  }, [handleConfigChange]);
+
+  // Handle AI model selection
+  const handleModelChange = useCallback((modelType: 'embedding' | 'llm', modelId: string) => {
+    handleConfigChange({
+      aiModel: {
+        ...config.aiModel,
+        [modelType]: modelId
       }
-    };
-  }, []);
+    });
+  }, [config.aiModel, handleConfigChange]);
 
-  const handleSettingChange = useCallback((key: keyof SettingsConfig, value: any) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  }, []);
-
-  const handleSaveSettings = useCallback(async () => {
-    setIsSaving(true);
+  // Save configuration
+  const handleSave = useCallback(async () => {
+    setIsLoading(true);
     try {
-      postMessage({
-        command: 'updateSettings',
-        data: settings
+      postMessage('setConfiguration', {
+        advancedSearch: config
       });
-
-      // Listen for save confirmation
-      const handleSaveResponse = onMessageCommand('settingsSaved', () => {
-        setIsSaving(false);
-        // Show success notification could be added here
-      });
-
-      // Cleanup listener after a timeout
-      setTimeout(() => {
-        if (handleSaveResponse) {
-          handleSaveResponse();
-        }
-        setIsSaving(false);
-      }, 5000);
-
+      setHasChanges(false);
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      setIsSaving(false);
+      console.error('Failed to save configuration:', error);
+    } finally {
+      setIsLoading(false);
     }
-  }, [settings]);
+  }, [config]);
 
-  // Keyboard event handler for accessibility
-  const handleKeyDown = useCallback((event: React.KeyboardEvent, action: () => void) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      action();
-    }
+  // Reset configuration
+  const handleReset = useCallback(() => {
+    postMessage('getConfiguration');
+    setHasChanges(false);
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className={styles.container}>
-        <Text>Loading settings...</Text>
-      </div>
-    );
-  }
+  const embeddingModels = availableModels.filter(m => m.type === 'embedding');
+  const llmModels = availableModels.filter(m => m.type === 'llm');
 
   return (
-    <div className={styles.container} role="main" aria-label="Extension Settings">
+    <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
-        <Settings24Regular aria-hidden="true" />
-        <Text size={800} as="h1">Extension Settings</Text>
+        <div className={styles.headerIcon}>
+          <Settings24Regular />
+        </div>
+        <div>
+          <Text size={800} weight="bold" className={styles.title}>
+            Advanced Search Settings
+          </Text>
+          <Body1 className={styles.headerDescription}>
+            Configure advanced search behavior, query expansion, and AI model selection
+          </Body1>
+        </div>
       </div>
 
-      {/* Privacy & Telemetry Section */}
-      <section className={styles.section} aria-labelledby="privacy-heading">
-        <div className={styles.sectionTitle}>
-          <Shield24Regular aria-hidden="true" />
-          <Text size={600} as="h2" id="privacy-heading">Privacy & Telemetry</Text>
-        </div>
-        <Card className={`${styles.card} ${styles.privacySection}`} role="group" aria-labelledby="privacy-heading">
-          <div className={styles.settingRow}>
-            <div className={styles.settingInfo}>
-              <Text weight="semibold" as="label" htmlFor="telemetry-switch">
-                Enable Anonymous Usage Telemetry
-              </Text>
-              <div className={styles.settingDescription} id="telemetry-description">
-                Help improve the extension by sharing anonymous usage data.
-                No code content or personal information is collected.
-              </div>
-            </div>
-            <Switch
-              id="telemetry-switch"
-              checked={settings.enableTelemetry}
-              onChange={(_, data) => handleSettingChange('enableTelemetry', data.checked)}
-              aria-describedby="telemetry-description"
-              aria-label="Enable anonymous usage telemetry"
-            />
-          </div>
-        </Card>
-      </section>
-
-      <Divider />
-
-      {/* Search Settings */}
-      <section className={styles.section} aria-labelledby="search-heading">
-        <Text size={600} className={styles.sectionTitle} as="h2" id="search-heading">
-          Search Settings
+      {/* Query Expansion Settings */}
+      <div className={styles.section}>
+        <Text size={600} className={styles.sectionTitle}>
+          <Search24Regular />
+          Query Expansion
+          {config.queryExpansion.enabled && (
+            <Badge appearance="filled" color="brand" className={styles.badge}>
+              Enabled
+            </Badge>
+          )}
         </Text>
-        <Card className={styles.card} role="group" aria-labelledby="search-heading">
-          <div className={styles.settingRow}>
-            <div className={styles.settingInfo}>
-              <Text weight="semibold" as="label" htmlFor="max-results-input">
-                Maximum Results
-              </Text>
-              <div className={styles.settingDescription} id="max-results-description">
-                Maximum number of search results to display
-              </div>
+        
+        <Card className={styles.card}>
+          <div className={styles.formRowHorizontal}>
+            <Switch
+              checked={config.queryExpansion.enabled}
+              onChange={(_, data) => handleQueryExpansionToggle(data.checked)}
+            />
+            <div>
+              <Text className={styles.label}>Enable Query Expansion</Text>
+              <Caption1 className={styles.description}>
+                Automatically expand search queries with synonyms and related terms
+              </Caption1>
             </div>
-            <Field>
-              <Input
-                id="max-results-input"
-                type="number"
-                value={settings.maxResults.toString()}
-                onChange={(_, data) => handleSettingChange('maxResults', parseInt(data.value) || 20)}
-                min={1}
-                max={100}
-                aria-describedby="max-results-description"
-                aria-label="Maximum number of search results"
-              />
-            </Field>
           </div>
 
-          <div className={styles.settingRow}>
-            <div className={styles.settingInfo}>
-              <Text weight="semibold">Minimum Similarity</Text>
-              <div className={styles.settingDescription}>
-                Minimum similarity threshold for search results (0.0 - 1.0)
+          {config.queryExpansion.enabled && (
+            <>
+              <Divider />
+              <div className={styles.formRow}>
+                <Text className={styles.label}>Maximum Expanded Terms</Text>
+                <Input
+                  type="number"
+                  value={config.queryExpansion.maxExpandedTerms.toString()}
+                  onChange={(_, data) => {
+                    const value = parseInt(data.value, 10);
+                    if (!isNaN(value) && value >= 1 && value <= 10) {
+                      handleConfigChange({
+                        queryExpansion: { ...config.queryExpansion, maxExpandedTerms: value }
+                      });
+                    }
+                  }}
+                  min={1}
+                  max={10}
+                />
+                <Caption1 className={styles.description}>
+                  Number of additional terms to generate (1-10)
+                </Caption1>
               </div>
-            </div>
-            <Field>
-              <Input
-                type="number"
-                value={settings.minSimilarity.toString()}
-                onChange={(_, data) => handleSettingChange('minSimilarity', parseFloat(data.value) || 0.5)}
-                min={0}
-                max={1}
-                step={0.1}
-              />
-            </Field>
+
+              <div className={styles.formRowHorizontal}>
+                <Switch
+                  checked={config.queryExpansion.useSemanticSimilarity}
+                  onChange={(_, data) => handleConfigChange({
+                    queryExpansion: { ...config.queryExpansion, useSemanticSimilarity: data.checked }
+                  })}
+                />
+                <div>
+                  <Text className={styles.label}>Use Semantic Similarity</Text>
+                  <Caption1 className={styles.description}>
+                    Generate semantically similar terms instead of just synonyms
+                  </Caption1>
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* Result Limit Settings */}
+      <div className={styles.section}>
+        <Text size={600} className={styles.sectionTitle}>
+          <NumberSymbol24Regular />
+          Result Limits
+        </Text>
+
+        <Card className={styles.card}>
+          <div className={styles.formRow}>
+            <Text className={styles.label}>Maximum Search Results</Text>
+            <Input
+              type="number"
+              value={config.resultLimit.toString()}
+              onChange={(_, data) => handleResultLimitChange(data.value)}
+              min={1}
+              max={100}
+            />
+            <Caption1 className={styles.description}>
+              Maximum number of results to return per search (1-100)
+            </Caption1>
+          </div>
+
+          <div className={styles.formRow}>
+            <Text className={styles.label}>Minimum Similarity Threshold</Text>
+            <Input
+              type="number"
+              value={config.searchBehavior.minSimilarity.toString()}
+              onChange={(_, data) => {
+                const value = parseFloat(data.value);
+                if (!isNaN(value) && value >= 0 && value <= 1) {
+                  handleConfigChange({
+                    searchBehavior: { ...config.searchBehavior, minSimilarity: value }
+                  });
+                }
+              }}
+              step={0.1}
+              min={0}
+              max={1}
+            />
+            <Caption1 className={styles.description}>
+              Minimum similarity score for results (0.0-1.0)
+            </Caption1>
           </div>
         </Card>
+      </div>
+
+      {/* AI Model Selection */}
+      <div className={styles.section}>
+        <Text size={600} className={styles.sectionTitle}>
+          <Brain24Regular />
+          AI Model Selection
+        </Text>
+
+        <Card className={styles.card}>
+          <div className={styles.formRow}>
+            <Text className={styles.label}>Embedding Model</Text>
+            <Dropdown
+              placeholder="Select embedding model"
+              value={embeddingModels.find(m => m.id === config.aiModel.embedding)?.name || ''}
+              onOptionSelect={(_, data) => handleModelChange('embedding', data.optionValue as string)}
+            >
+              {embeddingModels.map(model => (
+                <Option key={model.id} value={model.id}>
+                  {model.name}
+                </Option>
+              ))}
+            </Dropdown>
+            <Caption1 className={styles.description}>
+              Model used for generating text embeddings
+            </Caption1>
+          </div>
+
+          <div className={styles.formRow}>
+            <Text className={styles.label}>Language Model (LLM)</Text>
+            <Dropdown
+              placeholder="Select language model"
+              value={llmModels.find(m => m.id === config.aiModel.llm)?.name || ''}
+              onOptionSelect={(_, data) => handleModelChange('llm', data.optionValue as string)}
+            >
+              {llmModels.map(model => (
+                <Option key={model.id} value={model.id}>
+                  {model.name}
+                </Option>
+              ))}
+            </Dropdown>
+            <Caption1 className={styles.description}>
+              Model used for query expansion and re-ranking
+            </Caption1>
+          </div>
+        </Card>
+      </div>
+
+      {/* Search Behavior Settings */}
+      <div className={styles.section}>
+        <Text size={600} className={styles.sectionTitle}>
+          Search Behavior
+        </Text>
+
+        <Card className={styles.card}>
+          <div className={styles.formRowHorizontal}>
+            <Switch
+              checked={config.searchBehavior.includeComments}
+              onChange={(_, data) => handleConfigChange({
+                searchBehavior: { ...config.searchBehavior, includeComments: data.checked }
+              })}
+            />
+            <div>
+              <Text className={styles.label}>Include Comments</Text>
+              <Caption1 className={styles.description}>
+                Include code comments in search results
+              </Caption1>
+            </div>
+          </div>
+
+          <div className={styles.formRowHorizontal}>
+            <Switch
+              checked={config.searchBehavior.includeTests}
+              onChange={(_, data) => handleConfigChange({
+                searchBehavior: { ...config.searchBehavior, includeTests: data.checked }
+              })}
+            />
+            <div>
+              <Text className={styles.label}>Include Test Files</Text>
+              <Caption1 className={styles.description}>
+                Include test files in search results
+              </Caption1>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Action Buttons */}
+      <div className={styles.actions}>
+        <Button
+          appearance="secondary"
+          icon={<Dismiss24Regular />}
+          onClick={handleReset}
+          disabled={!hasChanges || isLoading}
+        >
+          Reset
+        </Button>
+        <Button
+          appearance="primary"
+          icon={<Save24Regular />}
+          onClick={handleSave}
+          disabled={!hasChanges || isLoading}
+        >
+          {isLoading ? 'Saving...' : 'Save Settings'}
+        </Button>
       </div>
 
       {/* Indexing Settings */}

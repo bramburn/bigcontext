@@ -15,7 +15,7 @@ import { FileWalker } from './indexing/fileWalker';
 import { AstParser } from './parsing/astParser';
 import { Chunker } from './parsing/chunker';
 import { LSPService } from './lsp/lspService';
-import { FileSystemWatcherManager } from './fileSystemWatcherManager';
+import { FileWatcherService } from './indexing/fileWatcherService';
 import { WorkspaceManager } from './workspaceManager';
 
 // Manager imports
@@ -55,7 +55,7 @@ export class ExtensionManager {
     private embeddingProvider!: IEmbeddingProvider;
     private contextService!: ContextService;
     private indexingService!: IndexingService;
-    private fileSystemWatcherManager!: FileSystemWatcherManager;
+    private fileWatcherService!: FileWatcherService;
     private workspaceManager!: WorkspaceManager;
 
     // Managers - services that manage specific aspects of the extension
@@ -205,13 +205,13 @@ export class ExtensionManager {
                 );
                 this.loggingService.info('ExtensionManager: ContextService initialized');
 
-                // Initialize FileSystemWatcherManager for automatic indexing
-                // FileSystemWatcherManager monitors file changes and keeps the index up-to-date
+                // Initialize FileWatcherService for automatic indexing
+                // FileWatcherService monitors file changes and keeps the index up-to-date
                 // It depends on IndexingService for performing incremental updates
-                this.fileSystemWatcherManager = new FileSystemWatcherManager(this.indexingService);
-                await this.fileSystemWatcherManager.initialize();
-                this.disposables.push(this.fileSystemWatcherManager);
-                this.loggingService.info('FileSystemWatcherManager initialized', {}, 'ExtensionManager');
+                this.fileWatcherService = new FileWatcherService(this.indexingService);
+                await this.fileWatcherService.initialize();
+                this.disposables.push(this.fileWatcherService);
+                this.loggingService.info('FileWatcherService initialized', {}, 'ExtensionManager');
             } else {
                 this.loggingService.warn('No workspace folder found, some services not initialized', {}, 'ExtensionManager');
             }

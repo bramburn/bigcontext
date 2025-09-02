@@ -210,14 +210,17 @@ export class SearchManager {
                 this.loggingService.debug(`Expanded terms: ${expandedQuery.expandedTerms.join(', ')}`, {}, 'SearchManager');
             }
 
+            // Get result limit from configuration
+            const config = this.configService.getFullConfig();
+            const resultLimit = config.search?.maxResults || filters.maxResults || 20;
+            const minSimilarity = config.search?.minSimilarity || filters.minSimilarity || 0.5;
+
             // Build context query from search parameters
             const contextQuery: ContextQuery & { fileType?: string; dateRange?: any } = {
                 query: searchQuery, // Use expanded query
-                maxResults: filters.maxResults || 20,
-                minSimilarity: filters.minSimilarity || 0.5,
-                fileTypes: filters.fileTypes,
-                fileType: filters.fileType,
-                dateRange: filters.dateRange
+                maxResults: resultLimit,
+                minSimilarity: minSimilarity,
+                fileTypes: filters.fileTypes
             };
 
             // Perform the search

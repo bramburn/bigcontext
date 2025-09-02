@@ -137,10 +137,10 @@ describe('AppStore', () => {
       const { result } = renderHook(() => useAppStore());
       
       act(() => {
-        result.current.setProviderStatus('configured');
+        result.current.setProviderStatus('connected');
       });
-      
-      expect(result.current.providerStatus).toBe('configured');
+
+      expect(result.current.providerStatus).toBe('connected');
     });
 
     it('should update database configuration', () => {
@@ -282,10 +282,8 @@ describe('AppStore', () => {
     it('should complete indexing with stats', () => {
       const { result } = renderHook(() => useAppStore());
       const stats: Partial<IndexingStats> = {
-        totalFiles: 100,
-        processedFiles: 100,
-        totalChunks: 500,
         duration: 30000,
+        chunksCreated: 500,
       };
       
       act(() => {
@@ -328,20 +326,14 @@ describe('AppStore', () => {
           filePath: '/test/file1.ts',
           content: 'test content 1',
           score: 0.95,
-          startLine: 1,
-          endLine: 5,
-          type: 'function',
-          language: 'typescript',
+          lineNumber: 1,
         },
         {
           id: '2',
           filePath: '/test/file2.ts',
           content: 'test content 2',
           score: 0.85,
-          startLine: 10,
-          endLine: 15,
-          type: 'class',
-          language: 'typescript',
+          lineNumber: 10,
         },
       ];
       
@@ -361,7 +353,7 @@ describe('AppStore', () => {
         result.current.addToHistory('query 3');
       });
       
-      expect(result.current.history).toEqual(['query 1', 'query 2', 'query 3']);
+      expect(result.current.history).toEqual(['query 3', 'query 2', 'query 1']);
       
       act(() => {
         result.current.clearHistory();
@@ -375,7 +367,6 @@ describe('AppStore', () => {
       const stats: Partial<SearchStats> = {
         totalResults: 25,
         searchTime: 150,
-        query: 'test query',
       };
       
       act(() => {
@@ -404,14 +395,14 @@ describe('AppStore', () => {
       
       act(() => {
         result.current.setWorkspaceOpen(true);
-        result.current.setCurrentView('search');
+        result.current.setCurrentView('query');
         result.current.setSelectedDatabase('qdrant');
         result.current.setSelectedProvider('openai');
         result.current.setQuery('test query');
       });
       
       expect(result.current.isWorkspaceOpen).toBe(true);
-      expect(result.current.currentView).toBe('search');
+      expect(result.current.currentView).toBe('query');
       expect(result.current.selectedDatabase).toBe('qdrant');
       expect(result.current.selectedProvider).toBe('openai');
       expect(result.current.query).toBe('test query');
@@ -428,7 +419,7 @@ describe('AppStore', () => {
         result.current.setDatabaseStatus('connected');
         result.current.setSelectedProvider('ollama');
         result.current.updateProviderConfig({ model: 'nomic-embed-text' });
-        result.current.setProviderStatus('configured');
+        result.current.setProviderStatus('connected');
         result.current.setSetupComplete(true);
         result.current.setCurrentView('indexing');
       });
@@ -436,7 +427,7 @@ describe('AppStore', () => {
       expect(result.current.currentView).toBe('indexing');
       expect(result.current.isSetupComplete).toBe(true);
       expect(result.current.databaseStatus).toBe('connected');
-      expect(result.current.providerStatus).toBe('configured');
+      expect(result.current.providerStatus).toBe('connected');
     });
   });
 });

@@ -41,5 +41,10 @@ export default defineConfig({
   esbuild: {
     drop: ['console', 'debugger'],
     legalComments: 'none'
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/tests/setup.ts']
   }
 });

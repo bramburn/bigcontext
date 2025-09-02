@@ -3,7 +3,7 @@
  */
 
 // View types
-export type ViewType = 'setup' | 'indexing' | 'query' | 'diagnostics';
+export type ViewType = 'setup' | 'indexing' | 'query' | 'diagnostics' | 'settings' | 'indexingDashboard';
 
 // App state types
 export interface AppState {

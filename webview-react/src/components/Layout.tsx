@@ -35,6 +35,7 @@ import DiagnosticsView from './DiagnosticsView';
 import SearchContainer from './SearchContainer';
 import HelpView from './HelpView';
 import SettingsView from './SettingsView';
+import IndexingDashboard from './IndexingDashboard';
 
 const useStyles = makeStyles({
   layout: {
@@ -92,12 +93,20 @@ const navigationItems: NavigationItem[] = [
   {
     id: 'indexing',
     label: 'Indexing Status',
-    icon: <DatabaseSearch20Regular />
+    icon: <DatabaseSearch20Regular />,
+    children: [
+      { id: 'indexing.status', label: 'Status Overview', icon: <DatabaseSearch20Regular /> },
+      { id: 'indexing.dashboard', label: 'Enhanced Dashboard', icon: <DatabaseSearch20Regular /> }
+    ]
   },
   {
     id: 'setup',
     label: 'Setup & Configuration',
-    icon: <Settings20Regular />
+    icon: <Settings20Regular />,
+    children: [
+      { id: 'setup.basic', label: 'Basic Setup', icon: <Settings20Regular /> },
+      { id: 'setup.advanced', label: 'Advanced Settings', icon: <Settings20Regular /> }
+    ]
   },
   {
     id: 'settings',
@@ -174,11 +183,20 @@ export default function Layout() {
   const renderContent = () => {
     switch (selectedNavItem) {
       case 'search':
+      case 'search.query':
+      case 'search.saved':
         return <SearchContainer />;
       case 'indexing':
+      case 'indexing.status':
         return <IndexingView />;
+      case 'indexing.dashboard':
+        return <IndexingDashboard />;
       case 'setup':
+      case 'setup.basic':
         return <SetupView />;
+<<<<<<< HEAD
+      case 'setup.advanced':
+        return <SettingsView />;
       case 'settings':
         return <SettingsView />;
       case 'diagnostics':
