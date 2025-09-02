@@ -13,17 +13,22 @@ import {
   Body1,
   Input,
   Spinner,
+  Badge,
   makeStyles,
   tokens
 } from '@fluentui/react-components';
 import {
   Search24Regular,
   History24Regular,
-  Dismiss24Regular
+  Dismiss24Regular,
+  ThumbLike20Regular,
+  ThumbDislike20Regular,
+  Share20Regular
 } from '@fluentui/react-icons';
 import { useAppStore, useSearchState } from '../stores/appStore';
 import { SearchResult } from '../types';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
+import FilterPanel, { FilterOptions } from './FilterPanel';
 
 const useStyles = makeStyles({
   container: {
@@ -155,6 +160,9 @@ export const QueryView: React.FC = () => {
   } = useAppStore();
   
   const [inputValue, setInputValue] = useState(searchState.query);
+  const [filters, setFilters] = useState<FilterOptions>({});
+  const [availableFileTypes, setAvailableFileTypes] = useState<string[]>([]);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
 
   // Set up message listeners for search results
   useEffect(() => {
@@ -198,6 +206,19 @@ export const QueryView: React.FC = () => {
         searchTime: payload.searchTime ?? payload.processingTime ?? 0,
         lastSearched: new Date()
       });
+
+      // Extract available file types from results
+      const fileTypes = new Set<string>();
+      normalized.forEach((result: SearchResult) => {
+        if (result.filePath) {
+          const extension = result.filePath.split('.').pop() || '';
+          if (extension) {
+            fileTypes.add('.' + extension);
+          }
+        }
+      });
+      setAvailableFileTypes(Array.from(fileTypes).sort());
+
       setSearching(false);
     });
 
@@ -217,12 +238,35 @@ export const QueryView: React.FC = () => {
 
     setQuery(inputValue);
     setSearching(true);
-    addToHistory(inputValue);
-    
-    postMessage('search', {
-      query: inputValue
+    // Convert filters to the format expected by the backend
+    const searchFilters: any = {};
+
+    if (filters.fileType) {
+      searchFilters.fileType = filters.fileType;
+    }
+
+    if (filters.dateRange?.from || filters.dateRange?.to) {
+      searchFilters.dateRange = {};
+      if (filters.dateRange.from) {
+        searchFilters.dateRange.gte = new Date(filters.dateRange.from).getTime();
+      }
+      if (filters.dateRange.to) {
+        searchFilters.dateRange.lte = new Date(filters.dateRange.to).getTime();
+      }
+    }
+
+    // Track search action in UI
+    postMessage({
+      command: 'trackTelemetry',
+      data: {
+        eventName: 'search_performed',
+        metadata: {
+          source: 'ui',
+          queryLength: inputValue.trim().length
+        }
+      }
     });
-  }, [inputValue, setQuery, setSearching, addToHistory]);
+  }, [inputValue, filters, setQuery, setSearching, addToHistory]);
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter') {
@@ -248,123 +292,73 @@ export const QueryView: React.FC = () => {
     });
   };
 
+  const handleFilterChange = useCallback((newFilters: FilterOptions) => {
+    setFilters(newFilters);
+    // Trigger new search if there's a current query
+    if (inputValue.trim()) {
+      // Use setTimeout to ensure state is updated before search
+      setTimeout(() => {
+        handleSearch();
+      }, 0);
+    }
+  }, [inputValue, handleSearch]);
+
+  const handleFeedback = useCallback((result: SearchResult, feedbackType: 'positive' | 'negative') => {
+    if (feedbackSubmitted.has(result.id)) return;
+
+    postMessage('submitFeedback', {
+      query: searchState.query,
+      resultId: result.id,
+      filePath: result.filePath,
+      feedback: feedbackType
+    });
+
+    // Mark feedback as submitted for this result
+    setFeedbackSubmitted(prev => new Set(prev).add(result.id));
+  }, [searchState.query, feedbackSubmitted]);
+
+  const handleShare = useCallback((result: SearchResult) => {
+    // Generate the deep link URI using the correct extension ID from package.json
+    const extensionId = 'icelabz.code-context-engine'; // publisher.name from package.json
+    const link = `vscode://${extensionId}/view?resultId=${encodeURIComponent(result.id)}`;
+
+    // Copy to clipboard via backend
+    postMessage('copyToClipboard', {
+      text: link
+    });
+  }, []);
+
   const handleClearHistory = () => {
     clearHistory();
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <Text size={800} weight="bold" className={styles.title}>
-          <Search24Regular style={{ marginRight: tokens.spacingHorizontalS }} />
+    <div className={styles.container} role="main" aria-label="Code Context Search">
+      <header className={styles.header}>
+        <Text size={800} weight="bold" className={styles.title} as="h1">
+          <Search24Regular style={{ marginRight: tokens.spacingHorizontalS }} aria-hidden="true" />
           Search Your Code
         </Text>
         <Body1 className={styles.description}>
           Use natural language to search through your indexed codebase.
         </Body1>
-      </div>
+      </header>
 
       {/* Search Input */}
-      <div className={styles.searchSection}>
-        <Card className={styles.searchCard}>
+      <section className={styles.searchSection} aria-labelledby="search-heading">
+        <Card className={styles.searchCard} role="search">
+          <label htmlFor="search-input" className="sr-only">Search query</label>
           <Input
+            id="search-input"
             size="large"
             placeholder="Describe what you're looking for..."
             value={inputValue}
             onChange={(_, data) => setInputValue(data.value)}
             onKeyPress={handleKeyPress}
             className={styles.searchInput}
-          />
-          <div className={styles.searchActions}>
-            <Button
-              appearance="primary"
-              icon={<Search24Regular />}
-              disabled={!inputValue.trim() || searchState.isSearching}
-              onClick={handleSearch}
-            >
-              {searchState.isSearching ? 'Searching...' : 'Search'}
-            </Button>
-            {searchState.isSearching && <Spinner size="small" />}
-          </div>
-        </Card>
-      </div>
-
-      {/* Search History */}
-      {searchState.history.length > 0 && (
-        <div className={styles.historySection}>
-          <Card className={styles.historyCard}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text size={400} weight="semibold">
-                <History24Regular style={{ marginRight: tokens.spacingHorizontalXS }} />
-                Recent Searches
-              </Text>
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<Dismiss24Regular />}
-                onClick={handleClearHistory}
-              >
-                Clear
-              </Button>
-            </div>
-            <div className={styles.historyItems}>
-              {searchState.history.map((query, index) => (
-                <div
-                  key={index}
-                  className={styles.historyItem}
-                  onClick={() => handleHistoryClick(query)}
-                >
-                  {query}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Search Results */}
-      <div className={styles.resultsSection}>
-        {searchState.isSearching ? (
-          <div className={styles.loadingContainer}>
-            <Spinner />
-            <Text>Searching your codebase...</Text>
-          </div>
-        ) : searchState.results.length > 0 ? (
-          <>
-            <div className={styles.resultsHeader}>
-              <Text size={500} weight="semibold">
-                Search Results ({searchState.stats.totalResults})
-              </Text>
-              {searchState.stats.searchTime > 0 && (
-                <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-                  {searchState.stats.searchTime}ms
-                </Text>
-              )}
-            </div>
-            {searchState.results.map((result) => (
-              <Card
-                key={result.id}
-                className={styles.resultCard}
-                onClick={() => handleResultClick(result)}
-              >
-                <div className={styles.resultHeader}>
-                  <Text className={styles.filePath}>
-                    {result.filePath}:{result.lineNumber}
-                  </Text>
-                  <div className={styles.score}>
-                    {Math.round(result.score * 100)}%
-                  </div>
-                </div>
-                <div className={styles.content}>
-                  {result.content}
-                </div>
-                {result.context && (
-                  <div className={styles.context}>
-                    Context: {result.context}
-                  </div>
-                )}
-              </Card>
-            ))}
+            data-tour="search-input"
+            aria-label="Search query input"
+            aria-describedby="search-description"
           </>
         ) : searchState.query ? (
           <div className={styles.emptyState}>

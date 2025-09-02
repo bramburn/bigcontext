@@ -109,6 +109,11 @@ const navigationItems: NavigationItem[] = [
     ]
   },
   {
+    id: 'settings',
+    label: 'Extension Settings',
+    icon: <Settings20Regular />
+  },
+  {
     id: 'diagnostics',
     label: 'Diagnostics',
     icon: <Info20Regular />
@@ -189,7 +194,10 @@ export default function Layout() {
       case 'setup':
       case 'setup.basic':
         return <SetupView />;
+<<<<<<< HEAD
       case 'setup.advanced':
+        return <SettingsView />;
+      case 'settings':
         return <SettingsView />;
       case 'diagnostics':
         return <DiagnosticsView />;

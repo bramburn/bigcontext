@@ -21,6 +21,51 @@
   "contributes": {
     "commands": [
       {
+  "command": "code-context-engine.showSearch",
+  "title": "Show Search",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.showIndexing", 
+  "title": "Show Indexing Status",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.showHelp",
+  "title": "Show Help & Documentation", 
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.reindex",
+  "title": "Re-index Current Project",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.pauseIndexing",
+  "title": "Pause Indexing",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.resumeIndexing", 
+  "title": "Resume Indexing",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.clearIndex",
+  "title": "Clear Index",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.searchCode",
+  "title": "Search Code", 
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.showSavedSearches",
+  "title": "Show Saved Searches",
+  "category": "Code Context"
+},
+      {
         "command": "code-context-engine.openMainPanel",
         "title": "Open Main Panel",
         "category": "Code Context"
@@ -361,7 +406,6 @@
             "Show all messages including debug information"
           ]
         },
-
         "code-context-engine.webview.healthMonitoring.enabled": {
           "type": "boolean",
           "default": true,
@@ -381,6 +425,11 @@
           "type": "number",
           "default": 3,
           "description": "Reconnection attempts threshold. Alerts will be triggered when reconnection attempts exceed this value."
+        },
+        "code-context-engine.enableTelemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable anonymous usage telemetry to help improve the extension. No code content or personal information is collected."
         }
       }
     },
@@ -444,12 +493,12 @@
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.0.0",
     "eslint": "^8.28.0",
     "mocha": "^11.7.1",
     "rimraf": "^5.0.10",
     "shelljs": "^0.10.0",
-    "typescript": "^4.9.4",
-    "@vscode/vsce": "^3.0.0"
+    "typescript": "^4.9.5"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.7.0",

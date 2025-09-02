@@ -1,6 +1,6 @@
 /**
  * DiagnosticsView Component
- * 
+ *
  * System diagnostics and health monitoring view.
  * Shows connection status, system stats, and troubleshooting tools.
  */
@@ -159,6 +159,8 @@ export const DiagnosticsView: React.FC = () => {
     lastError: null
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isHealthChecking, setIsHealthChecking] = useState(false);
+  const [healthResults, setHealthResults] = useState<Array<{ service: string; status: string; details: string }>>([]);
 
   // Set up message listeners for system status updates
   useEffect(() => {
@@ -168,17 +170,24 @@ export const DiagnosticsView: React.FC = () => {
       setIsRefreshing(false);
     });
 
+    const unsubscribeHealth = onMessageCommand('healthCheckResponse', (message) => {
+      const results = message.data || [];
+      setHealthResults(results);
+      setIsHealthChecking(false);
+    });
+
     // Request initial status
     postMessage('getServiceStatus');
 
     return () => {
       unsubscribeStatus();
+      unsubscribeHealth();
     };
   }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    postMessage('getSystemStatus');
+    postMessage('getServiceStatus');
   };
 
   const handleTestDatabase = () => {
@@ -188,6 +197,11 @@ export const DiagnosticsView: React.FC = () => {
   const handleTestProvider = () => {
     postMessage('testProviderConnection');
   };
+  const handleRunHealthChecks = () => {
+    setIsHealthChecking(true);
+    postMessage('runHealthChecks');
+  };
+
 
   const handleReindex = () => {
     postMessage('startReindexing');
@@ -295,7 +309,7 @@ export const DiagnosticsView: React.FC = () => {
               Total Chunks
             </div>
           </div>
-          
+
           <div className={styles.statItem}>
             <div className={styles.statValue}>
               {systemStatus.database === 'connected' ? '✓' : '✗'}
@@ -304,7 +318,7 @@ export const DiagnosticsView: React.FC = () => {
               Database Status
             </div>
           </div>
-          
+
           <div className={styles.statItem}>
             <div className={styles.statValue}>
               {systemStatus.provider === 'connected' ? '✓' : '✗'}
@@ -313,7 +327,7 @@ export const DiagnosticsView: React.FC = () => {
               Provider Status
             </div>
           </div>
-          
+
           <div className={styles.statItem}>
             <div className={styles.statValue}>
               {systemStatus.lastIndexed ? '✓' : '✗'}
@@ -351,7 +365,7 @@ export const DiagnosticsView: React.FC = () => {
             </Text>
           }
         />
-        
+
         <div className={styles.troubleshootItem}>
           <div>
             <Text size={400} weight="semibold">Refresh System Status</Text>
@@ -379,6 +393,32 @@ export const DiagnosticsView: React.FC = () => {
             Reindex
           </Button>
         </div>
+
+	      <Card className={styles.troubleshootCard}>
+	        <CardHeader header={<Text size={500} weight="semibold">Health Checks</Text>} />
+	        <div className={styles.troubleshootItem}>
+	          <div>
+	            <Text size={400} weight="semibold">Run Health Checks</Text>
+	            <Caption1>Validate database and embedding provider connectivity</Caption1>
+	          </div>
+	          <Button appearance="secondary" onClick={handleRunHealthChecks} disabled={isHealthChecking}>
+	            {isHealthChecking ? 'Running...' : 'Run'}
+	          </Button>
+	        </div>
+	        {healthResults.length > 0 && (
+	          <div style={{ marginTop: tokens.spacingVerticalM }}>
+	            {healthResults.map((r, idx) => (
+	              <div key={idx} className={styles.statusItem}>
+	                <Text size={300}>{r.service}</Text>
+	                <Badge appearance="filled" color={r.status === 'healthy' ? 'success' : 'danger'}>
+	                  {r.status}
+	                </Badge>
+	              </div>
+	            ))}
+	          </div>
+	        )}
+	      </Card>
+
 
         <div className={styles.troubleshootItem}>
           <div>

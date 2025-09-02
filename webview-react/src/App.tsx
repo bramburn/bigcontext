@@ -16,6 +16,7 @@ import {
 import { useAppStore, useIsWorkspaceOpen } from './stores/appStore';
 import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
 import { connectionMonitor } from './utils/connectionMonitor';
+import { startTourWhenReady } from './services/onboardingService';
 import ConnectionIndicator from './components/ConnectionStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 import NoWorkspaceView from './components/NoWorkspaceView';
@@ -60,12 +61,17 @@ function App() {
       }
     });
 
-    const unsubscribeView = onMessageCommand('changeView', (data) => {
-      setCurrentView(data.view);
+    const unsubscribeView = onMessageCommand('changeView', (msg) => {
+      const view = msg.data?.view ?? msg.view;
+      if (view) setCurrentView(view);
     });
 
-    const unsubscribeFirstRun = onMessageCommand('firstRunComplete', () => {
-      setFirstRunComplete(true);
+    // Listen for onboarding tour start message
+    const unsubscribeOnboarding = onMessageCommand('startOnboardingTour', () => {
+      startTourWhenReady(() => {
+        // Tour completed or cancelled
+        postMessage('onboardingFinished');
+      });
     });
 
     // Handle navigation messages from command palette
@@ -125,6 +131,7 @@ function App() {
       unsubscribeWorkspaceState();
       unsubscribeView();
       unsubscribeFirstRun();
+      unsubscribeOnboarding();
       unsubscribeInitial();
       unsubscribeNavigate();
       unsubscribeSetQuery();

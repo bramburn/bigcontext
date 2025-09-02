@@ -18,6 +18,7 @@
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
+import * as fsPromises from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { Worker, isMainThread } from "worker_threads";
@@ -35,6 +36,7 @@ import { StateManager } from "../stateManager";
 import { WorkspaceManager } from "../workspaceManager";
 import { ConfigService } from "../configService";
 import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import { TelemetryService } from "../telemetry/telemetryService";
 
 /**
  * Progress tracking interface for the indexing process.
@@ -178,6 +180,8 @@ export class IndexingService {
   private configService: ConfigService;
   /** Centralized logging service for unified logging */
   private loggingService: CentralizedLoggingService;
+  /** Telemetry service for anonymous usage analytics */
+  private telemetryService?: TelemetryService;
   /** Flag to track if indexing is currently paused */
   private isPaused: boolean = false;
   /** Flag to track if indexing should be cancelled */
@@ -249,6 +253,8 @@ export class IndexingService {
    * @param stateManager - Injected StateManager instance
    * @param workspaceManager - Injected WorkspaceManager instance
    * @param configService - Injected ConfigService instance
+   * @param loggingService - Injected CentralizedLoggingService instance
+   * @param telemetryService - Optional TelemetryService instance for analytics
    */
   constructor(
     workspaceRoot: string,
@@ -262,6 +268,7 @@ export class IndexingService {
     workspaceManager: WorkspaceManager,
     configService: ConfigService,
     loggingService: CentralizedLoggingService,
+    telemetryService?: TelemetryService,
   ) {
     this.workspaceRoot = workspaceRoot;
     this.fileWalker = fileWalker;
@@ -274,6 +281,7 @@ export class IndexingService {
     this.workspaceManager = workspaceManager;
     this.configService = configService;
     this.loggingService = loggingService;
+    this.telemetryService = telemetryService;
 
     // Initialize worker pool if we're in the main thread
     if (isMainThread) {
@@ -715,6 +723,10 @@ export class IndexingService {
       startTime: new Date()
     };
 
+    // Track indexing start
+    this.telemetryService?.trackEvent('indexing_started', {
+      timestamp: startTime
+    });
     const result: IndexingResult = {
       success: false,
       chunks: [],
@@ -859,8 +871,34 @@ export class IndexingService {
           });
 
           const chunkContents = result.chunks.map((chunk) => chunk.content);
-          embeddings =
-            await this.embeddingProvider.generateEmbeddings(chunkContents);
+
+          // Retry wrapper with logging for robustness
+          const withRetry = async <T>(label: string, fn: () => Promise<T>, attempts = 2, backoffMs = 250): Promise<T> => {
+            let lastErr: any;
+            for (let i = 0; i < attempts; i++) {
+              try {
+                return await fn();
+              } catch (err: any) {
+                lastErr = err;
+                this.loggingService.warn(
+                  `Retry ${i + 1}/${attempts} for ${label}`,
+                  { error: err?.message || String(err) },
+                  'IndexingService'
+                );
+                if (i < attempts - 1) {
+                  await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+                }
+              }
+            }
+            this.loggingService.error(
+              `All retries failed for ${label}`,
+              { error: lastErr?.message || String(lastErr) },
+              'IndexingService'
+            );
+            throw lastErr;
+          };
+
+          embeddings = await withRetry('generateEmbeddings(batch)', () => this.embeddingProvider.generateEmbeddings(chunkContents));
         }
 
         result.stats.totalEmbeddings = embeddings.length;
@@ -917,11 +955,32 @@ export class IndexingService {
 
       result.success = true;
       result.duration = Date.now() - startTime;
+
+      // Track successful indexing completion
+      this.telemetryService?.trackEvent('indexing_completed', {
+        duration: result.duration,
+        fileCount: result.processedFiles,
+        chunkCount: result.chunks.length,
+        errorCount: result.errors.length,
+        success: true
+      });
+
     } catch (error) {
       const errorMessage = `Indexing failed: ${error instanceof Error ? error.message : String(error)}`;
       result.errors.push(errorMessage);
       console.error(errorMessage);
       this.stateManager.setError(errorMessage);
+
+      // Track failed indexing
+      const duration = Date.now() - startTime;
+      this.telemetryService?.trackEvent('indexing_completed', {
+        duration,
+        fileCount: result.processedFiles,
+        chunkCount: result.chunks.length,
+        errorCount: result.errors.length,
+        success: false
+      });
+
     } finally {
       // Only clear indexing flag if not paused
       if (!this.isPaused) {
@@ -1435,16 +1494,35 @@ export class IndexingService {
       throw new Error("Embedding provider not available");
     }
 
-    if (!this.embeddingProvider) {
-      throw new Error("Embedding provider not available");
-    }
+    // Small retry wrapper for robustness on transient provider/network errors
+    const withRetry = async <T>(fn: () => Promise<T>, attempts = 2, backoffMs = 250): Promise<T> => {
+      let lastErr: any;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await fn();
+        } catch (err: any) {
+          lastErr = err;
+          this.loggingService?.warn(
+            `Retry ${i + 1}/${attempts} for generateEmbeddings(query)`,
+            { error: err?.message || String(err) },
+            'IndexingService'
+          );
+          if (i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+          }
+        }
+      }
+      this.loggingService?.error(
+        'All retries failed for generateEmbeddings(query)',
+        { error: lastErr?.message || String(lastErr) },
+        'IndexingService'
+      );
+      throw lastErr;
+    };
 
     try {
-      // Generate embedding for the query
-      // This converts the natural language query into a vector representation
-      const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([
-        query,
-      ]);
+      // Generate embedding for the query with retry
+      const queryEmbeddings = await withRetry(() => this.embeddingProvider!.generateEmbeddings([query]));
       if (queryEmbeddings.length === 0) {
         return [];
       }
@@ -1452,7 +1530,6 @@ export class IndexingService {
       const collectionName = this.generateCollectionName();
 
       // Search in Qdrant
-      // This finds the most similar code chunks based on vector similarity
       const results = await this.qdrantService.search(
         collectionName,
         queryEmbeddings[0],

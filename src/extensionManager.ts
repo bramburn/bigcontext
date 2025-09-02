@@ -32,13 +32,13 @@ import { HistoryManager } from './historyManager';
 /**
  * ExtensionManager class responsible for managing the lifecycle of all core services
  * and coordinating the initialization and disposal of the extension.
- * 
+ *
  * This class serves as the main orchestrator for the extension, handling:
  * - Service initialization with dependency injection
  * - Command registration through CommandManager
  * - Resource cleanup and disposal
  * - Error handling during initialization
- * 
+ *
  * The ExtensionManager follows a dependency injection pattern, ensuring that services
  * are initialized in the correct order based on their dependencies. It acts as the
  * central point of access to all core services and managers throughout the extension.
@@ -82,14 +82,14 @@ export class ExtensionManager {
      * Initializes all core services and managers using dependency injection
      * This method sets up the entire extension architecture in a specific order
      * to ensure dependencies are available when needed.
-     * 
+     *
      * The initialization follows a specific order:
      * 1. Services with no dependencies (StateManager, ConfigService)
      * 2. Services that depend on basic configuration (QdrantService, EmbeddingProvider)
      * 3. Workspace-dependent services (IndexingService, ContextService)
      * 4. UI and management services (PerformanceManager, ConfigurationManager, etc.)
      * 5. User interface services (WebviewManager, CommandManager, StatusBarManager)
-     * 
+     *
      * @throws Error if any service fails to initialize
      */
     async initialize(): Promise<void> {
@@ -102,6 +102,9 @@ export class ExtensionManager {
             this.stateManager = new StateManager();
             console.log('ExtensionManager: StateManager initialized');
 
+            // Provide extension context to StateManager for persistence support
+            this.stateManager.setContext(this.context);
+            this.loggingService?.info('ExtensionManager: StateManager context set for persistence', {}, 'ExtensionManager');
             // Step 2: Initialize ConfigService (no dependencies)
             // ConfigService provides configuration settings needed by other services
             this.configService = new ConfigService();
@@ -263,6 +266,38 @@ export class ExtensionManager {
             this.statusBarManager = new StatusBarManager(this.loggingService, this.notificationService, this.context, this.stateManager);
             this.disposables.push(this.statusBarManager);
             this.loggingService.info('StatusBarManager initialized', {}, 'ExtensionManager');
+
+            // Create and show primary status bar item
+            const statusItemId = this.statusBarManager.createItem({
+                id: 'code-context-engine.status',
+                text: '$(zap) Code Context: Ready',
+                tooltip: 'Code Context Engine - Click to open',
+                command: 'code-context-engine.openMainPanel',
+                alignment: 'left',
+                priority: 100
+            });
+            this.statusBarManager.showItem(statusItemId);
+
+            // React to indexing state changes to update the status bar
+            try {
+                const unsubscribe = this.stateManager.subscribeAll(({ key, newValue }) => {
+                    if (key === 'isIndexing') {
+                        if (newValue === true) {
+                            this.statusBarManager.setText(statusItemId, '$(sync~spin) Indexing...');
+                            this.statusBarManager.setTooltip(statusItemId, 'Code Context Engine is indexing your workspace');
+                        } else {
+                            this.statusBarManager.setText(statusItemId, '$(zap) Code Context: Ready');
+                            this.statusBarManager.setTooltip(statusItemId, 'Code Context Engine - Click to open');
+                        }
+                    } else if (key === 'lastError' && newValue) {
+                        this.statusBarManager.setText(statusItemId, '$(error) Code Context: Error');
+                        this.statusBarManager.setTooltip(statusItemId, String(newValue));
+                    }
+                });
+                this.disposables.push({ dispose: unsubscribe });
+            } catch (e) {
+                console.warn('ExtensionManager: Unable to subscribe to state changes for status bar updates', e);
+            }
 
             // Step 13: Initialize HistoryManager
             // HistoryManager tracks user search history and interactions
@@ -466,5 +501,35 @@ export class ExtensionManager {
      */
     getWorkspaceManager(): WorkspaceManager {
         return this.workspaceManager;
+    }
+
+    /**
+     * Focuses the webview and shows a specific search result
+     * Used for deep linking functionality
+     * @param resultId - The ID of the result to show
+     */
+    focusAndShowResult(resultId: string): void {
+        try {
+            // Focus the main webview panel
+            if (this.webviewManager) {
+                this.webviewManager.focusMainPanel();
+
+                // Send message to webview to highlight the specific result
+                this.webviewManager.postMessageToMainPanel({
+                    command: 'showResult',
+                    resultId: resultId
+                });
+
+                this.loggingService.info(`Focused webview and requested to show result: ${resultId}`, {}, 'ExtensionManager');
+            } else {
+                this.loggingService.warn('WebviewManager not available for focusing result', {}, 'ExtensionManager');
+            }
+        } catch (error) {
+            this.loggingService.error(
+                'Failed to focus and show result',
+                { error: error instanceof Error ? error.message : String(error), resultId },
+                'ExtensionManager'
+            );
+        }
     }
 }

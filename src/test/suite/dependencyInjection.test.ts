@@ -40,9 +40,9 @@ suite('Dependency Injection Tests', () => {
     test('should create QdrantService with injected connection string', () => {
         // Test that QdrantService can be instantiated with a connection string
         // This verifies the basic dependency injection pattern for database services
-        const connectionString = 'http://test:6333';
-        const qdrantService = new QdrantService(connectionString, {} as any);
-        
+        const config = { connectionString: 'http://test:6333' };
+        const qdrantService = new QdrantService(config, {} as any);
+
         assert.ok(qdrantService);
         // QdrantService should be created without throwing
         // This confirms that the service properly accepts and stores the connection string
@@ -62,6 +62,17 @@ suite('Dependency Injection Tests', () => {
         
         // Create IndexingService with all its dependencies
         // This demonstrates the nested dependency injection pattern
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+
+        const mockWorkspaceManager = {
+            generateCollectionName: () => 'code_context_test'
+        };
+
         const mockIndexingService = new IndexingService(
             workspaceRoot,
             mockFileWalker as any,
@@ -71,9 +82,9 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockLspService as any,
             mockStateManager,
-            {} as any, // mockWorkspaceManager
+            mockWorkspaceManager as any,
             {} as any, // mockConfigService
-            {} as any  // mockLoggingService
+            mockLoggingService as any
         );
 
         // Create ContextService with its dependencies
@@ -84,7 +95,8 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockIndexingService,
             {} as any, // mockConfigService
-            {} as any  // mockLoggingService
+            mockLoggingService as any,
+            mockWorkspaceManager as any
         );
 
         assert.ok(contextService);
@@ -103,7 +115,19 @@ suite('Dependency Injection Tests', () => {
 
         // Create StateManager for managing indexing state
         const mockStateManager = new StateManager();
-        
+
+        // Create mock services for this test
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+
+        const mockWorkspaceManager = {
+            generateCollectionName: () => 'code_context_test'
+        };
+
         // Create IndexingService with all its dependencies
         // This service coordinates file walking, parsing, chunking, and vector storage
         const indexingService = new IndexingService(
@@ -115,9 +139,9 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockLspService as any,
             mockStateManager,
-            {} as any, // mockWorkspaceManager
+            mockWorkspaceManager as any,
             {} as any, // mockConfigService
-            {} as any  // mockLoggingService
+            mockLoggingService as any
         );
 
         assert.ok(indexingService);

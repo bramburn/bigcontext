@@ -1,12 +1,11 @@
 /**
  * SettingsView Component
  * 
- * Advanced settings view for configuring search behavior, query expansion,
- * result limits, and AI model selection. This component provides power users
- * with fine-grained control over the search engine's behavior.
+ * Provides a comprehensive settings interface for the Code Context Engine extension.
+ * Includes privacy controls, telemetry settings, and other configuration options.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   Button,
@@ -21,7 +20,7 @@ import {
   Badge,
   makeStyles,
   tokens,
-
+  Field
 } from '@fluentui/react-components';
 import {
   Settings24Regular,
@@ -134,6 +133,125 @@ const useStyles = makeStyles({
   },
   badge: {
     marginLeft: tokens.spacingHorizontalXS
+  },
+  settingRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: tokens.spacingVerticalM,
+    '&:last-child': {
+      marginBottom: 0
+    }
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: tokens.spacingHorizontalM
+  },
+  settingDescription: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+    marginTop: tokens.spacingVerticalXS
+  },
+  privacySection: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium
+  }
+});
+=======
+  Switch,
+  makeStyles,
+  tokens,
+  Divider,
+  Field,
+  Input,
+  Dropdown,
+  Option
+} from '@fluentui/react-components';
+import { Settings24Regular, Save24Regular, Shield24Regular } from '@fluentui/react-icons';
+import { postMessage, onMessageCommand } from '../utils/vscodeApi';
+
+const useStyles = makeStyles({
+  container: {
+    padding: tokens.spacingVerticalXL,
+>>>>>>> master
+    maxWidth: '800px',
+    margin: '0 auto'
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+<<<<<<< HEAD
+    marginBottom: tokens.spacingVerticalL
+  },
+  headerIcon: {
+    color: tokens.colorBrandBackground
+  },
+  title: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  headerDescription: {
+    color: tokens.colorNeutralForeground2,
+    marginTop: tokens.spacingVerticalXS
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalM
+=======
+    marginBottom: tokens.spacingVerticalXL
+  },
+  section: {
+    marginBottom: tokens.spacingVerticalXL
+>>>>>>> master
+  },
+  sectionTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+<<<<<<< HEAD
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: tokens.spacingVerticalS
+=======
+    marginBottom: tokens.spacingVerticalM,
+    fontWeight: tokens.fontWeightSemibold
+>>>>>>> master
+  },
+  card: {
+    padding: tokens.spacingVerticalL
+  },
+<<<<<<< HEAD
+  formRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    marginBottom: tokens.spacingVerticalM
+  },
+  formRowHorizontal: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+    marginBottom: tokens.spacingVerticalM
+  },
+  label: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightMedium
+  },
+  description: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200
+  },
+  actions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalM,
+    justifyContent: 'flex-end',
+    marginTop: tokens.spacingVerticalL
+  },
+  badge: {
+    marginLeft: tokens.spacingHorizontalXS
   }
 });
 
@@ -169,6 +287,7 @@ export const SettingsView: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Load configuration on mount
   useEffect(() => {
@@ -476,6 +595,104 @@ export const SettingsView: React.FC = () => {
         >
           {isLoading ? 'Saving...' : 'Save Settings'}
         </Button>
+      </div>
+
+      {/* Indexing Settings */}
+      <div className={styles.section}>
+        <Text size={600} className={styles.sectionTitle}>
+          Indexing Settings
+        </Text>
+        <Card className={styles.card}>
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <Text weight="semibold">Indexing Intensity</Text>
+              <div className={styles.settingDescription}>
+                Controls how thoroughly the codebase is indexed
+              </div>
+            </div>
+            <Dropdown
+              value={settings.indexingIntensity}
+              selectedOptions={[settings.indexingIntensity]}
+              onOptionSelect={(_, data) => handleSettingChange('indexingIntensity', data.optionValue)}
+            >
+              <Option value="low">Low</Option>
+              <Option value="medium">Medium</Option>
+              <Option value="high">High</Option>
+            </Dropdown>
+          </div>
+
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <Text weight="semibold">Auto-Index on File Changes</Text>
+              <div className={styles.settingDescription}>
+                Automatically re-index files when they are modified
+              </div>
+            </div>
+            <Switch
+              checked={settings.autoIndex}
+              onChange={(_, data) => handleSettingChange('autoIndex', data.checked)}
+            />
+          </div>
+        </Card>
+      </div>
+
+      {/* UI Settings */}
+      <div className={styles.section}>
+        <Text size={600} className={styles.sectionTitle}>
+          Interface Settings
+        </Text>
+        <Card className={styles.card}>
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <Text weight="semibold">Compact Mode</Text>
+              <div className={styles.settingDescription}>
+                Use a more compact layout to save space
+              </div>
+            </div>
+            <Switch
+              checked={settings.compactMode}
+              onChange={(_, data) => handleSettingChange('compactMode', data.checked)}
+            />
+          </div>
+
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <Text weight="semibold">Show Advanced Options</Text>
+              <div className={styles.settingDescription}>
+                Display advanced configuration options in the interface
+              </div>
+            </div>
+            <Switch
+              checked={settings.showAdvancedOptions}
+              onChange={(_, data) => handleSettingChange('showAdvancedOptions', data.checked)}
+            />
+          </div>
+        </Card>
+      </div>
+
+      {/* Actions */}
+      <div className={styles.actions}>
+        <Button
+          appearance="primary"
+          size="large"
+          icon={<Save24Regular aria-hidden="true" />}
+          disabled={isSaving}
+          onClick={handleSaveSettings}
+          aria-describedby="save-status"
+          onKeyDown={(e) => handleKeyDown(e, handleSaveSettings)}
+        >
+          {isSaving ? 'Saving...' : 'Save Settings'}
+        </Button>
+      </div>
+
+      {/* Live region for status updates */}
+      <div
+        id="save-status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={{ position: 'absolute', left: '-10000px', width: '1px', height: '1px', overflow: 'hidden' }}
+      >
+        {isSaving ? 'Saving settings...' : ''}
       </div>
     </div>
   );
