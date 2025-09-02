@@ -184,10 +184,10 @@ export class MessageRouter {
                     await this.handleGetServiceStatus(webview);
                     break;
                 case 'startIndexing':
-                    await this.handleStartIndexing(webview);
+                    await this.handleStartIndexing(message, webview);
                     break;
                 case 'retryIndexing':
-                    await this.handleStartIndexing(webview);
+                    await this.handleStartIndexing(message, webview);
                     break;
                 case 'openFile':
                     await this.handleOpenFile(message, webview);
@@ -293,13 +293,13 @@ export class MessageRouter {
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
-                    await this.sendErrorResponse(webview, `Unknown command: ${message.command}`);
+                    await this.sendErrorResponse(webview, `Unknown command: ${message.command}`, message.requestId);
                     break;
             }
         } catch (error) {
             // Global error handling to prevent uncaught exceptions from crashing the message router
             console.error('MessageRouter: Error handling message:', error);
-            await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error));
+            await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error), message.requestId);
         }
     }
 
@@ -768,7 +768,7 @@ export class MessageRouter {
 
         // Validate required parameters
         if (!query) {
-            await this.sendErrorResponse(webview, 'Query is required');
+            await this.sendErrorResponse(webview, 'Query is required', message.requestId);
             return;
         }
 
@@ -871,7 +871,7 @@ export class MessageRouter {
             });
 
             // Start indexing automatically after setup
-            await this.handleStartIndexing(webview);
+            await this.handleStartIndexing(message, webview);
 
         } catch (error) {
             console.error('MessageRouter: Error during setup:', error);
@@ -891,7 +891,7 @@ export class MessageRouter {
      *
      * @param webview - The webview to send the response to
      */
-    private async handleStartIndexing(webview: vscode.Webview): Promise<void> {
+    private async handleStartIndexing(message: any, webview: vscode.Webview): Promise<void> {
         try {
             console.log('MessageRouter: Handling start indexing request');
 
@@ -899,6 +899,7 @@ export class MessageRouter {
             if (this.stateManager.isIndexing()) {
                 await webview.postMessage({
                     command: 'indexingError',
+                    requestId: message.requestId,
                     error: 'Indexing is already in progress.'
                 });
                 console.log('MessageRouter: Indexing already in progress, request rejected');
@@ -922,6 +923,7 @@ export class MessageRouter {
 
             await webview.postMessage({
                 command: 'indexingComplete',
+                requestId: message.requestId,
                 chunksCreated: result.chunks.length,
                 duration: result.duration,
                 errors: result.errors
@@ -932,6 +934,7 @@ export class MessageRouter {
             console.error('MessageRouter: Error during indexing:', error);
             await webview.postMessage({
                 command: 'indexingError',
+                requestId: message.requestId,
                 error: error instanceof Error ? error.message : 'An unknown error occurred while indexing.'
             });
         }
@@ -1462,9 +1465,10 @@ export class MessageRouter {
      * @param webview - The webview to send the error response to
      * @param errorMessage - The error message to send
      */
-    private async sendErrorResponse(webview: vscode.Webview, errorMessage: string): Promise<void> {
+    private async sendErrorResponse(webview: vscode.Webview, errorMessage: string, requestId?: string): Promise<void> {
         await webview.postMessage({
             command: 'error',
+            requestId: requestId,
             message: errorMessage
         });
     }
