@@ -27,7 +27,9 @@ import {
   ErrorCircle24Regular,
   DocumentBulletList24Regular,
   Clock24Regular,
-  Warning24Regular
+  Warning24Regular,
+  Settings24Regular,
+  Play24Regular
 } from '@fluentui/react-icons';
 import { useAppStore, useIndexingState } from '../stores/appStore';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
@@ -208,11 +210,12 @@ const useStyles = makeStyles({
 export const IndexingView: React.FC = () => {
   const styles = useStyles();
   const indexingState = useIndexingState();
-  const { setCurrentView, setIndexingProgress, setIndexingMessage, setFilesProcessed, setCurrentFile, completeIndexing } = useAppStore();
+  const { setCurrentView, setIndexing, setIndexingProgress, setIndexingMessage, setFilesProcessed, setCurrentFile, completeIndexing, setPaused } = useAppStore();
 
   // Set up message listeners for indexing updates
   useEffect(() => {
     const unsubscribeProgress = onMessageCommand('indexingProgress', (data) => {
+      setIndexing(true);
       setIndexingProgress(data.progress);
       setIndexingMessage(data.message);
       if (data.filesProcessed !== undefined) {
@@ -237,16 +240,35 @@ export const IndexingView: React.FC = () => {
       });
     });
 
+    // Pause/Resume responses
+    const unsubscribePause = onMessageCommand('pauseIndexingResponse', (data) => {
+      if (data.success) {
+        setPaused(true);
+        setIndexingMessage('Indexing paused');
+      }
+    });
+    const unsubscribeResume = onMessageCommand('resumeIndexingResponse', (data) => {
+      if (data.success) {
+        setPaused(false);
+        setIndexingMessage('Resuming indexing...');
+      }
+    });
+
     return () => {
       unsubscribeProgress();
       unsubscribeComplete();
       unsubscribeError();
+      unsubscribePause();
+      unsubscribeResume();
     };
   }, [setIndexingProgress, setIndexingMessage, setFilesProcessed, setCurrentFile, completeIndexing]);
 
-  const handleStopIndexing = () => {
-    // Map to pause since full stop/cancel is not implemented in backend
+  const handlePauseIndexing = () => {
     postMessage('pauseIndexing');
+  };
+
+  const handleResumeIndexing = () => {
+    postMessage('resumeIndexing');
   };
 
   const handleGoToQuery = () => {
@@ -255,6 +277,10 @@ export const IndexingView: React.FC = () => {
 
   const handleRetryIndexing = () => {
     postMessage('retryIndexing');
+  };
+
+  const handleOpenSettings = () => {
+    postMessage('openSettings');
   };
 
   const formatDuration = (ms: number): string => {
@@ -441,14 +467,25 @@ export const IndexingView: React.FC = () => {
       {/* Action Buttons */}
       <div className={styles.actions}>
         {indexingState.isIndexing ? (
-          <Button
-            appearance="secondary"
-            size="large"
-            icon={<Stop24Regular />}
-            onClick={handleStopIndexing}
-          >
-            Pause Indexing
-          </Button>
+          indexingState.isPaused ? (
+            <Button
+              appearance="primary"
+              size="large"
+              icon={<Play24Regular />}
+              onClick={handleResumeIndexing}
+            >
+              Resume Indexing
+            </Button>
+          ) : (
+            <Button
+              appearance="secondary"
+              size="large"
+              icon={<Stop24Regular />}
+              onClick={handlePauseIndexing}
+            >
+              Pause Indexing
+            </Button>
+          )
         ) : isCompleted ? (
           <>
             <Button
@@ -458,6 +495,14 @@ export const IndexingView: React.FC = () => {
               onClick={handleGoToQuery}
             >
               Start Searching
+            </Button>
+            <Button
+              appearance="secondary"
+              size="large"
+              icon={<Settings24Regular />}
+              onClick={handleOpenSettings}
+            >
+              Manage Settings
             </Button>
             {hasErrors && (
               <Button

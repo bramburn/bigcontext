@@ -549,6 +549,12 @@ export class IndexingService {
    * ensuring continuous utilization of all available workers.
    */
   private processNextFile(): void {
+    // Do not dispatch new work when paused
+    if (this.isPaused) {
+      console.log("IndexingService: Paused - not dispatching new files");
+      return;
+    }
+
     if (this.fileQueue.length === 0) {
       // Check if all workers are idle
       if (this.activeWorkers === 0) {
@@ -740,6 +746,28 @@ export class IndexingService {
           result,
           progressCallback,
         );
+
+        // If paused during sequential processing, wait for resume and continue
+        if (this.isPaused) {
+          console.log("IndexingService: Sequential processing paused, waiting to resume...");
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (!this.isPaused) {
+                resolve();
+              } else {
+                setTimeout(check, 250);
+              }
+            };
+            check();
+          });
+
+          if (this.remainingFiles.length > 0) {
+            const remaining = [...this.remainingFiles];
+            this.remainingFiles = [];
+            console.log(`IndexingService: Resuming sequential processing of ${remaining.length} files`);
+            await this.processFilesSequentially(remaining, result, progressCallback);
+          }
+        }
       }
 
       // Phase 4: Handle embeddings and storage
@@ -837,8 +865,10 @@ export class IndexingService {
       console.error(errorMessage);
       this.stateManager.setError(errorMessage);
     } finally {
-      // Always reset the indexing state, regardless of success or failure
-      this.stateManager.setIndexing(false);
+      // Only clear indexing flag if not paused
+      if (!this.isPaused) {
+        this.stateManager.setIndexing(false);
+      }
     }
 
     result.duration = Date.now() - startTime;
@@ -1543,12 +1573,15 @@ export class IndexingService {
     this.stateManager.setIndexingMessage("Resuming indexing...");
 
     // Continue processing from where we left off
-    if (this.remainingFiles.length > 0) {
+    if (this.useParallelProcessing && this.workerPool.length > 0) {
       await this.continueIndexing();
     } else {
-      console.log("IndexingService: No remaining files to process");
-      this.stateManager.setIndexing(false);
-      this.stateManager.setIndexingMessage(null);
+      // In sequential mode, startIndexing's control flow will continue after pause
+      if (this.remainingFiles.length === 0) {
+        console.log("IndexingService: No remaining files to process");
+        this.stateManager.setIndexing(false);
+        this.stateManager.setIndexingMessage(null);
+      }
     }
   }
 
@@ -1559,21 +1592,55 @@ export class IndexingService {
    * processing the remaining files in the queue.
    */
   private async continueIndexing(): Promise<void> {
-    // This method would continue the indexing process
-    // For now, we'll implement a basic version that processes remaining files
     console.log(
-      `IndexingService: Continuing indexing with ${this.remainingFiles.length} remaining files`,
+      `IndexingService: Continuing indexing. Parallel=${this.useParallelProcessing && this.workerPool.length > 0}, queue=${this.fileQueue.length}, remainingFiles=${this.remainingFiles.length}`,
     );
 
-    // Note: In a full implementation, this would continue the exact same
-    // indexing pipeline from where it left off, including embedding generation
-    // and storage. For now, we'll just clear the remaining files and mark as complete.
+    // Parallel mode: resume scheduling files to idle workers
+    if (this.useParallelProcessing && this.workerPool.length > 0) {
+      // Kick the scheduler to fill idle workers
+      const idleCount = this.workerPool.filter((w) => {
+        const s = this.workerStates.get(w);
+        return s && !s.busy;
+      }).length;
+      const dispatchCount = Math.min(idleCount, this.fileQueue.length);
+      for (let i = 0; i < dispatchCount; i++) {
+        this.processNextFile();
+      }
+      return;
+    }
 
-    this.remainingFiles = [];
-    this.stateManager.setIndexing(false);
-    this.stateManager.setIndexingMessage(null);
+    // Sequential fallback (basic): process remaining files sequentially
+    if (this.remainingFiles.length > 0) {
+      try {
+        // Reuse current progress callback if available
+        const dummyResult: IndexingResult = {
+          success: false,
+          chunks: [],
+          totalFiles: this.remainingFiles.length,
+          processedFiles: 0,
+          errors: [],
+          duration: 0,
+          stats: {
+            filesByLanguage: {},
+            chunksByType: {} as Record<ChunkType, number>,
+            totalLines: 0,
+            totalBytes: 0,
+            totalEmbeddings: 0,
+            vectorDimensions: 0,
+          },
+        };
+        await this.processFilesSequentially(
+          this.remainingFiles,
+          dummyResult,
+          this.currentProgressCallback,
+        );
+      } finally {
+        this.remainingFiles = [];
+      }
+    }
 
-    console.log("IndexingService: Indexing resumed and completed");
+    // Note: embeddings and storage will be handled by the original startIndexing flow
   }
 
   /**
