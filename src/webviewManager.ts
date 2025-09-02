@@ -1179,6 +1179,46 @@ export class WebviewManager implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Sends a message to the main webview panel or sidebar
+     * @param command - The command to send
+     * @param data - Optional data to send with the command
+     */
+    sendMessageToWebview(command: string, data?: any): void {
+        try {
+            // Try to send to main panel first
+            if (this.mainPanel) {
+                this.mainPanel.webview.postMessage({
+                    type: command,
+                    command: command,
+                    data: data
+                });
+                this.loggingService.debug('Sent message to main webview', { command, data }, 'WebviewManager');
+                return;
+            }
+
+            // Fall back to sidebar if main panel is not available
+            if (this.sidebarWebviewView) {
+                this.sidebarWebviewView.webview.postMessage({
+                    type: command,
+                    command: command,
+                    data: data
+                });
+                this.loggingService.debug('Sent message to sidebar webview', { command, data }, 'WebviewManager');
+                return;
+            }
+
+            // If neither is available, log a warning
+            this.loggingService.warn('No active webview to send message to', { command, data }, 'WebviewManager');
+        } catch (error) {
+            this.loggingService.error('Failed to send message to webview', {
+                command,
+                data,
+                error: error instanceof Error ? error.message : String(error)
+            }, 'WebviewManager');
+        }
+    }
+
+    /**
      * Static property for view type (legacy compatibility)
      */
     static readonly viewType = 'codeContextMain';
