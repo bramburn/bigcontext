@@ -189,6 +189,9 @@ export class MessageRouter {
                 case 'resumeIndexing':
                     await this.handleResumeIndexing(webview);
                     break;
+                case 'getIndexingStatus':
+                    await this.handleGetIndexingStatus(webview);
+                    break;
                 case 'getIndexInfo':
                     await this.handleGetIndexInfo(webview);
                     break;
@@ -271,6 +274,12 @@ export class MessageRouter {
                     break;
                 case 'startSetup':
                     await this.handleStartSetup(message, webview);
+                    break;
+                case 'getConfiguration':
+                    await this.handleGetConfiguration(webview);
+                    break;
+                case 'setConfiguration':
+                    await this.handleSetConfiguration(message, webview);
                     break;
                 default:
                     // Handle unknown commands with a warning and error response
@@ -1059,6 +1068,37 @@ export class MessageRouter {
         } catch (error) {
             console.error('MessageRouter: Error clearing index:', error);
             await this.sendErrorResponse(webview, `Failed to clear index: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Gets the current indexing status and progress information
+     *
+     * This handler retrieves detailed information about the current indexing
+     * operation, including status, progress, errors, and statistics.
+     *
+     * @param webview - The webview to send the response to
+     */
+    private async handleGetIndexingStatus(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling get indexing status request');
+
+            // Get indexing status from the indexing service
+            const status = this.indexingService.getIndexingStatus();
+
+            await webview.postMessage({
+                command: 'getIndexingStatusResponse',
+                success: true,
+                data: status
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting indexing status:', error);
+            await webview.postMessage({
+                command: 'getIndexingStatusResponse',
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            });
         }
     }
 
@@ -2241,6 +2281,99 @@ export class MessageRouter {
                 data: {
                     message: error instanceof Error ? error.message : 'Failed to open link'
                 }
+            });
+        }
+    }
+
+    /**
+     * Gets the current extension configuration
+     *
+     * This handler retrieves the complete extension configuration including
+     * advanced search settings, query expansion, and AI model selection.
+     *
+     * @param webview - The webview to send the configuration response to
+     */
+    private async handleGetConfiguration(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling get configuration request');
+
+            // Get the full configuration from ConfigService
+            const config = this.configService.getFullConfig();
+
+            await webview.postMessage({
+                command: 'configurationResponse',
+                success: true,
+                config: config
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting configuration:', error);
+            await webview.postMessage({
+                command: 'configurationResponse',
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            });
+        }
+    }
+
+    /**
+     * Sets extension configuration values
+     *
+     * This handler updates the extension configuration with new values
+     * provided from the settings UI.
+     *
+     * @param message - The set configuration message containing the new config values
+     * @param webview - The webview to send the response to
+     */
+    private async handleSetConfiguration(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling set configuration request', message);
+
+            const configUpdates = message.advancedSearch || message;
+
+            // Update VS Code configuration
+            const config = vscode.workspace.getConfiguration('code-context-engine');
+
+            if (configUpdates.queryExpansion) {
+                await config.update('queryExpansion.enabled', configUpdates.queryExpansion.enabled, vscode.ConfigurationTarget.Workspace);
+                await config.update('queryExpansion.maxExpandedTerms', configUpdates.queryExpansion.maxExpandedTerms, vscode.ConfigurationTarget.Workspace);
+                await config.update('queryExpansion.useSemanticSimilarity', configUpdates.queryExpansion.useSemanticSimilarity, vscode.ConfigurationTarget.Workspace);
+            }
+
+            if (configUpdates.resultLimit) {
+                await config.update('search.maxResults', configUpdates.resultLimit, vscode.ConfigurationTarget.Workspace);
+            }
+
+            if (configUpdates.aiModel) {
+                if (configUpdates.aiModel.embedding) {
+                    await config.update('openaiModel', configUpdates.aiModel.embedding, vscode.ConfigurationTarget.Workspace);
+                }
+                if (configUpdates.aiModel.llm) {
+                    await config.update('queryExpansion.model', configUpdates.aiModel.llm, vscode.ConfigurationTarget.Workspace);
+                }
+            }
+
+            if (configUpdates.searchBehavior) {
+                await config.update('search.minSimilarity', configUpdates.searchBehavior.minSimilarity, vscode.ConfigurationTarget.Workspace);
+                await config.update('search.includeComments', configUpdates.searchBehavior.includeComments, vscode.ConfigurationTarget.Workspace);
+                await config.update('search.includeTests', configUpdates.searchBehavior.includeTests, vscode.ConfigurationTarget.Workspace);
+            }
+
+            // Refresh the config service to pick up changes
+            this.configService.refresh();
+
+            await webview.postMessage({
+                command: 'setConfigurationResponse',
+                success: true,
+                message: 'Configuration updated successfully'
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error setting configuration:', error);
+            await webview.postMessage({
+                command: 'setConfigurationResponse',
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
             });
         }
     }
