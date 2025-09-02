@@ -19,11 +19,15 @@ import {
 import {
   Search24Regular,
   History24Regular,
-  Dismiss24Regular
+  Dismiss24Regular,
+  ThumbLike20Regular,
+  ThumbDislike20Regular,
+  Share20Regular
 } from '@fluentui/react-icons';
 import { useAppStore, useSearchState } from '../stores/appStore';
 import { SearchResult } from '../types';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
+import FilterPanel, { FilterOptions } from './FilterPanel';
 
 const useStyles = makeStyles({
   container: {
@@ -155,6 +159,9 @@ export const QueryView: React.FC = () => {
   } = useAppStore();
   
   const [inputValue, setInputValue] = useState(searchState.query);
+  const [filters, setFilters] = useState<FilterOptions>({});
+  const [availableFileTypes, setAvailableFileTypes] = useState<string[]>([]);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
 
   // Set up message listeners for search results
   useEffect(() => {
@@ -198,6 +205,19 @@ export const QueryView: React.FC = () => {
         searchTime: payload.searchTime ?? payload.processingTime ?? 0,
         lastSearched: new Date()
       });
+
+      // Extract available file types from results
+      const fileTypes = new Set<string>();
+      normalized.forEach((result: SearchResult) => {
+        if (result.filePath) {
+          const extension = result.filePath.split('.').pop() || '';
+          if (extension) {
+            fileTypes.add('.' + extension);
+          }
+        }
+      });
+      setAvailableFileTypes(Array.from(fileTypes).sort());
+
       setSearching(false);
     });
 
@@ -218,11 +238,29 @@ export const QueryView: React.FC = () => {
     setQuery(inputValue);
     setSearching(true);
     addToHistory(inputValue);
-    
+
+    // Convert filters to the format expected by the backend
+    const searchFilters: any = {};
+
+    if (filters.fileType) {
+      searchFilters.fileType = filters.fileType;
+    }
+
+    if (filters.dateRange?.from || filters.dateRange?.to) {
+      searchFilters.dateRange = {};
+      if (filters.dateRange.from) {
+        searchFilters.dateRange.gte = new Date(filters.dateRange.from).getTime();
+      }
+      if (filters.dateRange.to) {
+        searchFilters.dateRange.lte = new Date(filters.dateRange.to).getTime();
+      }
+    }
+
     postMessage('search', {
-      query: inputValue
+      query: inputValue,
+      filters: searchFilters
     });
-  }, [inputValue, setQuery, setSearching, addToHistory]);
+  }, [inputValue, filters, setQuery, setSearching, addToHistory]);
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter') {
@@ -247,6 +285,42 @@ export const QueryView: React.FC = () => {
       lineNumber: result.lineNumber
     });
   };
+
+  const handleFilterChange = useCallback((newFilters: FilterOptions) => {
+    setFilters(newFilters);
+    // Trigger new search if there's a current query
+    if (inputValue.trim()) {
+      // Use setTimeout to ensure state is updated before search
+      setTimeout(() => {
+        handleSearch();
+      }, 0);
+    }
+  }, [inputValue, handleSearch]);
+
+  const handleFeedback = useCallback((result: SearchResult, feedbackType: 'positive' | 'negative') => {
+    if (feedbackSubmitted.has(result.id)) return;
+
+    postMessage('submitFeedback', {
+      query: searchState.query,
+      resultId: result.id,
+      filePath: result.filePath,
+      feedback: feedbackType
+    });
+
+    // Mark feedback as submitted for this result
+    setFeedbackSubmitted(prev => new Set(prev).add(result.id));
+  }, [searchState.query, feedbackSubmitted]);
+
+  const handleShare = useCallback((result: SearchResult) => {
+    // Generate the deep link URI using the correct extension ID from package.json
+    const extensionId = 'icelabz.code-context-engine'; // publisher.name from package.json
+    const link = `vscode://${extensionId}/view?resultId=${encodeURIComponent(result.id)}`;
+
+    // Copy to clipboard via backend
+    postMessage('copyToClipboard', {
+      text: link
+    });
+  }, []);
 
   const handleClearHistory = () => {
     clearHistory();
@@ -274,6 +348,7 @@ export const QueryView: React.FC = () => {
             onChange={(_, data) => setInputValue(data.value)}
             onKeyPress={handleKeyPress}
             className={styles.searchInput}
+            data-tour="search-input"
           />
           <div className={styles.searchActions}>
             <Button
@@ -287,6 +362,15 @@ export const QueryView: React.FC = () => {
             {searchState.isSearching && <Spinner size="small" />}
           </div>
         </Card>
+      </div>
+
+      {/* Filter Panel */}
+      <div data-tour="filter-panel">
+        <FilterPanel
+          availableFileTypes={availableFileTypes}
+          onFilterChange={handleFilterChange}
+          currentFilters={filters}
+        />
       </div>
 
       {/* Search History */}
@@ -323,7 +407,7 @@ export const QueryView: React.FC = () => {
       )}
 
       {/* Search Results */}
-      <div className={styles.resultsSection}>
+      <div className={styles.resultsSection} data-tour="results-section">
         {searchState.isSearching ? (
           <div className={styles.loadingContainer}>
             <Spinner />
@@ -341,30 +425,90 @@ export const QueryView: React.FC = () => {
                 </Text>
               )}
             </div>
-            {searchState.results.map((result) => (
-              <Card
-                key={result.id}
-                className={styles.resultCard}
-                onClick={() => handleResultClick(result)}
-              >
-                <div className={styles.resultHeader}>
-                  <Text className={styles.filePath}>
-                    {result.filePath}:{result.lineNumber}
-                  </Text>
-                  <div className={styles.score}>
-                    {Math.round(result.score * 100)}%
+            {searchState.results.map((result) => {
+              const isFeedbackSubmitted = feedbackSubmitted.has(result.id);
+              return (
+                <Card
+                  key={result.id}
+                  className={styles.resultCard}
+                >
+                  <div onClick={() => handleResultClick(result)} style={{ cursor: 'pointer' }}>
+                    <div className={styles.resultHeader}>
+                      <Text className={styles.filePath}>
+                        {result.filePath}:{result.lineNumber}
+                      </Text>
+                      <div className={styles.score}>
+                        {Math.round(result.score * 100)}%
+                      </div>
+                    </div>
+                    <div className={styles.content}>
+                      {result.content}
+                    </div>
+                    {result.context && (
+                      <div className={styles.context}>
+                        Context: {result.context}
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className={styles.content}>
-                  {result.content}
-                </div>
-                {result.context && (
-                  <div className={styles.context}>
-                    Context: {result.context}
+
+                  {/* Action Icons */}
+                  <div style={{
+                    display: 'flex',
+                    gap: tokens.spacingHorizontalS,
+                    marginTop: tokens.spacingVerticalS,
+                    paddingTop: tokens.spacingVerticalS,
+                    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+                    opacity: isFeedbackSubmitted ? 0.5 : 1
+                  }}>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<Share20Regular />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShare(result);
+                      }}
+                      title="Share this result"
+                    >
+                      Share
+                    </Button>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<ThumbLike20Regular />}
+                      disabled={isFeedbackSubmitted}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFeedback(result, 'positive');
+                      }}
+                    >
+                      Helpful
+                    </Button>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<ThumbDislike20Regular />}
+                      disabled={isFeedbackSubmitted}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFeedback(result, 'negative');
+                      }}
+                    >
+                      Not helpful
+                    </Button>
+                    {isFeedbackSubmitted && (
+                      <Text size={200} style={{
+                        color: tokens.colorNeutralForeground2,
+                        alignSelf: 'center',
+                        marginLeft: tokens.spacingHorizontalS
+                      }}>
+                        Thank you for your feedback!
+                      </Text>
+                    )}
                   </div>
-                )}
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </>
         ) : searchState.query ? (
           <div className={styles.emptyState}>

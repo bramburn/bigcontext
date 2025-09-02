@@ -87,6 +87,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(healthCheckCommand);
 
+        // Register URI handler for deep linking
+        const uriHandler = {
+            handleUri(uri: vscode.Uri) {
+                console.log(`Extension: Received URI: ${uri.toString()}`);
+                const params = new URLSearchParams(uri.query);
+                const resultId = params.get('resultId');
+
+                if (resultId) {
+                    // Focus the webview and tell it to highlight the result
+                    manager.focusAndShowResult(resultId);
+                } else {
+                    console.warn('Extension: URI received without resultId parameter');
+                }
+            }
+        };
+
+        context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+
     } catch (error) {
         console.error('Failed to initialize ExtensionManager:', error);
         vscode.window.showErrorMessage('Code Context Engine failed to initialize. Please check the logs.');

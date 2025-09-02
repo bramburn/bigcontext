@@ -15,7 +15,10 @@ export interface SearchFilters {
     dateRange?: {
         from?: Date;
         to?: Date;
+        gte?: number;  // Unix timestamp for greater than or equal
+        lte?: number;  // Unix timestamp for less than or equal
     };
+    fileType?: string;  // Single file type filter
     minSimilarity?: number;
     maxResults?: number;
     includeTests?: boolean;
@@ -143,11 +146,13 @@ export class SearchManager {
             }
 
             // Build context query from search parameters
-            const contextQuery: ContextQuery = {
+            const contextQuery: ContextQuery & { fileType?: string; dateRange?: any } = {
                 query: searchQuery, // Use expanded query
                 maxResults: filters.maxResults || 20,
                 minSimilarity: filters.minSimilarity || 0.5,
-                fileTypes: filters.fileTypes
+                fileTypes: filters.fileTypes,
+                fileType: filters.fileType,
+                dateRange: filters.dateRange
             };
 
             // Perform the search

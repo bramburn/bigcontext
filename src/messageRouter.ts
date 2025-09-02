@@ -10,6 +10,7 @@ import { ConfigurationManager } from './configuration/configurationManager';
 import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { WorkspaceManager } from './workspaceManager';
+import { FeedbackService } from './feedback/feedbackService';
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
@@ -45,6 +46,7 @@ export class MessageRouter {
     private stateManager: StateManager;
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
+    private feedbackService: FeedbackService;
 
     /**
      * Constructs a new MessageRouter instance with core services
@@ -62,6 +64,7 @@ export class MessageRouter {
         this.systemValidator = new SystemValidator(context);
         this.troubleshootingSystem = new TroubleshootingSystem();
         this.configurationManager = new ConfigurationManager(context);
+        this.feedbackService = new FeedbackService(contextService.getLoggingService());
     }
 
     /**
@@ -271,6 +274,15 @@ export class MessageRouter {
                     break;
                 case 'startSetup':
                     await this.handleStartSetup(message, webview);
+                    break;
+                case 'submitFeedback':
+                    await this.handleSubmitFeedback(message, webview);
+                    break;
+                case 'onboardingFinished':
+                    await this.handleOnboardingFinished(message, webview);
+                    break;
+                case 'copyToClipboard':
+                    await this.handleCopyToClipboard(message, webview);
                     break;
                 default:
                     // Handle unknown commands with a warning and error response
@@ -746,7 +758,7 @@ export class MessageRouter {
      * @param webview - The webview to send the search response to
      */
     private async handleSearch(message: any, webview: vscode.Webview): Promise<void> {
-        const { query } = message;
+        const { query, filters } = message;
 
         // Validate required parameters
         if (!query) {
@@ -754,12 +766,31 @@ export class MessageRouter {
             return;
         }
 
-        // Perform search with default parameters
-        const result = await this.contextService.queryContext({
+        // Build context query with filters
+        const contextQuery: any = {
             query,
             maxResults: 20,
             minSimilarity: 0.5
-        });
+        };
+
+        // Add filters if provided
+        if (filters) {
+            if (filters.fileType) {
+                contextQuery.fileType = filters.fileType;
+            }
+            if (filters.dateRange) {
+                contextQuery.dateRange = filters.dateRange;
+            }
+            if (filters.maxResults) {
+                contextQuery.maxResults = filters.maxResults;
+            }
+            if (filters.minSimilarity) {
+                contextQuery.minSimilarity = filters.minSimilarity;
+            }
+        }
+
+        // Perform search with filters
+        const result = await this.contextService.queryContext(contextQuery);
 
         // Send results back to webview
         await webview.postMessage({
@@ -2242,6 +2273,114 @@ export class MessageRouter {
                     message: error instanceof Error ? error.message : 'Failed to open link'
                 }
             });
+        }
+    }
+
+    /**
+     * Handles user feedback submission for search results
+     *
+     * @param message - The feedback message containing query, resultId, filePath, and feedback type
+     * @param webview - The webview to send the response to
+     */
+    private async handleSubmitFeedback(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { query, resultId, filePath, feedback } = message;
+
+            // Validate required parameters
+            if (!query || !resultId || !filePath || !feedback) {
+                await this.sendErrorResponse(webview, 'Missing required feedback parameters');
+                return;
+            }
+
+            if (!['positive', 'negative'].includes(feedback)) {
+                await this.sendErrorResponse(webview, 'Invalid feedback type. Must be positive or negative');
+                return;
+            }
+
+            // Log the feedback using the feedback service
+            const success = this.feedbackService.logValidatedFeedback({
+                query,
+                resultId,
+                filePath,
+                feedback
+            });
+
+            if (success) {
+                // Send success response back to webview
+                await webview.postMessage({
+                    command: 'feedbackResponse',
+                    requestId: message.requestId,
+                    success: true,
+                    message: 'Feedback submitted successfully'
+                });
+            } else {
+                await this.sendErrorResponse(webview, 'Failed to submit feedback');
+            }
+
+        } catch (error) {
+            console.error('MessageRouter: Error handling feedback submission:', error);
+            await this.sendErrorResponse(webview, 'Failed to submit feedback');
+        }
+    }
+
+    /**
+     * Handles onboarding completion and sets the completion flag
+     *
+     * @param message - The onboarding completion message
+     * @param webview - The webview to send the response to
+     */
+    private async handleOnboardingFinished(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            // Set the onboarding completion flag in global state
+            await this.context.globalState.update('hasCompletedOnboarding', true);
+
+            console.log('MessageRouter: Onboarding completed and flag set');
+
+            // Send success response back to webview
+            await webview.postMessage({
+                command: 'onboardingFinishedResponse',
+                requestId: message.requestId,
+                success: true
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error handling onboarding completion:', error);
+            await this.sendErrorResponse(webview, 'Failed to save onboarding completion');
+        }
+    }
+
+    /**
+     * Handles copying text to the system clipboard
+     *
+     * @param message - The clipboard message containing the text to copy
+     * @param webview - The webview to send the response to
+     */
+    private async handleCopyToClipboard(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { text } = message;
+
+            if (!text || typeof text !== 'string') {
+                await this.sendErrorResponse(webview, 'Invalid text provided for clipboard');
+                return;
+            }
+
+            // Copy text to clipboard using VS Code API
+            await vscode.env.clipboard.writeText(text);
+
+            // Show success notification
+            vscode.window.showInformationMessage('Link copied to clipboard!');
+
+            // Send success response back to webview
+            await webview.postMessage({
+                command: 'clipboardResponse',
+                requestId: message.requestId,
+                success: true
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error copying to clipboard:', error);
+            vscode.window.showErrorMessage('Failed to copy link to clipboard.');
+            await this.sendErrorResponse(webview, 'Failed to copy to clipboard');
         }
     }
 }

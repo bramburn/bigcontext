@@ -444,17 +444,48 @@ export class ContextService {
         this.configService.getMinSimilarityThreshold() ?? 0.5;
 
       // Build filter for file types if specified
-      let filter:
-        | { should: Array<{ key: string; match: { value: string } }> }
-        | undefined = undefined;
+      let filter: any = undefined;
+      const mustClauses: any[] = [];
+
       if (contextQuery.fileTypes && contextQuery.fileTypes.length > 0) {
         // Create a filter that matches any of the specified languages
-        filter = {
+        mustClauses.push({
           should: contextQuery.fileTypes.map((lang) => ({
             key: "language",
             match: { value: lang },
           })),
-        };
+        });
+      }
+
+      // Add support for additional filters from SearchFilters
+      if ((contextQuery as any).fileType) {
+        mustClauses.push({
+          key: "fileType",
+          match: { value: (contextQuery as any).fileType },
+        });
+      }
+
+      if ((contextQuery as any).dateRange) {
+        const dateRange = (contextQuery as any).dateRange;
+        const rangeFilter: any = {};
+
+        if (dateRange.gte !== undefined) {
+          rangeFilter.gte = dateRange.gte;
+        }
+        if (dateRange.lte !== undefined) {
+          rangeFilter.lte = dateRange.lte;
+        }
+
+        if (Object.keys(rangeFilter).length > 0) {
+          mustClauses.push({
+            key: "lastModified",
+            range: rangeFilter,
+          });
+        }
+      }
+
+      if (mustClauses.length > 0) {
+        filter = { must: mustClauses };
       }
 
       // Search for similar chunks - fetch more results to ensure good deduplication

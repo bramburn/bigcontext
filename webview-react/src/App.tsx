@@ -16,6 +16,7 @@ import {
 import { useAppStore, useCurrentView, useIsWorkspaceOpen } from './stores/appStore';
 import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
 import { connectionMonitor } from './utils/connectionMonitor';
+import { startTourWhenReady } from './services/onboardingService';
 import ConnectionIndicator from './components/ConnectionStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 import NoWorkspaceView from './components/NoWorkspaceView';
@@ -72,6 +73,14 @@ function App() {
       setFirstRunComplete(true);
     });
 
+    // Listen for onboarding tour start message
+    const unsubscribeOnboarding = onMessageCommand('startOnboardingTour', () => {
+      startTourWhenReady(() => {
+        // Tour completed or cancelled
+        postMessage('onboardingFinished');
+      });
+    });
+
     // Handle initial state message from extension
     const unsubscribeInitial = onMessageCommand('initialState', (data) => {
       console.log('Frontend: Received initialState message:', data);
@@ -101,6 +110,7 @@ function App() {
       unsubscribeWorkspaceState();
       unsubscribeView();
       unsubscribeFirstRun();
+      unsubscribeOnboarding();
       unsubscribeInitial();
     };
   }, [setWorkspaceOpen, setCurrentView, setFirstRunComplete]);
