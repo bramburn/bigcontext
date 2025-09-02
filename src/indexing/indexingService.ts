@@ -36,6 +36,7 @@ import { StateManager } from "../stateManager";
 import { WorkspaceManager } from "../workspaceManager";
 import { ConfigService } from "../configService";
 import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import { TelemetryService } from "../telemetry/telemetryService";
 
 /**
  * Progress tracking interface for the indexing process.
@@ -147,6 +148,8 @@ export class IndexingService {
   private configService: ConfigService;
   /** Centralized logging service for unified logging */
   private loggingService: CentralizedLoggingService;
+  /** Telemetry service for anonymous usage analytics */
+  private telemetryService?: TelemetryService;
   /** Flag to track if indexing is currently paused */
   private isPaused: boolean = false;
   /** Flag to track if indexing should be cancelled */
@@ -205,6 +208,8 @@ export class IndexingService {
    * @param stateManager - Injected StateManager instance
    * @param workspaceManager - Injected WorkspaceManager instance
    * @param configService - Injected ConfigService instance
+   * @param loggingService - Injected CentralizedLoggingService instance
+   * @param telemetryService - Optional TelemetryService instance for analytics
    */
   constructor(
     workspaceRoot: string,
@@ -218,6 +223,7 @@ export class IndexingService {
     workspaceManager: WorkspaceManager,
     configService: ConfigService,
     loggingService: CentralizedLoggingService,
+    telemetryService?: TelemetryService,
   ) {
     this.workspaceRoot = workspaceRoot;
     this.fileWalker = fileWalker;
@@ -230,6 +236,7 @@ export class IndexingService {
     this.workspaceManager = workspaceManager;
     this.configService = configService;
     this.loggingService = loggingService;
+    this.telemetryService = telemetryService;
 
     // Initialize worker pool if we're in the main thread
     if (isMainThread) {
@@ -658,6 +665,11 @@ export class IndexingService {
     }
 
     const startTime = Date.now();
+
+    // Track indexing start
+    this.telemetryService?.trackEvent('indexing_started', {
+      timestamp: startTime
+    });
     const result: IndexingResult = {
       success: false,
       chunks: [],
@@ -860,11 +872,32 @@ export class IndexingService {
 
       result.success = true;
       result.duration = Date.now() - startTime;
+
+      // Track successful indexing completion
+      this.telemetryService?.trackEvent('indexing_completed', {
+        duration: result.duration,
+        fileCount: result.processedFiles,
+        chunkCount: result.chunks.length,
+        errorCount: result.errors.length,
+        success: true
+      });
+
     } catch (error) {
       const errorMessage = `Indexing failed: ${error instanceof Error ? error.message : String(error)}`;
       result.errors.push(errorMessage);
       console.error(errorMessage);
       this.stateManager.setError(errorMessage);
+
+      // Track failed indexing
+      const duration = Date.now() - startTime;
+      this.telemetryService?.trackEvent('indexing_completed', {
+        duration,
+        fileCount: result.processedFiles,
+        chunkCount: result.chunks.length,
+        errorCount: result.errors.length,
+        success: false
+      });
+
     } finally {
       // Only clear indexing flag if not paused
       if (!this.isPaused) {

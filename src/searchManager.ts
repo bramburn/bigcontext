@@ -5,6 +5,7 @@ import { LLMReRankingService, ReRankingResult } from './search/llmReRankingServi
 import { ConfigService } from './configService';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { NotificationService } from './notifications/notificationService';
+import { TelemetryService } from './telemetry/telemetryService';
 
 /**
  * Search filters and options for advanced search functionality
@@ -84,6 +85,7 @@ export class SearchManager {
     private configService: ConfigService;
     private loggingService: CentralizedLoggingService;
     private notificationService: NotificationService;
+    private telemetryService?: TelemetryService;
     private searchHistory: SearchHistoryEntry[] = [];
     private resultCache: Map<string, EnhancedSearchResult[]> = new Map();
     private readonly maxHistoryEntries = 50;
@@ -97,6 +99,7 @@ export class SearchManager {
      * @param notificationService - The NotificationService instance for user notifications
      * @param queryExpansionService - Optional QueryExpansionService instance
      * @param llmReRankingService - Optional LLMReRankingService instance
+     * @param telemetryService - Optional TelemetryService instance for analytics
      */
     constructor(
         contextService: ContextService,
@@ -104,12 +107,14 @@ export class SearchManager {
         loggingService: CentralizedLoggingService,
         notificationService: NotificationService,
         queryExpansionService?: QueryExpansionService,
-        llmReRankingService?: LLMReRankingService
+        llmReRankingService?: LLMReRankingService,
+        telemetryService?: TelemetryService
     ) {
         this.contextService = contextService;
         this.configService = configService;
         this.loggingService = loggingService;
         this.notificationService = notificationService;
+        this.telemetryService = telemetryService;
         this.queryExpansionService = queryExpansionService || new QueryExpansionService(configService);
         this.llmReRankingService = llmReRankingService || new LLMReRankingService(configService);
         this.loadSearchHistory();
@@ -122,6 +127,8 @@ export class SearchManager {
      * @returns Promise resolving to enhanced search results
      */
     async search(query: string, filters: SearchFilters = {}): Promise<EnhancedSearchResult[]> {
+        const startTime = performance.now();
+
         try {
             this.loggingService.info('Performing advanced search', { query, filters }, 'SearchManager');
 
@@ -130,6 +137,16 @@ export class SearchManager {
             const cachedResults = this.resultCache.get(cacheKey);
             if (cachedResults) {
                 this.loggingService.debug('Returning cached results', {}, 'SearchManager');
+
+                // Track cached search
+                const latency = performance.now() - startTime;
+                this.telemetryService?.trackEvent('search_performed', {
+                    latency: Math.round(latency),
+                    resultCount: cachedResults.length,
+                    cached: true,
+                    hasFilters: Object.keys(filters).length > 0
+                });
+
                 return cachedResults;
             }
 
@@ -223,10 +240,29 @@ export class SearchManager {
                 reRankingResult?.success || false
             );
 
+            // Track successful search
+            const latency = performance.now() - startTime;
+            this.telemetryService?.trackEvent('search_performed', {
+                latency: Math.round(latency),
+                resultCount: sortedResults.length,
+                cached: false,
+                hasFilters: Object.keys(filters).length > 0,
+                queryExpanded: expandedQuery !== null,
+                reRanked: reRankingResult?.success || false
+            });
+
             this.loggingService.info(`Found ${sortedResults.length} results`, {}, 'SearchManager');
             return sortedResults;
 
         } catch (error) {
+            // Track failed search
+            const latency = performance.now() - startTime;
+            this.telemetryService?.trackEvent('error_occurred', {
+                errorType: 'search_failed',
+                latency: Math.round(latency),
+                hasFilters: Object.keys(filters).length > 0
+            });
+
             this.loggingService.error('Search failed', { error: error instanceof Error ? error.message : String(error) }, 'SearchManager');
             throw error;
         }

@@ -9,6 +9,7 @@ import { TroubleshootingSystem } from './validation/troubleshootingGuide';
 import { ConfigurationManager } from './configuration/configurationManager';
 import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
+import { TelemetryService } from './telemetry/telemetryService';
 import { WorkspaceManager } from './workspaceManager';
 import { FeedbackService } from './feedback/feedbackService';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
@@ -48,7 +49,10 @@ export class MessageRouter {
     private stateManager: StateManager;
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
+<<<<<<< HEAD
     private feedbackService: FeedbackService;
+    private telemetryService?: TelemetryService;
+>>>>>>> 647ca7f2331a8f38515f1ca7b9bd6cef9de6e3c7
 
     /**
      * Constructs a new MessageRouter instance with core services
@@ -84,17 +88,20 @@ export class MessageRouter {
      * @param legacyConfigurationManager - Legacy configuration management service
      * @param performanceManager - Performance monitoring and metrics collection service
      * @param xmlFormatterService - XML formatting and processing service
+     * @param telemetryService - Optional telemetry service for anonymous usage analytics
      */
     setAdvancedManagers(
         searchManager: SearchManager,
         legacyConfigurationManager: LegacyConfigurationManager,
         performanceManager: PerformanceManager,
-        xmlFormatterService: XmlFormatterService
+        xmlFormatterService: XmlFormatterService,
+        telemetryService?: TelemetryService
     ): void {
         this.searchManager = searchManager;
         this.legacyConfigurationManager = legacyConfigurationManager;
         this.performanceManager = performanceManager;
         this.xmlFormatterService = xmlFormatterService;
+        this.telemetryService = telemetryService;
         console.log('MessageRouter: Advanced managers set');
     }
 
@@ -206,6 +213,24 @@ export class MessageRouter {
                     break;
                 case 'getWorkspaceList':
                     await this.handleGetWorkspaceList(webview);
+                    break;
+                case 'getSettings':
+                    await this.handleGetSettings(webview);
+                    break;
+                case 'updateSettings':
+                    await this.handleUpdateSettings(message, webview);
+                    break;
+                case 'trackTelemetry':
+                    await this.handleTrackTelemetry(message, webview);
+                    break;
+                case 'navigateToView':
+                    await this.handleNavigateToView(message, webview);
+                    break;
+                case 'setQuery':
+                    await this.handleSetQuery(message, webview);
+                    break;
+                case 'setSearchTab':
+                    await this.handleSetSearchTab(message, webview);
                     break;
                 case 'switchWorkspace':
                     await this.handleSwitchWorkspace(message, webview);
@@ -1319,7 +1344,7 @@ export class MessageRouter {
      */
     private async handleMapToSettings(webview: vscode.Webview): Promise<void> {
         // Open VS Code settings filtered to this extension
-        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bramburn.code-context-engine');
+        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:icelabz.code-context-engine');
     }
 
     /**
@@ -2286,12 +2311,6 @@ export class MessageRouter {
         }
     }
 
-    /**
-     * Handles user feedback submission for search results
-     *
-     * @param message - The feedback message containing query, resultId, filePath, and feedback type
-     * @param webview - The webview to send the response to
-     */
     private async handleSubmitFeedback(message: any, webview: vscode.Webview): Promise<void> {
         try {
             const { query, resultId, filePath, feedback } = message;
@@ -2391,6 +2410,172 @@ export class MessageRouter {
             console.error('MessageRouter: Error copying to clipboard:', error);
             vscode.window.showErrorMessage('Failed to copy link to clipboard.');
             await this.sendErrorResponse(webview, 'Failed to copy to clipboard');
+        }
+    }
+
+    /**
+     * Handle navigate to view command from command palette
+     */
+    private async handleNavigateToView(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { view } = message.data || {};
+            console.log('MessageRouter: Navigating to view:', view);
+
+            // Send navigation command to webview
+            await webview.postMessage({
+                command: 'navigateToView',
+                data: { view }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error navigating to view:', error);
+            await this.sendErrorResponse(webview, 'Failed to navigate to view');
+        }
+    }
+
+    /**
+     * Handle set query command from command palette
+     */
+    private async handleSetQuery(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { query } = message.data || {};
+            console.log('MessageRouter: Setting query:', query);
+
+            // Send query to webview
+            await webview.postMessage({
+                command: 'setQuery',
+                data: { query }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error setting query:', error);
+            await this.sendErrorResponse(webview, 'Failed to set query');
+        }
+    }
+
+    /**
+     * Handle set search tab command from command palette
+     */
+    private async handleSetSearchTab(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { tab } = message.data || {};
+            console.log('MessageRouter: Setting search tab:', tab);
+
+            // Send tab selection to webview
+            await webview.postMessage({
+                command: 'setSearchTab',
+                data: { tab }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error setting search tab:', error);
+            await this.sendErrorResponse(webview, 'Failed to set search tab');
+        }
+    }
+
+    /**
+     * Handles requests to get current settings
+     */
+    private async handleGetSettings(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Getting settings');
+
+            // Get current configuration values
+            const config = vscode.workspace.getConfiguration('code-context-engine');
+
+            const settings = {
+                enableTelemetry: config.get<boolean>('enableTelemetry') ?? true,
+                maxResults: config.get<number>('maxResults') || 20,
+                minSimilarity: config.get<number>('minSimilarityThreshold') || 0.5,
+                indexingIntensity: config.get<string>('indexingIntensity') || 'High',
+                autoIndex: config.get<boolean>('autoIndexOnStartup') || false,
+                compactMode: false, // This would come from a UI-specific setting
+                showAdvancedOptions: false // This would come from a UI-specific setting
+            };
+
+            await webview.postMessage({
+                command: 'settingsLoaded',
+                success: true,
+                data: settings
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting settings:', error);
+            await webview.postMessage({
+                command: 'settingsLoaded',
+                success: false,
+                data: {
+                    message: error instanceof Error ? error.message : 'Failed to get settings'
+                }
+            });
+        }
+    }
+
+    /**
+     * Handles requests to update settings
+     */
+    private async handleUpdateSettings(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Updating settings:', message.data);
+
+            const settings = message.data;
+            const config = vscode.workspace.getConfiguration('code-context-engine');
+
+            // Update each setting
+            if (settings.enableTelemetry !== undefined) {
+                await config.update('enableTelemetry', settings.enableTelemetry, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.maxResults !== undefined) {
+                await config.update('maxResults', settings.maxResults, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.minSimilarity !== undefined) {
+                await config.update('minSimilarityThreshold', settings.minSimilarity, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.indexingIntensity !== undefined) {
+                await config.update('indexingIntensity', settings.indexingIntensity, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.autoIndex !== undefined) {
+                await config.update('autoIndexOnStartup', settings.autoIndex, vscode.ConfigurationTarget.Global);
+            }
+
+            // Update telemetry service if available
+            if (this.telemetryService && settings.enableTelemetry !== undefined) {
+                this.telemetryService.updateTelemetryPreference();
+            }
+
+            await webview.postMessage({
+                command: 'settingsSaved',
+                success: true,
+                data: { message: 'Settings saved successfully' }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error updating settings:', error);
+            await webview.postMessage({
+                command: 'settingsSaved',
+                success: false,
+                data: {
+                    message: error instanceof Error ? error.message : 'Failed to update settings'
+                }
+            });
+        }
+    }
+
+    /**
+     * Handles telemetry tracking requests from the UI
+     */
+    private async handleTrackTelemetry(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { eventName, metadata } = message.data;
+
+            if (this.telemetryService) {
+                this.telemetryService.trackEvent(eventName, metadata);
+            }
+
+            // No response needed for telemetry tracking
+        } catch (error) {
+            console.error('MessageRouter: Error tracking telemetry:', error);
+            // Don't send error response for telemetry to avoid disrupting UI
         }
     }
 }
