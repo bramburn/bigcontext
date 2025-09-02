@@ -10,6 +10,8 @@ import { ConfigurationManager } from './configuration/configurationManager';
 import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { WorkspaceManager } from './workspaceManager';
+import { HealthCheckService } from './validation/healthCheckService';
+
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
@@ -43,6 +45,8 @@ export class MessageRouter {
     private troubleshootingSystem: TroubleshootingSystem;
     private configurationManager: ConfigurationManager;
     private stateManager: StateManager;
+    private healthCheckService?: HealthCheckService;
+
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
 
@@ -58,6 +62,8 @@ export class MessageRouter {
         this.contextService = contextService;
         this.indexingService = indexingService;
         this.context = context;
+        this.healthCheckService = new HealthCheckService(this.contextService);
+
         this.stateManager = stateManager;
         this.systemValidator = new SystemValidator(context);
         this.troubleshootingSystem = new TroubleshootingSystem();
@@ -128,6 +134,9 @@ export class MessageRouter {
                     break;
                 case 'getTroubleshootingGuides':
                     await this.handleGetTroubleshootingGuides(message, webview);
+                    break;
+                case 'runHealthChecks':
+                    await this.handleRunHealthChecks(webview);
                     break;
                 case 'runAutoFix':
                     await this.handleRunAutoFix(message, webview);
@@ -787,6 +796,25 @@ export class MessageRouter {
             command: 'serviceStatusResponse',
             data: status
         });
+    }
+
+    /**
+     * Runs health checks for critical services and returns results to webview
+     */
+    private async handleRunHealthChecks(webview: vscode.Webview): Promise<void> {
+        try {
+            const results = await this.healthCheckService?.runAllChecks();
+            await webview.postMessage({
+                command: 'healthCheckResponse',
+                data: results ?? []
+            });
+        } catch (error) {
+            await webview.postMessage({
+                command: 'healthCheckResponse',
+                data: [],
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
     }
 
     /**

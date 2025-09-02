@@ -13,6 +13,7 @@ import {
   Body1,
   Input,
   Spinner,
+  Badge,
   makeStyles,
   tokens
 } from '@fluentui/react-components';
@@ -351,9 +352,9 @@ export const QueryView: React.FC = () => {
                   <Text className={styles.filePath}>
                     {result.filePath}:{result.lineNumber}
                   </Text>
-                  <div className={styles.score}>
-                    {Math.round(result.score * 100)}%
-                  </div>
+                  <Badge appearance="filled" color="brand">
+                    {Math.round(result.score * 100)}% match
+                  </Badge>
                 </div>
                 <div className={styles.content}>
                   {result.content}
