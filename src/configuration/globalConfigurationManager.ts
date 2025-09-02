@@ -114,6 +114,12 @@ export class GlobalConfigurationManager {
           isConfigured: false,
           lastValidated: 0,
         },
+        openai: {
+          apiKey: '',
+          model: 'text-embedding-ada-002',
+          isConfigured: false,
+          lastValidated: 0,
+        },
       },
       indexing: {
         intensity: 'medium',
@@ -324,10 +330,10 @@ export class GlobalConfigurationManager {
    * Check if global setup is completed
    */
   public isSetupCompleted(): boolean {
-    return this.globalConfig.setupCompleted &&
+    return !!(this.globalConfig.setupCompleted &&
            this.globalConfig.qdrant.isConfigured &&
            (this.globalConfig.embeddingProvider.ollama?.isConfigured ||
-            this.globalConfig.embeddingProvider.openai?.isConfigured);
+            this.globalConfig.embeddingProvider.openai?.isConfigured));
   }
 
   /**

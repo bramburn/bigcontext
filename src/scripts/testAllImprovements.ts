@@ -33,7 +33,19 @@ class ComprehensiveTestSuite {
   private testResults: Map<string, { passed: boolean; message: string; duration: number }> = new Map();
 
   constructor() {
-    this.loggingService = new CentralizedLoggingService();
+    // Create a mock ConfigService for testing
+    const mockConfigService = {
+      getFullConfig: () => ({
+        logging: {
+          level: 'Info',
+          enableFileLogging: true,
+          enableConsoleLogging: true,
+          enableOutputChannel: true,
+        }
+      })
+    } as any;
+
+    this.loggingService = new CentralizedLoggingService(mockConfigService);
     
     // Mock VS Code context for testing
     const mockContext = {
