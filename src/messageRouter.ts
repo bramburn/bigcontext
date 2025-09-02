@@ -9,6 +9,7 @@ import { TroubleshootingSystem } from './validation/troubleshootingGuide';
 import { ConfigurationManager } from './configuration/configurationManager';
 import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
+import { TelemetryService } from './telemetry/telemetryService';
 import { WorkspaceManager } from './workspaceManager';
 
 /**
@@ -45,6 +46,7 @@ export class MessageRouter {
     private stateManager: StateManager;
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
+    private telemetryService?: TelemetryService;
 
     /**
      * Constructs a new MessageRouter instance with core services
@@ -75,17 +77,20 @@ export class MessageRouter {
      * @param legacyConfigurationManager - Legacy configuration management service
      * @param performanceManager - Performance monitoring and metrics collection service
      * @param xmlFormatterService - XML formatting and processing service
+     * @param telemetryService - Optional telemetry service for anonymous usage analytics
      */
     setAdvancedManagers(
         searchManager: SearchManager,
         legacyConfigurationManager: LegacyConfigurationManager,
         performanceManager: PerformanceManager,
-        xmlFormatterService: XmlFormatterService
+        xmlFormatterService: XmlFormatterService,
+        telemetryService?: TelemetryService
     ): void {
         this.searchManager = searchManager;
         this.legacyConfigurationManager = legacyConfigurationManager;
         this.performanceManager = performanceManager;
         this.xmlFormatterService = xmlFormatterService;
+        this.telemetryService = telemetryService;
         console.log('MessageRouter: Advanced managers set');
     }
 
@@ -197,6 +202,15 @@ export class MessageRouter {
                     break;
                 case 'getWorkspaceList':
                     await this.handleGetWorkspaceList(webview);
+                    break;
+                case 'getSettings':
+                    await this.handleGetSettings(webview);
+                    break;
+                case 'updateSettings':
+                    await this.handleUpdateSettings(message, webview);
+                    break;
+                case 'trackTelemetry':
+                    await this.handleTrackTelemetry(message, webview);
                     break;
                 case 'switchWorkspace':
                     await this.handleSwitchWorkspace(message, webview);
@@ -2242,6 +2256,112 @@ export class MessageRouter {
                     message: error instanceof Error ? error.message : 'Failed to open link'
                 }
             });
+        }
+    }
+
+    /**
+     * Handles requests to get current settings
+     */
+    private async handleGetSettings(webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Getting settings');
+
+            // Get current configuration values
+            const config = vscode.workspace.getConfiguration('code-context-engine');
+
+            const settings = {
+                enableTelemetry: config.get<boolean>('enableTelemetry') ?? true,
+                maxResults: config.get<number>('maxResults') || 20,
+                minSimilarity: config.get<number>('minSimilarityThreshold') || 0.5,
+                indexingIntensity: config.get<string>('indexingIntensity') || 'High',
+                autoIndex: config.get<boolean>('autoIndexOnStartup') || false,
+                compactMode: false, // This would come from a UI-specific setting
+                showAdvancedOptions: false // This would come from a UI-specific setting
+            };
+
+            await webview.postMessage({
+                command: 'settingsLoaded',
+                success: true,
+                data: settings
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error getting settings:', error);
+            await webview.postMessage({
+                command: 'settingsLoaded',
+                success: false,
+                data: {
+                    message: error instanceof Error ? error.message : 'Failed to get settings'
+                }
+            });
+        }
+    }
+
+    /**
+     * Handles requests to update settings
+     */
+    private async handleUpdateSettings(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Updating settings:', message.data);
+
+            const settings = message.data;
+            const config = vscode.workspace.getConfiguration('code-context-engine');
+
+            // Update each setting
+            if (settings.enableTelemetry !== undefined) {
+                await config.update('enableTelemetry', settings.enableTelemetry, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.maxResults !== undefined) {
+                await config.update('maxResults', settings.maxResults, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.minSimilarity !== undefined) {
+                await config.update('minSimilarityThreshold', settings.minSimilarity, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.indexingIntensity !== undefined) {
+                await config.update('indexingIntensity', settings.indexingIntensity, vscode.ConfigurationTarget.Global);
+            }
+            if (settings.autoIndex !== undefined) {
+                await config.update('autoIndexOnStartup', settings.autoIndex, vscode.ConfigurationTarget.Global);
+            }
+
+            // Update telemetry service if available
+            if (this.telemetryService && settings.enableTelemetry !== undefined) {
+                this.telemetryService.updateTelemetryPreference();
+            }
+
+            await webview.postMessage({
+                command: 'settingsSaved',
+                success: true,
+                data: { message: 'Settings saved successfully' }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error updating settings:', error);
+            await webview.postMessage({
+                command: 'settingsSaved',
+                success: false,
+                data: {
+                    message: error instanceof Error ? error.message : 'Failed to update settings'
+                }
+            });
+        }
+    }
+
+    /**
+     * Handles telemetry tracking requests from the UI
+     */
+    private async handleTrackTelemetry(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { eventName, metadata } = message.data;
+
+            if (this.telemetryService) {
+                this.telemetryService.trackEvent(eventName, metadata);
+            }
+
+            // No response needed for telemetry tracking
+        } catch (error) {
+            console.error('MessageRouter: Error tracking telemetry:', error);
+            // Don't send error response for telemetry to avoid disrupting UI
         }
     }
 }

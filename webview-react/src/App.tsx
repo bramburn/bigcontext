@@ -23,6 +23,7 @@ import SetupView from './components/SetupView';
 import IndexingView from './components/IndexingView';
 import QueryView from './components/QueryView';
 import DiagnosticsView from './components/DiagnosticsView';
+import SettingsView from './components/SettingsView';
 import { useVscodeTheme } from './hooks/useVscodeTheme';
 
 const useStyles = makeStyles({
@@ -125,6 +126,8 @@ function App() {
         return <QueryView />;
       case 'diagnostics':
         return <DiagnosticsView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return <SetupView />;
     }

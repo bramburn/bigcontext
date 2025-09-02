@@ -381,6 +381,11 @@
           "type": "number",
           "default": 3,
           "description": "Reconnection attempts threshold. Alerts will be triggered when reconnection attempts exceed this value."
+        },
+        "code-context-engine.enableTelemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable anonymous usage telemetry to help improve the extension. No code content or personal information is collected."
         }
       }
     },
