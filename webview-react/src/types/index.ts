@@ -90,6 +90,7 @@ export interface IndexingStats {
 
 export interface IndexingState {
   isIndexing: boolean;
+  isPaused?: boolean;
   progress: number;
   message: string;
   filesProcessed: number;

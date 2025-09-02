@@ -23,6 +23,7 @@ import {
 interface AppStore extends AppState, SetupState {
   // Indexing state
   isIndexing: boolean;
+  isPaused: boolean;
   progress: number;
   message: string;
   filesProcessed: number;
@@ -60,6 +61,7 @@ interface AppStore extends AppState, SetupState {
 
   // Indexing actions
   setIndexing: (isIndexing: boolean) => void;
+  setPaused: (isPaused: boolean) => void;
   setIndexingProgress: (progress: number) => void;
   setIndexingMessage: (message: string) => void;
   setFilesProcessed: (processed: number, total: number) => void;
@@ -107,6 +109,7 @@ export const useAppStore = create<AppStore>()(
 
     // Initial indexing state
     isIndexing: false,
+    isPaused: false,
     progress: 0,
     message: '',
     filesProcessed: 0,
@@ -216,15 +219,17 @@ export const useAppStore = create<AppStore>()(
 
     // Indexing actions
     setIndexing: (isIndexing) => set({ isIndexing }),
+    setPaused: (isPaused) => set({ isPaused }),
     setIndexingProgress: (progress) => set({ progress }),
     setIndexingMessage: (message) => set({ message }),
-    setFilesProcessed: (processed, total) => set({ 
-      filesProcessed: processed, 
-      totalFiles: total 
+    setFilesProcessed: (processed, total) => set({
+      filesProcessed: processed,
+      totalFiles: total
     }),
     setCurrentFile: (file) => set({ currentFile: file }),
     startIndexing: () => set((state) => ({
       isIndexing: true,
+      isPaused: false,
       progress: 0,
       message: 'Starting indexing...',
       indexingStats: {
@@ -236,6 +241,7 @@ export const useAppStore = create<AppStore>()(
     })),
     completeIndexing: (stats) => set((state) => ({
       isIndexing: false,
+      isPaused: false,
       progress: 100,
       message: 'Indexing completed',
       indexingStats: {
@@ -280,6 +286,7 @@ export const useSetupState = () => useAppStore((state) => ({
 }));
 export const useIndexingState = () => useAppStore((state) => ({
   isIndexing: state.isIndexing,
+  isPaused: state.isPaused,
   progress: state.progress,
   message: state.message,
   filesProcessed: state.filesProcessed,
