@@ -272,6 +272,8 @@ export class TypeSafeCommunicationService {
         reject,
         timeout: timeoutHandle,
         timestamp: Date.now(),
+        retryCount: 0,
+        originalMessage: request as RequestMessage,
       });
 
       // Send the message
@@ -303,7 +305,7 @@ export class TypeSafeCommunicationService {
     }
 
     if (this.config.enableValidation) {
-      this.validateMessage(message);
+      this._validateMessageInternal(message);
     }
 
     if (this.config.enableMessageLogging) {
@@ -338,7 +340,7 @@ export class TypeSafeCommunicationService {
   private async handleIncomingMessage(message: any): Promise<void> {
     try {
       if (this.config.enableValidation) {
-        this.validateMessage(message);
+        this._validateMessageInternal(message);
       }
 
       if (this.config.enableMessageLogging) {
@@ -565,6 +567,44 @@ export class TypeSafeCommunicationService {
       {
         config: this.config,
       },
+  /**
+   * Expose current configuration for testing/inspection
+   */
+  public getConfiguration(): CommunicationConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Expose metrics when enabled
+   */
+  public getMetrics(): CommunicationMetrics | null {
+    return this.config.enableMetrics ? { ...this.metrics } : null;
+  }
+
+  /**
+   * Public wrapper for validateMessage for test usage
+   */
+  public validateMessage(message: any): void {
+    this._validateMessageInternal(message);
+  }
+
+  private _validateMessageInternal(message: any): void {
+    if (!message || typeof message !== "object") {
+      throw new Error("Invalid message format");
+    }
+
+    if (!message.id || typeof message.id !== "string") {
+      throw new Error("Message must have a valid id");
+    }
+
+    if (!message.type || typeof message.type !== "string") {
+      throw new Error("Message must have a valid type");
+    }
+
+    if (typeof message.timestamp !== "number") {
+      throw new Error("Message must have a valid timestamp");
+    }
+  }
       "TypeSafeCommunicationService",
     );
   }
