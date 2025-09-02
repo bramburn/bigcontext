@@ -62,6 +62,17 @@ suite('Dependency Injection Tests', () => {
         
         // Create IndexingService with all its dependencies
         // This demonstrates the nested dependency injection pattern
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+
+        const mockWorkspaceManager = {
+            generateCollectionName: () => 'code_context_test'
+        };
+
         const mockIndexingService = new IndexingService(
             workspaceRoot,
             mockFileWalker as any,
@@ -71,9 +82,9 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockLspService as any,
             mockStateManager,
-            {} as any, // mockWorkspaceManager
+            mockWorkspaceManager as any,
             {} as any, // mockConfigService
-            {} as any  // mockLoggingService
+            mockLoggingService as any
         );
 
         // Create ContextService with its dependencies
@@ -84,8 +95,8 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockIndexingService,
             {} as any, // mockConfigService
-            {} as any, // mockLoggingService
-            {} as any  // mockWorkspaceManager
+            mockLoggingService as any,
+            mockWorkspaceManager as any
         );
 
         assert.ok(contextService);
@@ -104,7 +115,19 @@ suite('Dependency Injection Tests', () => {
 
         // Create StateManager for managing indexing state
         const mockStateManager = new StateManager();
-        
+
+        // Create mock services for this test
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+
+        const mockWorkspaceManager = {
+            generateCollectionName: () => 'code_context_test'
+        };
+
         // Create IndexingService with all its dependencies
         // This service coordinates file walking, parsing, chunking, and vector storage
         const indexingService = new IndexingService(
@@ -116,9 +139,9 @@ suite('Dependency Injection Tests', () => {
             mockEmbeddingProvider,
             mockLspService as any,
             mockStateManager,
-            {} as any, // mockWorkspaceManager
+            mockWorkspaceManager as any,
             {} as any, // mockConfigService
-            {} as any  // mockLoggingService
+            mockLoggingService as any
         );
 
         assert.ok(indexingService);

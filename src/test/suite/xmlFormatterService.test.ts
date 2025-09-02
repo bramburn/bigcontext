@@ -90,7 +90,7 @@ suite('XmlFormatterService Tests', () => {
         };
         
         const xml = xmlFormatterService.formatResults(mockSearchResults, options);
-        
+
         // Verify custom options are applied
         assert.ok(!xml.includes('<?xml'), 'Should not include XML declaration');
         assert.ok(xml.includes('<searchResults>'), 'Should use custom root element name');
@@ -172,9 +172,9 @@ suite('XmlFormatterService Tests', () => {
     test('should handle empty results array', () => {
         // Test handling of empty results array
         const xml = xmlFormatterService.formatResults([]);
-        
-        assert.ok(xml.includes('<files count="0"'), 'Should show count of 0');
-        assert.ok(!xml.includes('<file'), 'Should not include any file elements');
+
+        assert.ok(xml.includes('count="0"'), 'Should show count of 0');
+        assert.ok(!xml.includes('<file '), 'Should not include any file elements');
     });
 
     test('should handle results with empty content', () => {

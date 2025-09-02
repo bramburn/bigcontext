@@ -26,6 +26,7 @@ suite('MessageRouter Tests', () => {
         mockContext = {
             extensionUri: vscode.Uri.file('/mock/extension/path'),
             extensionPath: '/mock/extension/path',
+            globalStorageUri: vscode.Uri.file('/mock/global/storage'),
             subscriptions: [] // Array for disposable resources
         } as any;
 

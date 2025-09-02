@@ -50,17 +50,22 @@ suite('Parallel Indexing Tests', () => {
         // This mirrors the real initialization process in the extension
         configService = new ConfigService();
         stateManager = new StateManager();
-        const mockLoggingService = {} as any;
-        workspaceManager = new WorkspaceManager(mockLoggingService);
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+        workspaceManager = new WorkspaceManager(mockLoggingService as any);
 
         // Initialize IndexingService with all its dependencies
         // This creates a complete indexing pipeline for testing
         const fileWalker = new FileWalker(tempWorkspaceDir);
         const astParser = new AstParser();
         const chunker = new Chunker();
-        const qdrantService = new QdrantService({ connectionString: configService.getQdrantConnectionString() }, mockLoggingService);
+        const qdrantService = new QdrantService({ connectionString: configService.getQdrantConnectionString() }, mockLoggingService as any);
         const embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(configService);
-        const lspService = new LSPService(tempWorkspaceDir, mockLoggingService);
+        const lspService = new LSPService(tempWorkspaceDir, mockLoggingService as any);
 
         indexingService = new IndexingService(
             tempWorkspaceDir,
@@ -73,7 +78,7 @@ suite('Parallel Indexing Tests', () => {
             stateManager,
             workspaceManager,
             configService,
-            mockLoggingService
+            mockLoggingService as any
         );
     });
 
@@ -155,7 +160,13 @@ suite('Parallel Indexing Tests', () => {
         const fileWalker = new FileWalker(invalidWorkspaceDir);
         const astParser = new AstParser();
         const chunker = new Chunker();
-        const qdrantService = new QdrantService({ connectionString: configService.getQdrantConnectionString() }, {} as any);
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+        const qdrantService = new QdrantService({ connectionString: configService.getQdrantConnectionString() }, mockLoggingService as any);
         const embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(configService);
         const lspService = new LSPService(invalidWorkspaceDir, {} as any);
 
@@ -171,7 +182,7 @@ suite('Parallel Indexing Tests', () => {
             stateManager,
             workspaceManager,
             configService,
-            {} as any
+            mockLoggingService as any
         );
 
         try {

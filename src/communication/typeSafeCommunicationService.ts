@@ -494,26 +494,7 @@ export class TypeSafeCommunicationService {
     await Promise.allSettled(promises);
   }
 
-  /**
-   * Validate a message
-   */
-  private validateMessage(message: any): void {
-    if (!message || typeof message !== "object") {
-      throw new Error("Invalid message format");
-    }
 
-    if (!message.id || typeof message.id !== "string") {
-      throw new Error("Message must have a valid id");
-    }
-
-    if (!message.type || typeof message.type !== "string") {
-      throw new Error("Message must have a valid type");
-    }
-
-    if (typeof message.timestamp !== "number") {
-      throw new Error("Message must have a valid timestamp");
-    }
-  }
 
   /**
    * Clean up pending requests and handlers
@@ -567,6 +548,10 @@ export class TypeSafeCommunicationService {
       {
         config: this.config,
       },
+      "TypeSafeCommunicationService",
+    );
+  }
+
   /**
    * Expose current configuration for testing/inspection
    */
@@ -609,9 +594,6 @@ export class TypeSafeCommunicationService {
     if (typeof message.timestamp !== "number") {
       throw new Error("Message must have a valid timestamp");
     }
-  }
-      "TypeSafeCommunicationService",
-    );
   }
 
   /**

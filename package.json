@@ -21,6 +21,51 @@
   "contributes": {
     "commands": [
       {
+  "command": "code-context-engine.showSearch",
+  "title": "Show Search",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.showIndexing", 
+  "title": "Show Indexing Status",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.showHelp",
+  "title": "Show Help & Documentation", 
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.reindex",
+  "title": "Re-index Current Project",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.pauseIndexing",
+  "title": "Pause Indexing",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.resumeIndexing", 
+  "title": "Resume Indexing",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.clearIndex",
+  "title": "Clear Index",
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.searchCode",
+  "title": "Search Code", 
+  "category": "Code Context"
+},
+{
+  "command": "code-context-engine.showSavedSearches",
+  "title": "Show Saved Searches",
+  "category": "Code Context"
+},
+      {
         "command": "code-context-engine.openMainPanel",
         "title": "Open Main Panel",
         "category": "Code Context"

@@ -63,7 +63,7 @@ suite('Extension Lifecycle Tests', () => {
 
         try {
             // Read the extension.ts file to check its structure
-            const extensionPath = path.join(__dirname, '../../extension.ts');
+            const extensionPath = path.join(__dirname, '../../extension.js');
             const content = fs.readFileSync(extensionPath, 'utf8');
             const lineCount = content.split('\n').length;
 
