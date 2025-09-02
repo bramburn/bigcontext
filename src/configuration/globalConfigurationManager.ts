@@ -201,8 +201,12 @@ export class GlobalConfigurationManager {
       embeddingProvider: {
         ...defaults.embeddingProvider,
         ...saved.embeddingProvider,
-        ollama: { ...defaults.embeddingProvider.ollama, ...saved.embeddingProvider?.ollama },
-        openai: { ...defaults.embeddingProvider.openai, ...saved.embeddingProvider?.openai },
+        ollama: saved.embeddingProvider?.ollama ?
+          { ...defaults.embeddingProvider.ollama, ...saved.embeddingProvider.ollama } :
+          defaults.embeddingProvider.ollama,
+        openai: saved.embeddingProvider?.openai ?
+          { ...defaults.embeddingProvider.openai, ...saved.embeddingProvider.openai } :
+          defaults.embeddingProvider.openai,
       },
       indexing: { ...defaults.indexing, ...saved.indexing },
       search: { ...defaults.search, ...saved.search },

@@ -18,6 +18,7 @@
 		"webview/**/*",
 		"webview-backup-*/**/*",
 		"webview-simple/**/*",
-		"webview-react/**/*"
+		"webview-react/**/*",
+		"src/tests/**/*"
 	]
 }

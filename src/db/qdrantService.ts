@@ -1,6 +1,8 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { CodeChunk } from "../parsing/chunker";
 import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import * as fs from "fs/promises";
+import * as path from "path";
 
 export interface QdrantPoint {
   id: string | number;
@@ -16,6 +18,9 @@ export interface QdrantPoint {
     docstring?: string;
     language: string;
     metadata?: Record<string, any>;
+    // New metadata for filtering
+    fileType?: string;
+    lastModified?: number;
   };
 }
 
@@ -327,11 +332,12 @@ export class QdrantService {
   /**
    * Convert CodeChunk to QdrantPoint format with validation
    */
-  private chunkToPoint(
+  private async chunkToPoint(
     chunk: CodeChunk,
     vector: number[],
     index: number,
-  ): QdrantPoint {
+    fileStats?: { fileType: string; lastModified: number },
+  ): Promise<QdrantPoint> {
     this.validateChunk(chunk);
     this.validateVector(vector);
 
@@ -355,6 +361,12 @@ export class QdrantService {
     }
     if (chunk.metadata !== undefined) {
       payload.metadata = chunk.metadata;
+    }
+
+    // Add file metadata for filtering
+    if (fileStats) {
+      payload.fileType = fileStats.fileType;
+      payload.lastModified = fileStats.lastModified;
     }
 
     return {
@@ -397,14 +409,38 @@ export class QdrantService {
         throw new Error("Qdrant service is not healthy");
       }
 
+      // Gather file statistics for metadata
+      const fileStatsMap = new Map<string, { fileType: string; lastModified: number }>();
+
+      for (const chunk of chunks) {
+        if (!fileStatsMap.has(chunk.filePath)) {
+          try {
+            const stats = await fs.stat(chunk.filePath);
+            const fileType = path.extname(chunk.filePath);
+            fileStatsMap.set(chunk.filePath, {
+              fileType,
+              lastModified: stats.mtime.getTime(),
+            });
+          } catch (error) {
+            // If we can't get file stats, continue without metadata
+            this.loggingService.warn(
+              `Could not get file stats for ${chunk.filePath}`,
+              { error: error instanceof Error ? error.message : String(error) },
+              "QdrantService",
+            );
+          }
+        }
+      }
+
       // Convert chunks to points with validation
-      const points = chunks.map((chunk, index) => {
+      const points = await Promise.all(chunks.map(async (chunk, index) => {
         try {
-          return this.chunkToPoint(chunk, vectors[index], index);
+          const fileStats = fileStatsMap.get(chunk.filePath);
+          return await this.chunkToPoint(chunk, vectors[index], index, fileStats);
         } catch (error) {
           throw new Error(`Failed to convert chunk ${index}: ${error instanceof Error ? error.message : String(error)}`);
         }
-      });
+      }));
 
       this.loggingService.info(
         `Starting upsert of ${points.length} points to collection '${collectionName}'`,

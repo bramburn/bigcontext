@@ -18,6 +18,7 @@
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
+import * as fsPromises from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { Worker, isMainThread } from "worker_threads";
@@ -813,8 +814,34 @@ export class IndexingService {
           });
 
           const chunkContents = result.chunks.map((chunk) => chunk.content);
-          embeddings =
-            await this.embeddingProvider.generateEmbeddings(chunkContents);
+
+          // Retry wrapper with logging for robustness
+          const withRetry = async <T>(label: string, fn: () => Promise<T>, attempts = 2, backoffMs = 250): Promise<T> => {
+            let lastErr: any;
+            for (let i = 0; i < attempts; i++) {
+              try {
+                return await fn();
+              } catch (err: any) {
+                lastErr = err;
+                this.loggingService.warn(
+                  `Retry ${i + 1}/${attempts} for ${label}`,
+                  { error: err?.message || String(err) },
+                  'IndexingService'
+                );
+                if (i < attempts - 1) {
+                  await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+                }
+              }
+            }
+            this.loggingService.error(
+              `All retries failed for ${label}`,
+              { error: lastErr?.message || String(lastErr) },
+              'IndexingService'
+            );
+            throw lastErr;
+          };
+
+          embeddings = await withRetry('generateEmbeddings(batch)', () => this.embeddingProvider.generateEmbeddings(chunkContents));
         }
 
         result.stats.totalEmbeddings = embeddings.length;
@@ -1405,16 +1432,35 @@ export class IndexingService {
       throw new Error("Embedding provider not available");
     }
 
-    if (!this.embeddingProvider) {
-      throw new Error("Embedding provider not available");
-    }
+    // Small retry wrapper for robustness on transient provider/network errors
+    const withRetry = async <T>(fn: () => Promise<T>, attempts = 2, backoffMs = 250): Promise<T> => {
+      let lastErr: any;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await fn();
+        } catch (err: any) {
+          lastErr = err;
+          this.loggingService?.warn(
+            `Retry ${i + 1}/${attempts} for generateEmbeddings(query)`,
+            { error: err?.message || String(err) },
+            'IndexingService'
+          );
+          if (i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+          }
+        }
+      }
+      this.loggingService?.error(
+        'All retries failed for generateEmbeddings(query)',
+        { error: lastErr?.message || String(lastErr) },
+        'IndexingService'
+      );
+      throw lastErr;
+    };
 
     try {
-      // Generate embedding for the query
-      // This converts the natural language query into a vector representation
-      const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([
-        query,
-      ]);
+      // Generate embedding for the query with retry
+      const queryEmbeddings = await withRetry(() => this.embeddingProvider!.generateEmbeddings([query]));
       if (queryEmbeddings.length === 0) {
         return [];
       }
@@ -1422,7 +1468,6 @@ export class IndexingService {
       const collectionName = this.generateCollectionName();
 
       // Search in Qdrant
-      // This finds the most similar code chunks based on vector similarity
       const results = await this.qdrantService.search(
         collectionName,
         queryEmbeddings[0],

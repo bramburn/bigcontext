@@ -502,4 +502,34 @@ export class ExtensionManager {
     getWorkspaceManager(): WorkspaceManager {
         return this.workspaceManager;
     }
+
+    /**
+     * Focuses the webview and shows a specific search result
+     * Used for deep linking functionality
+     * @param resultId - The ID of the result to show
+     */
+    focusAndShowResult(resultId: string): void {
+        try {
+            // Focus the main webview panel
+            if (this.webviewManager) {
+                this.webviewManager.focusMainPanel();
+
+                // Send message to webview to highlight the specific result
+                this.webviewManager.postMessageToMainPanel({
+                    command: 'showResult',
+                    resultId: resultId
+                });
+
+                this.loggingService.info(`Focused webview and requested to show result: ${resultId}`, {}, 'ExtensionManager');
+            } else {
+                this.loggingService.warn('WebviewManager not available for focusing result', {}, 'ExtensionManager');
+            }
+        } catch (error) {
+            this.loggingService.error(
+                'Failed to focus and show result',
+                { error: error instanceof Error ? error.message : String(error), resultId },
+                'ExtensionManager'
+            );
+        }
+    }
 }

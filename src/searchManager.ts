@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ContextService, ContextQuery } from './context/contextService';
+import { SearchResult } from './db/qdrantService';
 import { QueryExpansionService, ExpandedQuery } from './search/queryExpansionService';
 import { LLMReRankingService, ReRankingResult } from './search/llmReRankingService';
 import { ConfigService } from './configService';
@@ -16,7 +17,10 @@ export interface SearchFilters {
     dateRange?: {
         from?: Date;
         to?: Date;
+        gte?: number;  // Unix timestamp for greater than or equal
+        lte?: number;  // Unix timestamp for less than or equal
     };
+    fileType?: string;  // Single file type filter
     minSimilarity?: number;
     maxResults?: number;
     includeTests?: boolean;
@@ -67,7 +71,7 @@ export interface SearchHistoryEntry {
 
 /**
  * SearchManager class responsible for advanced search functionality and result management.
- * 
+ *
  * This class provides enhanced search capabilities including:
  * - Advanced filtering and sorting options
  * - Search history and suggestions
@@ -116,6 +120,54 @@ export class SearchManager {
         this.llmReRankingService = llmReRankingService || new LLMReRankingService(configService);
         this.loadSearchHistory();
     }
+    /**
+     * Performs semantic vector search using embeddings
+     * @param query - The search query string
+     * @param limit - Maximum number of results to return
+     * @returns Promise resolving to search results with similarity scores
+     */
+    async performSemanticSearch(query: string, limit: number = 20): Promise<SearchResult[]> {
+        try {
+            this.loggingService.info('Performing semantic search', { query, limit }, 'SearchManager');
+
+            // Use ContextService which already handles semantic search via IndexingService
+            const contextQuery: ContextQuery = {
+                query,
+                maxResults: limit,
+                minSimilarity: 0.3, // Lower threshold for semantic search
+            };
+
+            const contextResult = await this.contextService.queryContext(contextQuery);
+
+            // ContextResult.results are already SearchResult[] from QdrantService
+            // Just return them directly since they have the correct structure
+            const searchResults: SearchResult[] = contextResult.results;
+
+            this.loggingService.info(`Semantic search completed: ${searchResults.length} results`, {}, 'SearchManager');
+            return searchResults;
+
+        } catch (error) {
+            this.loggingService.error('Semantic search failed', {
+                error: error instanceof Error ? error.message : String(error),
+                query
+            }, 'SearchManager');
+            return [];
+        }
+    }
+
+    /**
+     * Main search method - delegates to semantic search by default
+     * @param query - The search query string
+     * @param filters - Search filters and options
+     * @returns Promise resolving to enhanced search results
+     */
+    async search(query: string, filters: SearchFilters = {}): Promise<EnhancedSearchResult[]> {
+        // For now, use semantic search as the primary method
+        const semanticResults = await this.performSemanticSearch(query, filters.maxResults);
+
+        // Transform to EnhancedSearchResult format
+        return this.transformSearchResults(semanticResults, query, filters);
+    }
 
     /**
      * Performs an advanced search with filters and options
@@ -123,9 +175,8 @@ export class SearchManager {
      * @param filters - Search filters and options
      * @returns Promise resolving to enhanced search results
      */
-    async search(query: string, filters: SearchFilters = {}): Promise<EnhancedSearchResult[]> {
+    async performKeywordSearch(query: string, filters: SearchFilters = {}): Promise<EnhancedSearchResult[]> {
         const startTime = performance.now();
-
         try {
             this.loggingService.info('Performing advanced search', { query, filters }, 'SearchManager');
 
@@ -160,11 +211,13 @@ export class SearchManager {
             }
 
             // Build context query from search parameters
-            const contextQuery: ContextQuery = {
+            const contextQuery: ContextQuery & { fileType?: string; dateRange?: any } = {
                 query: searchQuery, // Use expanded query
                 maxResults: filters.maxResults || 20,
                 minSimilarity: filters.minSimilarity || 0.5,
-                fileTypes: filters.fileTypes
+                fileTypes: filters.fileTypes,
+                fileType: filters.fileType,
+                dateRange: filters.dateRange
             };
 
             // Perform the search
@@ -331,7 +384,7 @@ export class SearchManager {
             const endLine = Math.min(lines.length, lineNumber + contextLines);
 
             const previewLines = lines.slice(startLine, endLine);
-            
+
             return previewLines
                 .map((line, index) => {
                     const actualLineNumber = startLine + index + 1;
@@ -347,6 +400,60 @@ export class SearchManager {
         }
     }
 
+    /**
+     * Transforms QdrantService SearchResult[] to EnhancedSearchResult[]
+     */
+    private async transformSearchResults(
+        searchResults: SearchResult[],
+        query: string,
+        filters: SearchFilters = {}
+    ): Promise<EnhancedSearchResult[]> {
+        const results: EnhancedSearchResult[] = [];
+
+        for (const result of searchResults) {
+            try {
+                const enhanced: EnhancedSearchResult = {
+                    id: String(result.id),
+                    title: this.extractTitleFromPayload(result.payload),
+                    description: this.extractDescriptionFromPayload(result.payload),
+                    filePath: result.payload.filePath,
+                    language: result.payload.language || 'unknown',
+                    lineNumber: result.payload.startLine || 1,
+                    similarity: result.score,
+                    context: result.payload.content || '',
+                    preview: result.payload.content?.substring(0, 200) + '...' || '',
+                    lastModified: new Date(), // Would be populated from file stats
+                    fileSize: 0, // Would be populated from file stats
+                    chunkType: result.payload.type || 'code',
+                    finalScore: result.score,
+                    wasReRanked: false
+                };
+
+                results.push(enhanced);
+            } catch (error) {
+                this.loggingService.warn('Failed to transform search result', {
+                    error: error instanceof Error ? error.message : String(error),
+                    resultId: result.id
+                }, 'SearchManager');
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Extract title from QdrantPoint payload
+     */
+    private extractTitleFromPayload(payload: any): string {
+        return payload.name || payload.signature || `${payload.type || 'Code'} in ${payload.filePath}`;
+    }
+
+    /**
+     * Extract description from QdrantPoint payload
+     */
+    private extractDescriptionFromPayload(payload: any): string {
+        return payload.docstring || payload.content?.substring(0, 100) + '...' || 'No description available';
+    }
     /**
      * Transforms context service results to enhanced search results
      */
@@ -387,14 +494,14 @@ export class SearchManager {
 
         // Filter by file types
         if (filters.fileTypes && filters.fileTypes.length > 0) {
-            filtered = filtered.filter(result => 
+            filtered = filtered.filter(result =>
                 filters.fileTypes!.some(type => result.filePath.endsWith(type))
             );
         }
 
         // Filter by languages
         if (filters.languages && filters.languages.length > 0) {
-            filtered = filtered.filter(result => 
+            filtered = filtered.filter(result =>
                 filters.languages!.includes(result.language)
             );
         }
@@ -402,12 +509,12 @@ export class SearchManager {
         // Filter by date range
         if (filters.dateRange) {
             if (filters.dateRange.from) {
-                filtered = filtered.filter(result => 
+                filtered = filtered.filter(result =>
                     result.lastModified >= filters.dateRange!.from!
                 );
             }
             if (filters.dateRange.to) {
-                filtered = filtered.filter(result => 
+                filtered = filtered.filter(result =>
                     result.lastModified <= filters.dateRange!.to!
                 );
             }
@@ -415,7 +522,7 @@ export class SearchManager {
 
         // Filter by minimum similarity
         if (filters.minSimilarity !== undefined) {
-            filtered = filtered.filter(result => 
+            filtered = filtered.filter(result =>
                 result.similarity >= filters.minSimilarity!
             );
         }
@@ -457,7 +564,7 @@ export class SearchManager {
      */
     private cacheResults(key: string, results: EnhancedSearchResult[]): void {
         this.resultCache.set(key, results);
-        
+
         // Set timeout to clear cache entry
         setTimeout(() => {
             this.resultCache.delete(key);
@@ -509,13 +616,13 @@ export class SearchManager {
         if (chunk.metadata?.className) {
             return `Class: ${chunk.metadata.className}`;
         }
-        
+
         // Extract first meaningful line
         const lines = chunk.content?.split('\n') || [];
         const meaningfulLine = lines.find((line: string) =>
             line.trim() && !line.trim().startsWith('//') && !line.trim().startsWith('*')
         );
-        
+
         return meaningfulLine?.trim().substring(0, 50) + '...' || 'Code snippet';
     }
 
@@ -525,16 +632,16 @@ export class SearchManager {
     private extractDescription(chunk: any): string {
         const content = chunk.content || '';
         const lines = content.split('\n');
-        
+
         // Look for comments that might describe the code
         const commentLine = lines.find((line: string) =>
             line.trim().startsWith('//') || line.trim().startsWith('*')
         );
-        
+
         if (commentLine) {
             return commentLine.trim().replace(/^[\/\*\s]+/, '').substring(0, 100);
         }
-        
+
         // Fallback to first few lines
         return lines.slice(0, 2).join(' ').trim().substring(0, 100) + '...';
     }

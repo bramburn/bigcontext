@@ -45,7 +45,13 @@ suite('WebviewManager Tests', () => {
         };
 
         // Create the WebviewManager with mocked dependencies
-        webviewManager = new WebviewManager(mockContext, mockExtensionManager, {} as any, {} as any);
+        const mockLoggingService = {
+            info: () => {},
+            error: () => {},
+            warn: () => {},
+            debug: () => {}
+        };
+        webviewManager = new WebviewManager(mockContext, mockExtensionManager, mockLoggingService as any, {} as any);
     });
 
     teardown(() => {
@@ -140,7 +146,13 @@ suite('WebviewManager Tests', () => {
         // Test that the constructor properly accepts and uses the context and extension manager
         // This verifies that the WebviewManager can be properly integrated with the extension
         try {
-            const testManager = new WebviewManager(mockContext, mockExtensionManager, {} as any, {} as any);
+            const mockLoggingService = {
+                info: () => {},
+                error: () => {},
+                warn: () => {},
+                debug: () => {}
+            };
+            const testManager = new WebviewManager(mockContext, mockExtensionManager, mockLoggingService as any, {} as any);
             assert.ok(testManager, 'WebviewManager should accept context and extension manager parameters');
             testManager.dispose();
         } catch (error) {

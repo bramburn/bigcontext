@@ -11,6 +11,10 @@ import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { TelemetryService } from './telemetry/telemetryService';
 import { WorkspaceManager } from './workspaceManager';
+import { FeedbackService } from './feedback/feedbackService';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
+import { ConfigService } from './configService';
+import { HealthCheckService } from './validation/healthCheckService';
 
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
@@ -44,8 +48,11 @@ export class MessageRouter {
     private troubleshootingSystem: TroubleshootingSystem;
     private configurationManager: ConfigurationManager;
     private stateManager: StateManager;
+    private healthCheckService?: HealthCheckService;
+
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
+    private feedbackService: FeedbackService;
     private telemetryService?: TelemetryService;
 
     /**
@@ -60,10 +67,17 @@ export class MessageRouter {
         this.contextService = contextService;
         this.indexingService = indexingService;
         this.context = context;
+        this.healthCheckService = new HealthCheckService(this.contextService);
+
         this.stateManager = stateManager;
         this.systemValidator = new SystemValidator(context);
         this.troubleshootingSystem = new TroubleshootingSystem();
         this.configurationManager = new ConfigurationManager(context);
+
+        // Create a logging service for the feedback service
+        const configService = new ConfigService();
+        const loggingService = new CentralizedLoggingService(configService);
+        this.feedbackService = new FeedbackService(loggingService);
     }
 
     /**
@@ -134,6 +148,9 @@ export class MessageRouter {
                 case 'getTroubleshootingGuides':
                     await this.handleGetTroubleshootingGuides(message, webview);
                     break;
+                case 'runHealthChecks':
+                    await this.handleRunHealthChecks(webview);
+                    break;
                 case 'runAutoFix':
                     await this.handleRunAutoFix(message, webview);
                     break;
@@ -180,10 +197,10 @@ export class MessageRouter {
                     await this.handleGetServiceStatus(webview);
                     break;
                 case 'startIndexing':
-                    await this.handleStartIndexing(webview);
+                    await this.handleStartIndexing(message, webview);
                     break;
                 case 'retryIndexing':
-                    await this.handleStartIndexing(webview);
+                    await this.handleStartIndexing(message, webview);
                     break;
                 case 'openFile':
                     await this.handleOpenFile(message, webview);
@@ -295,16 +312,25 @@ export class MessageRouter {
                 case 'startSetup':
                     await this.handleStartSetup(message, webview);
                     break;
+                case 'submitFeedback':
+                    await this.handleSubmitFeedback(message, webview);
+                    break;
+                case 'onboardingFinished':
+                    await this.handleOnboardingFinished(message, webview);
+                    break;
+                case 'copyToClipboard':
+                    await this.handleCopyToClipboard(message, webview);
+                    break;
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
-                    await this.sendErrorResponse(webview, `Unknown command: ${message.command}`);
+                    await this.sendErrorResponse(webview, `Unknown command: ${message.command}`, message.requestId);
                     break;
             }
         } catch (error) {
             // Global error handling to prevent uncaught exceptions from crashing the message router
             console.error('MessageRouter: Error handling message:', error);
-            await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error));
+            await this.sendErrorResponse(webview, error instanceof Error ? error.message : String(error), message.requestId);
         }
     }
 
@@ -769,20 +795,16 @@ export class MessageRouter {
      * @param webview - The webview to send the search response to
      */
     private async handleSearch(message: any, webview: vscode.Webview): Promise<void> {
-        const { query } = message;
+        const { query, filters } = message;
 
         // Validate required parameters
         if (!query) {
-            await this.sendErrorResponse(webview, 'Query is required');
+            await this.sendErrorResponse(webview, 'Query is required', message.requestId);
             return;
         }
 
-        // Perform search with default parameters
-        const result = await this.contextService.queryContext({
-            query,
-            maxResults: 20,
-            minSimilarity: 0.5
-        });
+        // Perform search with filters
+        const result = await this.searchManager.search(query, filters);
 
         // Send results back to webview
         await webview.postMessage({
@@ -810,6 +832,25 @@ export class MessageRouter {
             command: 'serviceStatusResponse',
             data: status
         });
+    }
+
+    /**
+     * Runs health checks for critical services and returns results to webview
+     */
+    private async handleRunHealthChecks(webview: vscode.Webview): Promise<void> {
+        try {
+            const results = await this.healthCheckService?.runAllChecks();
+            await webview.postMessage({
+                command: 'healthCheckResponse',
+                data: results ?? []
+            });
+        } catch (error) {
+            await webview.postMessage({
+                command: 'healthCheckResponse',
+                data: [],
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
     }
 
     /**
@@ -857,7 +898,7 @@ export class MessageRouter {
             });
 
             // Start indexing automatically after setup
-            await this.handleStartIndexing(webview);
+            await this.handleStartIndexing(message, webview);
 
         } catch (error) {
             console.error('MessageRouter: Error during setup:', error);
@@ -877,7 +918,7 @@ export class MessageRouter {
      *
      * @param webview - The webview to send the response to
      */
-    private async handleStartIndexing(webview: vscode.Webview): Promise<void> {
+    private async handleStartIndexing(message: any, webview: vscode.Webview): Promise<void> {
         try {
             console.log('MessageRouter: Handling start indexing request');
 
@@ -885,6 +926,7 @@ export class MessageRouter {
             if (this.stateManager.isIndexing()) {
                 await webview.postMessage({
                     command: 'indexingError',
+                    requestId: message.requestId,
                     error: 'Indexing is already in progress.'
                 });
                 console.log('MessageRouter: Indexing already in progress, request rejected');
@@ -908,6 +950,7 @@ export class MessageRouter {
 
             await webview.postMessage({
                 command: 'indexingComplete',
+                requestId: message.requestId,
                 chunksCreated: result.chunks.length,
                 duration: result.duration,
                 errors: result.errors
@@ -918,6 +961,7 @@ export class MessageRouter {
             console.error('MessageRouter: Error during indexing:', error);
             await webview.postMessage({
                 command: 'indexingError',
+                requestId: message.requestId,
                 error: error instanceof Error ? error.message : 'An unknown error occurred while indexing.'
             });
         }
@@ -1448,9 +1492,10 @@ export class MessageRouter {
      * @param webview - The webview to send the error response to
      * @param errorMessage - The error message to send
      */
-    private async sendErrorResponse(webview: vscode.Webview, errorMessage: string): Promise<void> {
+    private async sendErrorResponse(webview: vscode.Webview, errorMessage: string, requestId?: string): Promise<void> {
         await webview.postMessage({
             command: 'error',
+            requestId: requestId,
             message: errorMessage
         });
     }
@@ -2265,6 +2310,108 @@ export class MessageRouter {
                     message: error instanceof Error ? error.message : 'Failed to open link'
                 }
             });
+        }
+    }
+
+    private async handleSubmitFeedback(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { query, resultId, filePath, feedback } = message;
+
+            // Validate required parameters
+            if (!query || !resultId || !filePath || !feedback) {
+                await this.sendErrorResponse(webview, 'Missing required feedback parameters');
+                return;
+            }
+
+            if (!['positive', 'negative'].includes(feedback)) {
+                await this.sendErrorResponse(webview, 'Invalid feedback type. Must be positive or negative');
+                return;
+            }
+
+            // Log the feedback using the feedback service
+            const success = this.feedbackService.logValidatedFeedback({
+                query,
+                resultId,
+                filePath,
+                feedback
+            });
+
+            if (success) {
+                // Send success response back to webview
+                await webview.postMessage({
+                    command: 'feedbackResponse',
+                    requestId: message.requestId,
+                    success: true,
+                    message: 'Feedback submitted successfully'
+                });
+            } else {
+                await this.sendErrorResponse(webview, 'Failed to submit feedback');
+            }
+
+        } catch (error) {
+            console.error('MessageRouter: Error handling feedback submission:', error);
+            await this.sendErrorResponse(webview, 'Failed to submit feedback');
+        }
+    }
+
+    /**
+     * Handles onboarding completion and sets the completion flag
+     *
+     * @param message - The onboarding completion message
+     * @param webview - The webview to send the response to
+     */
+    private async handleOnboardingFinished(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            // Set the onboarding completion flag in global state
+            await this.context.globalState.update('hasCompletedOnboarding', true);
+
+            console.log('MessageRouter: Onboarding completed and flag set');
+
+            // Send success response back to webview
+            await webview.postMessage({
+                command: 'onboardingFinishedResponse',
+                requestId: message.requestId,
+                success: true
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error handling onboarding completion:', error);
+            await this.sendErrorResponse(webview, 'Failed to save onboarding completion');
+        }
+    }
+
+    /**
+     * Handles copying text to the system clipboard
+     *
+     * @param message - The clipboard message containing the text to copy
+     * @param webview - The webview to send the response to
+     */
+    private async handleCopyToClipboard(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            const { text } = message;
+
+            if (!text || typeof text !== 'string') {
+                await this.sendErrorResponse(webview, 'Invalid text provided for clipboard');
+                return;
+            }
+
+            // Copy text to clipboard using VS Code API
+            await vscode.env.clipboard.writeText(text);
+
+            // Show success notification
+            vscode.window.showInformationMessage('Link copied to clipboard!');
+
+            // Send success response back to webview
+            await webview.postMessage({
+                command: 'clipboardResponse',
+                requestId: message.requestId,
+                success: true
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error copying to clipboard:', error);
+            vscode.window.showErrorMessage('Failed to copy link to clipboard.');
+            await this.sendErrorResponse(webview, 'Failed to copy to clipboard');
         }
     }
 
