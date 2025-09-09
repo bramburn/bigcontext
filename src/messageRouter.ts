@@ -43,6 +43,7 @@ export class MessageRouter {
     private contextService: ContextService;
     private indexingService: IndexingService;
     private searchManager?: SearchManager;
+    private configService?: ConfigService;
     private legacyConfigurationManager?: LegacyConfigurationManager;
     private performanceManager?: PerformanceManager;
     private context: vscode.ExtensionContext;
@@ -79,8 +80,8 @@ export class MessageRouter {
         this.configurationManager = new ConfigurationManager(context);
 
         // Create a logging service for the feedback service
-        const configService = new ConfigService();
-        const loggingService = new CentralizedLoggingService(configService);
+        this.configService = new ConfigService();
+        const loggingService = new CentralizedLoggingService(this.configService);
         this.feedbackService = new FeedbackService(loggingService);
     }
 
@@ -836,6 +837,9 @@ export class MessageRouter {
         }
 
         // Perform search with filters
+        if (!this.searchManager) {
+            throw new Error('SearchManager not initialized');
+        }
         const result = await this.searchManager.search(query, filters);
 
         // Send results back to webview
@@ -1218,6 +1222,9 @@ export class MessageRouter {
         }
 
         // Perform advanced search with filters
+        if (!this.searchManager) {
+            throw new Error('SearchManager not initialized');
+        }
         const result = await this.searchManager.search(query, filters);
 
         // Send results back to webview
@@ -2491,6 +2498,9 @@ export class MessageRouter {
             console.log('MessageRouter: Handling get configuration request');
 
             // Get the full configuration from ConfigService
+            if (!this.configService) {
+                throw new Error('ConfigService not initialized');
+            }
             const config = this.configService.getFullConfig();
 
             await webview.postMessage({
@@ -2573,6 +2583,9 @@ export class MessageRouter {
             }
 
             // Refresh the config service to pick up changes
+            if (!this.configService) {
+                throw new Error('ConfigService not initialized');
+            }
             this.configService.refresh();
 
             await webview.postMessage({

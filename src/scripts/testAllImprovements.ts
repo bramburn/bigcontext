@@ -290,7 +290,7 @@ class ComprehensiveTestSuite {
 
       // Test initial state
       const initialStatus = indexingService.getIndexingStatus();
-      if (initialStatus.isIndexing) {
+      if (initialStatus.status === 'indexing') {
         throw new Error('Indexing should not be active initially');
       }
 
@@ -310,8 +310,8 @@ class ComprehensiveTestSuite {
 
       // Test status after operations
       const finalStatus = indexingService.getIndexingStatus();
-      if (finalStatus.isCancelled || finalStatus.isStopped) {
-        throw new Error('Status should not be cancelled or stopped when not indexing');
+      if (finalStatus.status === 'error') {
+        throw new Error('Status should not be in error state when not indexing');
       }
     });
   }

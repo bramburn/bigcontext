@@ -212,8 +212,8 @@ export class SearchManager {
 
             // Get result limit from configuration
             const config = this.configService.getFullConfig();
-            const resultLimit = config.search?.maxResults || filters.maxResults || 20;
-            const minSimilarity = config.search?.minSimilarity || filters.minSimilarity || 0.5;
+            const resultLimit = filters.maxResults || 20;
+            const minSimilarity = filters.minSimilarity || 0.5;
 
             // Build context query from search parameters
             const contextQuery: ContextQuery & { fileType?: string; dateRange?: any } = {
