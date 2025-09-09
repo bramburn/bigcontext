@@ -13,7 +13,7 @@
 /**
  * Supported embedding providers
  */
-export type EmbeddingProvider = "Mimic Embed" | "OpenAI";
+export type EmbeddingProvider = "Nomic Embed" | "OpenAI";
 
 /**
  * Base interface for embedding model configuration
@@ -36,15 +36,15 @@ export interface EmbeddingModelSettings {
 }
 
 /**
- * Mimic Embed specific configuration
+ * Nomic Embed specific configuration
  */
 export interface MimicEmbedSettings extends EmbeddingModelSettings {
-  provider: "Mimic Embed";
+  provider: "Nomic Embed";
   
-  /** Mimic Embed API endpoint (required for this provider) */
+  /** Nomic Embed API endpoint (required for this provider) */
   endpoint: string;
   
-  /** Model name for Mimic Embed */
+  /** Model name for Nomic Embed */
   modelName?: string;
   
   /** Optional timeout for API requests in milliseconds */
@@ -236,7 +236,7 @@ export const DEFAULT_EMBEDDING_SETTINGS: Partial<EmbeddingSettings> = {
  */
 export const DEFAULT_PROVIDER_MODELS: Record<EmbeddingProvider, string> = {
   "OpenAI": "text-embedding-ada-002",
-  "Mimic Embed": "all-MiniLM-L6-v2",
+  "Nomic Embed": "all-MiniLM-L6-v2",
 };
 
 /**
@@ -244,5 +244,5 @@ export const DEFAULT_PROVIDER_MODELS: Record<EmbeddingProvider, string> = {
  */
 export const DEFAULT_PROVIDER_ENDPOINTS: Record<EmbeddingProvider, string | undefined> = {
   "OpenAI": "https://api.openai.com/v1",
-  "Mimic Embed": undefined, // Must be provided by user
+  "Nomic Embed": undefined, // Must be provided by user
 };

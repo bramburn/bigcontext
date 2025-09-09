@@ -282,8 +282,8 @@ export class SettingsService {
     // Validate provider
     if (!settings.provider) {
       errors.push('Embedding provider is required');
-    } else if (!['Mimic Embed', 'OpenAI'].includes(settings.provider)) {
-      errors.push('Invalid embedding provider. Must be "Mimic Embed" or "OpenAI"');
+    } else if (!['Nomic Embed', 'OpenAI'].includes(settings.provider)) {
+      errors.push('Invalid embedding provider. Must be "Nomic Embed" or "OpenAI"');
     }
     
     // Validate API key
@@ -294,8 +294,8 @@ export class SettingsService {
     }
     
     // Provider-specific validation
-    if (settings.provider === 'Mimic Embed' && !settings.endpoint) {
-      errors.push('Endpoint is required for Mimic Embed provider');
+    if (settings.provider === 'Nomic Embed' && !settings.endpoint) {
+      errors.push('Endpoint is required for Nomic Embed provider');
     }
     
     if (settings.provider === 'OpenAI' && settings.apiKey && !settings.apiKey.startsWith('sk-')) {

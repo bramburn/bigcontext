@@ -132,7 +132,7 @@ describe('Re-opening Extension View Integration Test', () => {
         window.postMessage({
           command: 'settingsResponse',
           data: {
-            embeddingModel: { provider: 'Mimic Embed', apiKey: 'test-key' },
+            embeddingModel: { provider: 'Nomic Embed', apiKey: 'test-key' },
             qdrantDatabase: { host: 'localhost', collectionName: 'embeddings' }
           }
         }, '*');

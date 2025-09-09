@@ -320,7 +320,7 @@ export class IndexingService {
       averageChunksPerFile: 0,
       totalProcessingTime: 0,
       averageProcessingTimePerFile: 0,
-      fileTypeStats: {},
+      fileTypeStats: {} as Record<string, { count: number; totalChunks: number; averageSize: number; processingTime: number; }>,
       errorStats: {
         totalErrors: 0,
         errorsByType: {},
@@ -368,8 +368,8 @@ export class IndexingService {
         try {
           this.updateProgress('processing', `Processing ${file.fileName}...`);
           
-          const chunks = await this.fileProcessor.processFile(file);
-          allChunks.push(...chunks);
+          const result = await this.fileProcessor.processFile(file);
+          allChunks.push(...result.chunks);
           
           processedCount++;
           session.progress.filesProcessed = processedCount;

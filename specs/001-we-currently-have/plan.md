@@ -29,7 +29,7 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-This plan outlines the implementation of a RAG for LLM VS Code extension. The core functionality includes configuring embedding models (Mimic Embed/OpenAI) and Qdrant database settings via a React/Fluent UI frontend, managing project chunking (excluding binary and .gitignore files), storing embeddings in Qdrant, and displaying indexing progress with relevant statistics. Communication between the extension backend and frontend will be established. File metadata (location, creation/modification time, line count, chunked status) will be stored.
+This plan outlines the implementation of a RAG for LLM VS Code extension. The core functionality includes configuring embedding models (Nomic Embed/OpenAI) and Qdrant database settings via a React/Fluent UI frontend, managing project chunking (excluding binary and .gitignore files), storing embeddings in Qdrant, and displaying indexing progress with relevant statistics. Communication between the extension backend and frontend will be established. File metadata (location, creation/modification time, line count, chunked status) will be stored.
 
 ## Technical Context
 **Language/Version**: TypeScript, Node.js  

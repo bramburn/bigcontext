@@ -6,7 +6,7 @@ This guide provides steps to quickly set up and validate the core functionalitie
 
 *   VS Code installed.
 *   The RAG for LLM VS Code Extension installed (from source or VSIX).
-*   Access to an OpenAI API key or a Mimic Embed instance.
+*   Access to an OpenAI API key or a Nomic Embed instance.
 *   Access to a running Qdrant database instance.
 
 ## Scenarios to Validate

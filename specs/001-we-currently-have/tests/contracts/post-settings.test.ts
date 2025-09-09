@@ -10,7 +10,7 @@ import * as contract from '../../contracts/post-settings.json';
  * Expected Request Schema:
  * {
  *   "embeddingModel": {
- *     "provider": "Mimic Embed" | "OpenAI",
+ *     "provider": "Nomic Embed" | "OpenAI",
  *     "apiKey": string,
  *     "endpoint": string (uri format, optional),
  *     "modelName": string (optional)
@@ -132,7 +132,7 @@ describe('POST /settings Contract Test', () => {
     // Arrange
     const settingsWithInvalidProvider = {
       embeddingModel: {
-        provider: 'InvalidProvider', // Should only be 'Mimic Embed' or 'OpenAI'
+        provider: 'InvalidProvider', // Should only be 'Nomic Embed' or 'OpenAI'
         apiKey: 'test-key'
       },
       qdrantDatabase: {

@@ -24,7 +24,7 @@
 
 ### 5. Embedding Model Configuration Details (FR-003)
 
-*   **Research Task**: Determine the specific configuration parameters required for Mimic Embed and OpenAI embedding models.
+*   **Research Task**: Determine the specific configuration parameters required for Nomic Embed and OpenAI embedding models.
     *   **Context**: The extension needs to capture and store these details.
     *   **Expected Outcome**: For each provider, a list of necessary fields (e.g., API key, endpoint URL, model name, authentication method).
 

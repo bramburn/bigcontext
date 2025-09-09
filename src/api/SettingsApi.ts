@@ -273,18 +273,18 @@ export class SettingsApi {
   }> {
     const result = {
       success: false,
-      embeddingTest: { success: false, error: 'Not tested' },
-      qdrantTest: { success: false, error: 'Not tested' },
+      embeddingTest: { success: false, error: 'Not tested' as string | undefined },
+      qdrantTest: { success: false, error: 'Not tested' as string | undefined },
     };
-    
+
     try {
       // Test embedding provider connection
       // This would be implemented with actual provider testing
-      result.embeddingTest = { success: true };
-      
+      result.embeddingTest = { success: true, error: undefined };
+
       // Test Qdrant connection
       // This would be implemented with actual Qdrant testing
-      result.qdrantTest = { success: true };
+      result.qdrantTest = { success: true, error: undefined };
       
       result.success = result.embeddingTest.success && result.qdrantTest.success;
       

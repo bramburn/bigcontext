@@ -2,7 +2,7 @@
  * Embedding Provider Service
  * 
  * This service handles embedding generation for the RAG for LLM VS Code extension.
- * It supports multiple embedding providers (OpenAI, Mimic Embed) and provides
+ * It supports multiple embedding providers (OpenAI, Nomic Embed) and provides
  * a unified interface for generating embeddings from text content.
  * 
  * The service handles provider configuration, connection testing, batch processing,
@@ -238,7 +238,7 @@ class OpenAIEmbeddingProvider extends BaseEmbeddingProvider {
 }
 
 /**
- * Mimic Embed provider
+ * Nomic Embed provider
  */
 class MimicEmbedProvider extends BaseEmbeddingProvider {
   async generateEmbedding(text: string): Promise<EmbeddingResult> {
@@ -256,10 +256,10 @@ class MimicEmbedProvider extends BaseEmbeddingProvider {
         };
       }
       
-      throw new Error('No embedding data received from Mimic Embed');
+      throw new Error('No embedding data received from Nomic Embed');
       
     } catch (error) {
-      throw new Error(`Mimic Embed generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Nomic Embed generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
   
@@ -280,7 +280,7 @@ class MimicEmbedProvider extends BaseEmbeddingProvider {
         };
       }
       
-      throw new Error('No embedding data received from Mimic Embed');
+      throw new Error('No embedding data received from Nomic Embed');
       
     } catch (error) {
       return {
@@ -321,7 +321,7 @@ class MimicEmbedProvider extends BaseEmbeddingProvider {
   
   private async makeRequest(texts: string[]): Promise<any> {
     if (!this.settings.endpoint) {
-      throw new Error('Mimic Embed endpoint not configured');
+      throw new Error('Nomic Embed endpoint not configured');
     }
     
     const response = await fetch(`${this.settings.endpoint}/embeddings`, {
@@ -338,7 +338,7 @@ class MimicEmbedProvider extends BaseEmbeddingProvider {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Mimic Embed API error: ${response.status} ${response.statusText} - ${errorData.error || 'Unknown error'}`);
+      throw new Error(`Nomic Embed API error: ${response.status} ${response.statusText} - ${errorData.error || 'Unknown error'}`);
     }
     
     return response.json();
@@ -349,11 +349,11 @@ class MimicEmbedProvider extends BaseEmbeddingProvider {
   }
   
   getDimensions(): number {
-    return 384; // Default Mimic Embed dimensions
+    return 384; // Default Nomic Embed dimensions
   }
   
   getMaxTokens(): number {
-    return 512; // Default Mimic Embed token limit
+    return 512; // Default Nomic Embed token limit
   }
 }
 
@@ -395,7 +395,7 @@ export class EmbeddingProvider {
       case 'OpenAI':
         this.provider = new OpenAIEmbeddingProvider(settings);
         break;
-      case 'Mimic Embed':
+      case 'Nomic Embed':
         this.provider = new MimicEmbedProvider(settings);
         break;
       default:

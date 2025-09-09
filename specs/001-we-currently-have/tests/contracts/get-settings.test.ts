@@ -10,7 +10,7 @@ import * as contract from '../../contracts/get-settings.json';
  * Expected Response Schema:
  * {
  *   "embeddingModel": {
- *     "provider": "Mimic Embed" | "OpenAI",
+ *     "provider": "Nomic Embed" | "OpenAI",
  *     "apiKey": string (password format),
  *     "endpoint": string (uri format, optional),
  *     "modelName": string (optional)
@@ -83,7 +83,7 @@ describe('GET /settings Contract Test', () => {
 
     // Validate required fields for embeddingModel
     // expect(response.data.embeddingModel.provider).toBeDefined();
-    // expect(['Mimic Embed', 'OpenAI']).toContain(response.data.embeddingModel.provider);
+    // expect(['Nomic Embed', 'OpenAI']).toContain(response.data.embeddingModel.provider);
     // expect(response.data.embeddingModel.apiKey).toBeDefined();
 
     // Validate required fields for qdrantDatabase

@@ -35,7 +35,7 @@
 - [ ] T016 Implement `SettingsService` to handle persistence of embedding and Qdrant settings using VS Code Memento API in `src/services/settingsService.ts`.
 - [ ] T017 Implement `IndexingService` to manage project chunking, embedding generation, and Qdrant storage in `src/services/indexingService.ts`.
 - [ ] T018 Implement `FileProcessor` to handle file reading, binary/gitignore exclusion, and chunking logic in `src/services/fileProcessor.ts`.
-- [ ] T019 Implement `EmbeddingProvider` interface and concrete implementations for Mimic Embed and OpenAI in `src/embeddings/`.
+- [ ] T019 Implement `EmbeddingProvider` interface and concrete implementations for Nomic Embed and OpenAI in `src/embeddings/`.
 - [ ] T020 Implement `QdrantService` for interaction with the Qdrant database in `src/db/qdrantService.ts`.
 - [ ] T021 Implement backend API for `GET /settings` using `SettingsService` in `src/api/settingsApi.ts`.
 - [ ] T022 Implement backend API for `POST /settings` using `SettingsService` in `src/api/settingsApi.ts`.
