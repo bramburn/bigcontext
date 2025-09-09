@@ -8,7 +8,7 @@
       "embeddingModel": {
         "type": "object",
         "properties": {
-          "provider": { "type": "string", "enum": ["Mimic Embed", "OpenAI"] },
+          "provider": { "type": "string", "enum": ["Nomic Embed", "OpenAI"] },
           "apiKey": { "type": "string", "format": "password" },
           "endpoint": { "type": "string", "format": "uri" },
           "modelName": { "type": "string" }

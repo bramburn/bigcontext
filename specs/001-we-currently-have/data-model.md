@@ -4,7 +4,7 @@
 
 ### 1. Embedding Model Settings
 
-*   **Description**: Stores the configuration details for the selected embedding model provider (Mimic Embed or OpenAI).
+*   **Description**: Stores the configuration details for the selected embedding model provider (Nomic Embed or OpenAI).
 *   **Attributes**:
     *   `provider`: String (Enum: "Mimic Embed", "OpenAI") - The chosen embedding service provider.
     *   `apiKey`: String (Sensitive) - API key for authentication with the embedding service.

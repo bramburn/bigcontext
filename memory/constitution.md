@@ -20,7 +20,7 @@ Test-Driven Development is a mandatory practice. Tests must be written before an
 
 ### IV. Comprehensive Testing Strategy
 <!-- Example: IV. Integration Testing -->
-Beyond unit tests, a comprehensive testing strategy is required, including integration tests for new component contracts, changes to existing contracts, inter-service communication, and shared schemas.
+Beyond unit tests, a comprehensive testing strategy is required, including integration tests for new component contracts, changes to existing contracts, inter-service communication, and shared schemas. **Vitest is the chosen testing framework for all tests.** Every single component, function, and feature must be thoroughly tested to ensure complete code coverage and reliability.
 <!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
 
 ### V. Observability and Maintainability
@@ -46,6 +46,9 @@ The primary technologies and frameworks used in this project are:
 -   **React**: For building interactive and dynamic user interfaces within the webview.
 -   **Node.js**: As the JavaScript runtime environment for backend processes and development tooling.
 -   **Qdrant**: A vector similarity search engine, likely used for efficient data retrieval or AI-related features.
+
+-   **CLI Tools**: `gh cli` (GitHub CLI) and `fly.io cli` are available for deployment needs.
+-   **Node.js Version Management**: `nvm` (Node Version Manager) is installed for managing Node.js versions. If there are Node.js version issues, `nvmrc` setup can be used.
 
 ## Development Workflow
 

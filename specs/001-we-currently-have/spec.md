@@ -75,7 +75,7 @@ As a VS Code extension user, I want to easily configure the RAG for LLM extensio
 
 ### Functional Requirements
 -   **FR-001**: The extension MUST present a dedicated visual page for initial setup of embedding model and Qdrant database settings if settings are not found.
--   **FR-002**: The extension MUST allow users to select between Mimic Embed and OpenAI as embedding model providers.
+-   **FR-002**: The extension MUST allow users to select between Nomic Embed and OpenAI as embedding model providers.
 -   **FR-003**: The extension MUST capture and store configuration details for the selected embedding model. [NEEDS CLARIFICATION: What specific configuration details are required for Mimic Embed and OpenAI (e.g., API key, endpoint, model name)?]
 -   **FR-004**: The extension MUST capture and store configuration details for connecting to a Qdrant database. [NEEDS CLARIFICATION: What specific configuration details are required for Qdrant (e.g., host, port, API key, collection name)?]
 -   **FR-005**: The extension MUST persist the configured settings across VS Code sessions.

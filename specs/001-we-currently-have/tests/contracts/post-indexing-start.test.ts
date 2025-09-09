@@ -1,12 +1,131 @@
-import * as assert from 'assert';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as contract from '../../contracts/post-indexing-start.json';
 
-// This is a placeholder test. It will fail until the actual API is implemented.
-// It asserts the structure of the expected response based on the contract.
+/**
+ * Contract Test for POST /indexing-start endpoint
+ *
+ * This test validates the API contract defined in:
+ * /Users/bramburn/dev/bigcontext/specs/001-we-currently-have/contracts/post-indexing-start.json
+ *
+ * Expected Response Schema:
+ * {
+ *   "success": boolean,
+ *   "message": string
+ * }
+ */
+
 describe('POST /indexing-start Contract Test', () => {
-  it('should define the correct response structure', () => {
+  let mockIndexingService: any;
+  let indexingApi: any;
+
+  beforeEach(() => {
+    // This will fail until we implement IndexingService and IndexingApi
+    // mockIndexingService = new IndexingService();
+    // indexingApi = new IndexingApi(mockIndexingService);
+  });
+
+  it('should define the correct response structure from contract', () => {
     const expectedResponseProperties = contract.response.properties;
-    assert.ok(expectedResponseProperties.success, 'success property missing');
-    assert.ok(expectedResponseProperties.message, 'message property missing');
+    expect(expectedResponseProperties.success).toBeDefined();
+    expect(expectedResponseProperties.message).toBeDefined();
+
+    // Validate response types
+    expect(expectedResponseProperties.success.type).toBe('boolean');
+    expect(expectedResponseProperties.message.type).toBe('string');
+  });
+
+  it('should return 200 with success response when indexing starts successfully', async () => {
+    // Arrange
+    const expectedResponse = {
+      success: true,
+      message: 'Indexing started successfully'
+    };
+
+    // This will fail until we implement the service
+    // mockIndexingService.startIndexing = vi.fn().mockResolvedValue(true);
+
+    // Act
+    // const response = await indexingApi.startIndexing();
+
+    // Assert
+    // expect(response.status).toBe(200);
+    // expect(response.data.success).toBe(true);
+    // expect(response.data.message).toBeDefined();
+    // expect(typeof response.data.message).toBe('string');
+    // expect(response.data.message).toContain('started');
+
+    // This test MUST FAIL until implementation is complete
+    expect(true).toBe(false); // Intentional failure for TDD
+  });
+
+  it('should return 200 with success response when reindexing starts successfully', async () => {
+    // Arrange
+    const expectedResponse = {
+      success: true,
+      message: 'Reindexing started successfully'
+    };
+
+    // This will fail until we implement the service
+    // mockIndexingService.startIndexing = vi.fn().mockResolvedValue(true);
+
+    // Act
+    // const response = await indexingApi.startIndexing();
+
+    // Assert
+    // expect(response.status).toBe(200);
+    // expect(response.data.success).toBe(true);
+    // expect(response.data.message).toBeDefined();
+    // expect(typeof response.data.message).toBe('string');
+
+    // This test MUST FAIL until implementation is complete
+    expect(true).toBe(false); // Intentional failure for TDD
+  });
+
+  it('should return 400 when indexing cannot start due to missing settings', async () => {
+    // Arrange - no settings configured
+    // mockIndexingService.startIndexing = vi.fn().mockRejectedValue(new Error('Settings not configured'));
+
+    // Act
+    // const response = await indexingApi.startIndexing();
+
+    // Assert
+    // expect(response.status).toBe(400);
+    // expect(response.data.success).toBe(false);
+    // expect(response.data.message).toContain('settings');
+
+    // This test MUST FAIL until implementation is complete
+    expect(true).toBe(false); // Intentional failure for TDD
+  });
+
+  it('should return 409 when indexing is already in progress', async () => {
+    // Arrange - indexing already running
+    // mockIndexingService.startIndexing = vi.fn().mockRejectedValue(new Error('Indexing already in progress'));
+
+    // Act
+    // const response = await indexingApi.startIndexing();
+
+    // Assert
+    // expect(response.status).toBe(409);
+    // expect(response.data.success).toBe(false);
+    // expect(response.data.message).toContain('already in progress');
+
+    // This test MUST FAIL until implementation is complete
+    expect(true).toBe(false); // Intentional failure for TDD
+  });
+
+  it('should return 500 when indexing fails to start due to internal error', async () => {
+    // Arrange - internal service error
+    // mockIndexingService.startIndexing = vi.fn().mockRejectedValue(new Error('Database connection failed'));
+
+    // Act
+    // const response = await indexingApi.startIndexing();
+
+    // Assert
+    // expect(response.status).toBe(500);
+    // expect(response.data.success).toBe(false);
+    // expect(response.data.message).toContain('error');
+
+    // This test MUST FAIL until implementation is complete
+    expect(true).toBe(false); // Intentional failure for TDD
   });
 });
