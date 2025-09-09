@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SetupView } from '../../components/SetupView';
-import { useAppStore } from '../../stores/appStore';
+import { useAppStore, useSetupState } from '../../stores/appStore';
 
 // Mock the store
 vi.mock('../../stores/appStore');
