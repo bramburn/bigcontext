@@ -16,6 +16,8 @@ import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { ConfigService } from './configService';
 import { HealthCheckService } from './validation/healthCheckService';
 
+import { MessageRouterIntegration } from './communication/MessageRouterIntegration';
+
 /**
  * MessageRouter - Central message handling system for VS Code extension webview communication
  *
@@ -53,6 +55,8 @@ export class MessageRouter {
     private xmlFormatterService?: XmlFormatterService;
     private workspaceManager?: WorkspaceManager;
     private feedbackService: FeedbackService;
+    private ragIntegration?: MessageRouterIntegration;
+
     private telemetryService?: TelemetryService;
 
     /**
@@ -121,6 +125,22 @@ export class MessageRouter {
     async handleMessage(message: any, webview: vscode.Webview): Promise<void> {
         try {
             console.log('MessageRouter: Handling message:', message.command);
+
+            // Try RAG handler first (lazy init)
+            if (!this.ragIntegration) {
+                this.ragIntegration = new MessageRouterIntegration(this.context);
+                try {
+                    await this.ragIntegration.initialize();
+                } catch (e) {
+                    console.error('Failed to initialize RAG integration', e);
+                }
+            }
+            if (this.ragIntegration) {
+                const ragHandled = await this.ragIntegration.handleRagMessage(message, webview);
+                if (ragHandled) {
+                    return;
+                }
+            }
 
             // Route message to appropriate handler based on command type
             switch (message.command) {

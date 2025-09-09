@@ -154,7 +154,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const pauseIndexingCommand = vscode.commands.registerCommand('code-context-engine.pauseIndexing', async () => {
             try {
                 const indexingService = manager.getIndexingService();
-                await indexingService.pauseIndexing();
+                await indexingService.pause();
                 vscode.window.showInformationMessage('Indexing paused');
             } catch (error) {
                 console.error('Failed to pause indexing:', error);
@@ -165,7 +165,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const resumeIndexingCommand = vscode.commands.registerCommand('code-context-engine.resumeIndexing', async () => {
             try {
                 const indexingService = manager.getIndexingService();
-                await indexingService.resumeIndexing();
+                await indexingService.resume();
                 vscode.window.showInformationMessage('Indexing resumed');
             } catch (error) {
                 console.error('Failed to resume indexing:', error);

@@ -1,5 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as contract from '../../contracts/get-settings.json';
+import { SettingsApi } from '../../../../src/api/SettingsApi';
+
+// Mock vscode API used inside SettingsApi/SettingsService
+vi.mock('vscode', () => ({
+  workspace: {
+    getConfiguration: () => ({ get: vi.fn(), update: vi.fn() }),
+    onDidChangeConfiguration: vi.fn()
+  },
+  ConfigurationTarget: { Workspace: 1 }
+}));
 
 /**
  * Contract Test for GET /settings endpoint
@@ -26,12 +36,14 @@ import * as contract from '../../contracts/get-settings.json';
 
 describe('GET /settings Contract Test', () => {
   let mockSettingsService: any;
-  let settingsApi: any;
+  let settingsApi: SettingsApi;
+  let messages: any[];
+  const webview = { postMessage: async (msg: any) => { messages.push(msg); } } as any;
 
   beforeEach(() => {
-    // This will fail until we implement SettingsService and SettingsApi
-    // mockSettingsService = new SettingsService();
-    // settingsApi = new SettingsApi(mockSettingsService);
+    messages = [];
+    mockSettingsService = {};
+    settingsApi = new SettingsApi(mockSettingsService as any);
   });
 
   it('should define the correct response structure from contract', () => {
@@ -54,7 +66,7 @@ describe('GET /settings Contract Test', () => {
     expect(qdrantProps.collectionName).toBeDefined();
   });
 
-  it('should return 200 with valid settings when settings exist', async () => {
+  it('should return success with valid settings when settings exist', async () => {
     // Arrange
     const expectedSettings = {
       embeddingModel: {
@@ -70,42 +82,33 @@ describe('GET /settings Contract Test', () => {
         collectionName: 'code-embeddings'
       }
     };
-
-    // This will fail until we implement the service
-    // mockSettingsService.getSettings = vi.fn().mockResolvedValue(expectedSettings);
+    mockSettingsService.getSettings = vi.fn().mockReturnValue(expectedSettings);
 
     // Act
-    // const response = await settingsApi.getSettings();
+    await settingsApi.handleGetSettings({ requestId: 't1' }, webview);
 
     // Assert
-    // expect(response.status).toBe(200);
-    // expect(response.data).toEqual(expectedSettings);
-
-    // Validate required fields for embeddingModel
-    // expect(response.data.embeddingModel.provider).toBeDefined();
-    // expect(['Nomic Embed', 'OpenAI']).toContain(response.data.embeddingModel.provider);
-    // expect(response.data.embeddingModel.apiKey).toBeDefined();
-
-    // Validate required fields for qdrantDatabase
-    // expect(response.data.qdrantDatabase.host).toBeDefined();
-    // expect(response.data.qdrantDatabase.collectionName).toBeDefined();
-
-    // This test MUST FAIL until implementation is complete
-    expect(true).toBe(false); // Intentional failure for TDD
+    expect(messages.length).toBe(1);
+    const msg = messages[0];
+    expect(msg.command).toBe('getSettingsResponse');
+    expect(msg.success).toBe(true);
+    expect(msg.settings).toEqual(expectedSettings);
+    expect(['Nomic Embed', 'OpenAI']).toContain(msg.settings.embeddingModel.provider);
+    expect(msg.settings.qdrantDatabase.collectionName).toBeDefined();
   });
 
-  it('should return 404 when no settings are configured', async () => {
+  it('should return error when no settings are configured', async () => {
     // Arrange
-    // mockSettingsService.getSettings = vi.fn().mockResolvedValue(null);
+    mockSettingsService.getSettings = vi.fn(() => { throw new Error('Settings not found'); });
 
     // Act
-    // const response = await settingsApi.getSettings();
+    await settingsApi.handleGetSettings({ requestId: 't2' }, webview);
 
     // Assert
-    // expect(response.status).toBe(404);
-    // expect(response.data).toEqual({ message: 'Settings not found' });
-
-    // This test MUST FAIL until implementation is complete
-    expect(true).toBe(false); // Intentional failure for TDD
+    expect(messages.length).toBe(1);
+    const msg = messages[0];
+    expect(msg.command).toBe('getSettingsResponse');
+    expect(msg.success).toBe(false);
+    expect(String(msg.error).toLowerCase()).toContain('not');
   });
 });

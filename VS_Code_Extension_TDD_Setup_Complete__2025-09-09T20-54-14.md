@@ -1,0 +1,40 @@
+[ ] NAME:Current Task List DESCRIPTION:Root task for conversation __NEW_AGENT__
+-[ ] NAME:Phase 3.1: Setup DESCRIPTION:Initialize project dependencies and configuration for both backend and frontend components
+--[x] NAME:T001 - Initialize project dependencies DESCRIPTION:Initialize project dependencies for backend (TypeScript, Node.js) and frontend (React, Fluent UI) in package.json and webview-react/package.json
+--[x] NAME:T002 - Configure ESLint and Prettier DESCRIPTION:Configure ESLint and Prettier for TypeScript and React in .eslintrc.json and webview-react/.eslintrc.json
+--[x] NAME:T003 - Setup Vitest testing DESCRIPTION:Setup Vitest for testing both backend (src/) and frontend (webview-react/src/) components
+-[ ] NAME:Phase 3.2: Tests First (TDD) DESCRIPTION:Write all contract and integration tests that MUST FAIL before implementation begins
+--[x] NAME:T004 - Contract test GET /settings DESCRIPTION:Write contract test for GET /settings in /Users/bramburn/dev/bigcontext/specs/001-we-currently-have/tests/contracts/get-settings.test.ts
+--[x] NAME:T005 - Contract test POST /settings DESCRIPTION:Write contract test for POST /settings in /Users/bramburn/dev/bigcontext/specs/001-we-currently-have/tests/contracts/post-settings.test.ts
+--[x] NAME:T006 - Contract test GET /indexing-status DESCRIPTION:Write contract test for GET /indexing-status in /Users/bramburn/dev/bigcontext/specs/001-we-currently-have/tests/contracts/get-indexing-status.test.ts
+--[x] NAME:T007 - Contract test POST /indexing-start DESCRIPTION:Write contract test for POST /indexing-start in /Users/bramburn/dev/bigcontext/specs/001-we-currently-have/tests/contracts/post-indexing-start.test.ts
+--[x] NAME:T008 - Integration test Initial Extension Setup DESCRIPTION:Write integration test for Initial Extension Setup scenario in webview-react/src/tests/integration/initialSetup.test.ts
+--[x] NAME:T009 - Integration test Starting and Monitoring Indexing DESCRIPTION:Write integration test for Starting and Monitoring Indexing scenario in webview-react/src/tests/integration/indexingFlow.test.ts
+--[x] NAME:T010 - Integration test Re-opening Extension View DESCRIPTION:Write integration test for Re-opening the Extension View scenario in webview-react/src/tests/integration/reopenView.test.ts
+--[x] NAME:T011 - Integration test Reindexing Existing Project DESCRIPTION:Write integration test for Reindexing an Existing Project scenario in webview-react/src/tests/integration/reindexing.test.ts
+-[/] NAME:Phase 3.3: Core Implementation DESCRIPTION:Implement data models, services, APIs, and UI components (ONLY after tests are failing)
+--[x] NAME:T012 - Data model embeddingSettings.ts DESCRIPTION:Implement EmbeddingSettings interface and related types in src/models/embeddingSettings.ts
+--[x] NAME:T013 - Data model qdrantSettings.ts DESCRIPTION:Implement QdrantSettings interface and related types in src/models/qdrantSettings.ts
+--[x] NAME:T014 - Data model indexingProgress.ts DESCRIPTION:Implement IndexingProgress interface and related types in src/models/indexingProgress.ts
+--[x] NAME:T015 - Data model projectFileMetadata.ts DESCRIPTION:Implement ProjectFileMetadata interface and related types in src/models/projectFileMetadata.ts
+--[x] NAME:T016 - Service SettingsService DESCRIPTION:Implement SettingsService class in src/services/SettingsService.ts for managing extension settings
+--[x] NAME:T017 - Service IndexingService DESCRIPTION:Implement IndexingService class in src/services/IndexingService.ts for managing indexing operations
+--[x] NAME:T018 - Service FileProcessor DESCRIPTION:Implement FileProcessor class in src/services/FileProcessor.ts for processing project files
+--[x] NAME:T019 - Service EmbeddingProvider DESCRIPTION:Implement EmbeddingProvider class in src/services/EmbeddingProvider.ts for generating embeddings
+--[x] NAME:T020 - Service QdrantService DESCRIPTION:Implement QdrantService class in src/services/QdrantService.ts for vector database operations
+--[x] NAME:T021 - API GET /settings DESCRIPTION:Implement GET /settings endpoint in backend API to retrieve current extension settings
+--[x] NAME:T022 - API POST /settings DESCRIPTION:Implement POST /settings endpoint in backend API to save extension settings
+--[x] NAME:T023 - API GET /indexing-status DESCRIPTION:Implement GET /indexing-status endpoint in backend API to retrieve indexing progress
+--[x] NAME:T024 - API POST /indexing-start DESCRIPTION:Implement POST /indexing-start endpoint in backend API to start/stop indexing process
+--[x] NAME:T025 - React component SettingsForm DESCRIPTION:Implement SettingsForm component in webview-react/src/components/SettingsForm.tsx
+--[x] NAME:T026 - React component IndexingProgress DESCRIPTION:Implement IndexingProgress component in webview-react/src/components/IndexingProgress.tsx
+--[x] NAME:T027 - React component App.tsx DESCRIPTION:Implement main App component in webview-react/src/App.tsx with routing logic
+--[x] NAME:T028 - Communication channel DESCRIPTION:Establish communication channel between VS Code extension and React webview
+-[ ] NAME:Phase 3.4: Integration DESCRIPTION:Connect frontend to backend APIs and integrate all services
+--[x] NAME:T029 - Frontend-Backend integration DESCRIPTION:Connect React frontend to backend APIs and test end-to-end functionality
+--[x] NAME:T030 - Service integration testing DESCRIPTION:Test integration between all services (Settings, Indexing, File Processing, etc.)
+--[x] NAME:T031 - Error handling integration DESCRIPTION:Implement and test comprehensive error handling across all components
+-[ ] NAME:Phase 3.5: Polish DESCRIPTION:Research clarifications, write unit tests, optimize performance, and update documentation
+--[x] NAME:T032 - Performance optimization DESCRIPTION:Optimize indexing performance, memory usage, and UI responsiveness
+--[x] NAME:T033 - Unit test coverage DESCRIPTION:Write comprehensive unit tests for all services and components
+--[x] NAME:T034 - Documentation update DESCRIPTION:Update README.md and add inline documentation for all implemented features

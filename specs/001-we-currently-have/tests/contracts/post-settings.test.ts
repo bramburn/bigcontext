@@ -1,5 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as contract from '../../contracts/post-settings.json';
+import { SettingsApi } from '../../../../src/api/SettingsApi';
+
+// Mock vscode API
+vi.mock('vscode', () => ({
+  workspace: {
+    getConfiguration: () => ({ get: vi.fn(), update: vi.fn() }),
+    onDidChangeConfiguration: vi.fn()
+  },
+  ConfigurationTarget: { Workspace: 1 }
+}));
 
 /**
  * Contract Test for POST /settings endpoint
@@ -32,12 +42,14 @@ import * as contract from '../../contracts/post-settings.json';
 
 describe('POST /settings Contract Test', () => {
   let mockSettingsService: any;
-  let settingsApi: any;
+  let settingsApi: SettingsApi;
+  let messages: any[];
+  const webview = { postMessage: async (msg: any) => { messages.push(msg); } } as any;
 
   beforeEach(() => {
-    // This will fail until we implement SettingsService and SettingsApi
-    // mockSettingsService = new SettingsService();
-    // settingsApi = new SettingsApi(mockSettingsService);
+    messages = [];
+    mockSettingsService = {};
+    settingsApi = new SettingsApi(mockSettingsService as any);
   });
 
   it('should define the correct request structure from contract', () => {
@@ -70,7 +82,7 @@ describe('POST /settings Contract Test', () => {
     expect(expectedResponseProperties.message.type).toBe('string');
   });
 
-  it('should return 200 with success response when valid settings are saved', async () => {
+  it('should return success response when valid settings are saved', async () => {
     // Arrange
     const validSettings = {
       embeddingModel: {
@@ -86,24 +98,21 @@ describe('POST /settings Contract Test', () => {
         collectionName: 'code-embeddings'
       }
     };
-
-    // This will fail until we implement the service
-    // mockSettingsService.saveSettings = vi.fn().mockResolvedValue(true);
+    mockSettingsService.saveSettings = vi.fn().mockResolvedValue({ success: true, message: 'Settings saved' });
 
     // Act
-    // const response = await settingsApi.saveSettings(validSettings);
+    await settingsApi.handlePostSettings({ settings: validSettings, requestId: 't1' }, webview);
 
     // Assert
-    // expect(response.status).toBe(200);
-    // expect(response.data.success).toBe(true);
-    // expect(response.data.message).toBeDefined();
-    // expect(typeof response.data.message).toBe('string');
-
-    // This test MUST FAIL until implementation is complete
-    expect(true).toBe(false); // Intentional failure for TDD
+    expect(messages.length).toBe(1);
+    const msg = messages[0];
+    expect(msg.command).toBe('postSettingsResponse');
+    expect(msg.success).toBe(true);
+    expect(msg.message).toBeDefined();
+    expect(typeof msg.message).toBe('string');
   });
 
-  it('should return 400 when required fields are missing', async () => {
+  it('should return error when required fields are missing', async () => {
     // Arrange
     const invalidSettings = {
       embeddingModel: {
@@ -115,17 +124,21 @@ describe('POST /settings Contract Test', () => {
         port: 6333
       }
     };
+    mockSettingsService.saveSettings = vi.fn().mockResolvedValue({
+      success: false,
+      message: 'Settings validation failed',
+      errors: ['Embedding provider is required', 'API key is required']
+    });
 
     // Act
-    // const response = await settingsApi.saveSettings(invalidSettings);
+    await settingsApi.handlePostSettings({ settings: invalidSettings as any, requestId: 't2' }, webview);
 
     // Assert
-    // expect(response.status).toBe(400);
-    // expect(response.data.success).toBe(false);
-    // expect(response.data.message).toContain('validation');
-
-    // This test MUST FAIL until implementation is complete
-    expect(true).toBe(false); // Intentional failure for TDD
+    expect(messages.length).toBe(1);
+    const msg = messages[0];
+    expect(msg.command).toBe('postSettingsResponse');
+    expect(msg.success).toBe(false);
+    expect(msg.message).toContain('validation');
   });
 
   it('should validate provider enum values', async () => {
