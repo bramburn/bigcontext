@@ -1,0 +1,30 @@
+{
+  "endpoint": "/settings",
+  "method": "GET",
+  "description": "Retrieve current embedding model and Qdrant database settings.",
+  "response": {
+    "type": "object",
+    "properties": {
+      "embeddingModel": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string", "enum": ["Mimic Embed", "OpenAI"] },
+          "apiKey": { "type": "string", "format": "password" },
+          "endpoint": { "type": "string", "format": "uri" },
+          "modelName": { "type": "string" }
+        },
+        "required": ["provider", "apiKey"]
+      },
+      "qdrantDatabase": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "number" },
+          "apiKey": { "type": "string", "format": "password" },
+          "collectionName": { "type": "string" }
+        },
+        "required": ["host", "collectionName"]
+      }
+    }
+  }
+}

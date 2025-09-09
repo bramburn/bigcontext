@@ -1,0 +1,38 @@
+{
+  "endpoint": "/settings",
+  "method": "POST",
+  "description": "Save embedding model and Qdrant database settings.",
+  "request": {
+    "type": "object",
+    "properties": {
+      "embeddingModel": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string", "enum": ["Mimic Embed", "OpenAI"] },
+          "apiKey": { "type": "string" },
+          "endpoint": { "type": "string", "format": "uri" },
+          "modelName": { "type": "string" }
+        },
+        "required": ["provider", "apiKey"]
+      },
+      "qdrantDatabase": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "number" },
+          "apiKey": { "type": "string" },
+          "collectionName": { "type": "string" }
+        },
+        "required": ["host", "collectionName"]
+      }
+    },
+    "required": ["embeddingModel", "qdrantDatabase"]
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": { "type": "boolean" },
+      "message": { "type": "string" }
+    }
+  }
+}

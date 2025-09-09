@@ -1,0 +1,12 @@
+{
+  "endpoint": "/indexing-start",
+  "method": "POST",
+  "description": "Start or restart the project indexing process.",
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": { "type": "boolean" },
+      "message": { "type": "string" }
+    }
+  }
+}
