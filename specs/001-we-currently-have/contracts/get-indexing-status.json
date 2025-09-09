@@ -1,0 +1,19 @@
+{
+  "endpoint": "/indexing-status",
+  "method": "GET",
+  "description": "Retrieve current indexing progress and statistics.",
+  "response": {
+    "type": "object",
+    "properties": {
+      "status": { "type": "string", "enum": ["Not Started", "In Progress", "Completed", "Paused", "Error"] },
+      "percentageComplete": { "type": "number", "minimum": 0, "maximum": 100 },
+      "chunksIndexed": { "type": "number", "minimum": 0 },
+      "totalFiles": { "type": "number", "minimum": 0 },
+      "filesProcessed": { "type": "number", "minimum": 0 },
+      "timeElapsed": { "type": "number", "minimum": 0 },
+      "estimatedTimeRemaining": { "type": "number", "minimum": 0 },
+      "errorsEncountered": { "type": "number", "minimum": 0 }
+    },
+    "required": ["status", "percentageComplete", "chunksIndexed"]
+  }
+}

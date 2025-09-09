@@ -1196,16 +1196,7 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 return;
             }
 
-            // Fall back to sidebar if main panel is not available
-            if (this.sidebarWebviewView) {
-                this.sidebarWebviewView.webview.postMessage({
-                    type: command,
-                    command: command,
-                    data: data
-                });
-                this.loggingService.debug('Sent message to sidebar webview', { command, data }, 'WebviewManager');
-                return;
-            }
+
 
             // If neither is available, log a warning
             this.loggingService.warn('No active webview to send message to', { command, data }, 'WebviewManager');

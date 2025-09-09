@@ -1178,7 +1178,7 @@ export class IndexingService {
       } catch (error) {
         const errorMessage = `Error processing file ${filePath}: ${error instanceof Error ? error.message : String(error)}`;
         result.errors.push(errorMessage);
-        this.addIndexingError(filePath, error);
+        this.addIndexingError(filePath, error instanceof Error ? error : new Error(String(error)));
         console.error(errorMessage);
       }
 
@@ -1670,60 +1670,9 @@ export class IndexingService {
     }
   }
 
-  /**
-   * Pauses the current indexing operation
-   *
-   * This method gracefully pauses the indexing process between files,
-   * preserving the current state and remaining files to be processed.
-   * The indexing can be resumed later from where it left off.
-   */
-  public pause(): void {
-    if (!this.stateManager.isIndexing()) {
-      console.warn(
-        "IndexingService: Cannot pause - no indexing operation in progress",
-      );
-      return;
-    }
 
-    console.log("IndexingService: Pausing indexing operation...");
-    this.isPaused = true;
-    this.stateManager.setPaused(true);
-    this.stateManager.setIndexingMessage("Indexing paused");
 
-    console.log(
-      `IndexingService: Indexing paused. ${this.remainingFiles.length} files remaining.`,
-    );
-  }
 
-  /**
-   * Resumes a paused indexing operation
-   *
-   * This method continues the indexing process from where it was paused,
-   * using the saved state and remaining files queue.
-   */
-  public async resume(): Promise<void> {
-    if (!this.stateManager.isPaused()) {
-      console.warn("IndexingService: Cannot resume - indexing is not paused");
-      return;
-    }
-
-    console.log("IndexingService: Resuming indexing operation...");
-    this.isPaused = false;
-    this.stateManager.setPaused(false);
-    this.stateManager.setIndexingMessage("Resuming indexing...");
-
-    // Continue processing from where we left off
-    if (this.useParallelProcessing && this.workerPool.length > 0) {
-      await this.continueIndexing();
-    } else {
-      // In sequential mode, startIndexing's control flow will continue after pause
-      if (this.remainingFiles.length === 0) {
-        console.log("IndexingService: No remaining files to process");
-        this.stateManager.setIndexing(false);
-        this.stateManager.setIndexingMessage(null);
-      }
-    }
-  }
 
   /**
    * Continues indexing from a paused state
@@ -1891,24 +1840,7 @@ export class IndexingService {
     return this.stateManager.isIndexing() && !this.isCancelled && !this.isStopped;
   }
 
-  /**
-   * Get current indexing operation status
-   */
-  public getIndexingStatus(): {
-    isIndexing: boolean;
-    isPaused: boolean;
-    isCancelled: boolean;
-    isStopped: boolean;
-    remainingFiles: number;
-  } {
-    return {
-      isIndexing: this.stateManager.isIndexing(),
-      isPaused: this.isPaused,
-      isCancelled: this.isCancelled,
-      isStopped: this.isStopped,
-      remainingFiles: this.remainingFiles.length,
-    };
-  }
+
 
   /**
    * Clears the entire index for the current workspace
@@ -2119,13 +2051,12 @@ export class IndexingService {
     // Call progress callback if available
     if (this.currentProgressCallback) {
       const progress: IndexingProgress = {
-        progress: this.progressInfo.totalFiles > 0
-          ? (this.progressInfo.processedFiles / this.progressInfo.totalFiles) * 100
-          : 0,
-        message: `Processing ${this.progressInfo.currentFile || 'files'}...`,
-        filesProcessed: this.progressInfo.processedFiles,
+        currentFile: this.progressInfo.currentFile || '',
+        processedFiles: this.progressInfo.processedFiles,
         totalFiles: this.progressInfo.totalFiles,
-        currentFile: this.progressInfo.currentFile
+        currentPhase: 'parsing',
+        chunks: [],
+        errors: this.indexingErrors.map(e => e.error)
       };
 
       this.currentProgressCallback(progress);

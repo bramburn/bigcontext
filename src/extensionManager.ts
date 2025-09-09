@@ -479,13 +479,7 @@ export class ExtensionManager {
         return this.historyManager;
     }
 
-    /**
-     * Gets the FileSystemWatcherManager instance
-     * @returns The FileSystemWatcherManager instance that monitors file changes
-     */
-    getFileSystemWatcherManager(): FileSystemWatcherManager {
-        return this.fileSystemWatcherManager;
-    }
+
 
     /**
      * Gets the VS Code extension context

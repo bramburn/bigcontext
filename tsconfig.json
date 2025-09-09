@@ -19,6 +19,8 @@
 		"webview-backup-*/**/*",
 		"webview-simple/**/*",
 		"webview-react/**/*",
-		"src/tests/**/*"
+		"src/tests/**/*",
+		"specs/**/*",
+		"vitest.config.ts"
 	]
 }

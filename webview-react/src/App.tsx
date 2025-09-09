@@ -1,174 +1,301 @@
 /**
  * Main App Component
  *
- * Root component for the React webview application.
- * Handles routing between different views and manages global state.
+ * Root component for the RAG for LLM VS Code extension React webview.
+ * Handles routing between settings and indexing views, manages global state,
+ * and provides communication with the VS Code extension backend.
  */
 
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FluentProvider,
   webLightTheme,
   webDarkTheme,
   makeStyles,
-  tokens
+  tokens,
+  Stack,
+  Pivot,
+  PivotItem,
+  Text,
+  MessageBar,
+  MessageBarType,
 } from '@fluentui/react-components';
-import { useAppStore, useIsWorkspaceOpen } from './stores/appStore';
-import { initializeVSCodeApi, onMessageCommand, postMessage } from './utils/vscodeApi';
-import { connectionMonitor } from './utils/connectionMonitor';
-import { startTourWhenReady } from './services/onboardingService';
-import ConnectionIndicator from './components/ConnectionStatus';
-import ErrorBoundary from './components/ErrorBoundary';
-import NoWorkspaceView from './components/NoWorkspaceView';
-import Layout from './components/Layout';
-import { useVscodeTheme } from './hooks/useVscodeTheme';
+import { SettingsForm } from './components/SettingsForm';
+import { IndexingProgress } from './components/IndexingProgress';
+import { postMessageToVsCode } from './utils/vscode';
+
+/**
+ * VS Code API interface
+ */
+interface VSCodeAPI {
+  postMessage: (message: any) => void;
+  setState: (state: any) => void;
+  getState: () => any;
+}
+
+declare global {
+  interface Window {
+    acquireVsCodeApi?: () => VSCodeAPI;
+  }
+}
+
+/**
+ * App state interface
+ */
+interface AppState {
+  currentView: 'settings' | 'indexing';
+  isWorkspaceOpen: boolean;
+  message: {
+    type: MessageBarType;
+    text: string;
+  } | null;
+  theme: 'light' | 'dark';
+}
 
 const useStyles = makeStyles({
   app: {
     minHeight: '100vh',
     backgroundColor: tokens.colorNeutralBackground1,
     color: tokens.colorNeutralForeground1,
-    fontFamily: tokens.fontFamilyBase
-  }
+    fontFamily: tokens.fontFamilyBase,
+    padding: tokens.spacingVerticalM,
+  },
+  header: {
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    paddingBottom: tokens.spacingVerticalM,
+    marginBottom: tokens.spacingVerticalL,
+  },
+  content: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+  },
 });
 
 function App() {
   const styles = useStyles();
-  const isWorkspaceOpen = useIsWorkspaceOpen();
-  const { setWorkspaceOpen, setCurrentView, setFirstRunComplete } = useAppStore();
 
-  // Initialize VS Code API and set up message listeners
+  const [state, setState] = useState<AppState>({
+    currentView: 'settings',
+    isWorkspaceOpen: true, // Assume workspace is open for now
+    message: null,
+    theme: 'light',
+  });
+
+  /**
+   * Initialize VS Code API and set up message listeners
+   */
   useEffect(() => {
+    // Initialize VS Code API
+    const vscodeApi = window.acquireVsCodeApi?.();
+
+    if (!vscodeApi) {
+      console.error('VS Code API not available');
+      setState(prev => ({
+        ...prev,
+        message: {
+          type: MessageBarType.error,
+          text: 'VS Code API not available. Please reload the extension.',
+        },
+      }));
+      return;
+    }
+
+    // Detect VS Code theme
+    const detectTheme = () => {
+      const body = document.body;
+      const isDark = body.classList.contains('vscode-dark') ||
+                    body.classList.contains('vscode-high-contrast');
+      setState(prev => ({ ...prev, theme: isDark ? 'dark' : 'light' }));
+    };
+
+    detectTheme();
+
+    // Set up message listener for responses from extension
+    const messageListener = (event: MessageEvent) => {
+      const message = event.data;
+
+      switch (message.command) {
+        case 'getSettingsResponse':
+          // Handle settings response
+          console.log('Received settings:', message.settings);
+          break;
+
+        case 'postSettingsResponse':
+          // Handle save settings response
+          if (message.success) {
+            setState(prev => ({
+              ...prev,
+              message: {
+                type: MessageBarType.success,
+                text: 'Settings saved successfully!',
+              },
+            }));
+          } else {
+            setState(prev => ({
+              ...prev,
+              message: {
+                type: MessageBarType.error,
+                text: message.message || 'Failed to save settings',
+              },
+            }));
+          }
+          break;
+
+        case 'getIndexingStatusResponse':
+          // Handle indexing status response
+          console.log('Received indexing status:', message.progress);
+          break;
+
+        case 'postIndexingStartResponse':
+          // Handle indexing operation response
+          if (message.success) {
+            setState(prev => ({
+              ...prev,
+              message: {
+                type: MessageBarType.success,
+                text: message.message,
+              },
+            }));
+          } else {
+            setState(prev => ({
+              ...prev,
+              message: {
+                type: MessageBarType.error,
+                text: message.message || 'Operation failed',
+              },
+            }));
+          }
+          break;
+
+        case 'indexingProgressUpdate':
+          // Handle real-time progress updates
+          console.log('Indexing progress update:', message.progress);
+          break;
+
+        default:
+          console.log('Unhandled message:', message);
+      }
+    };
+
+    window.addEventListener('message', messageListener);
+
     // Notify extension that webview is ready
-    postMessage('webviewReady');
-
-    const api = initializeVSCodeApi();
-
-    // Initialize connection monitor
-    if (api) {
-      connectionMonitor.initialize(api);
-    }
-
-    // Set up message listeners
-    const unsubscribeWorkspace = onMessageCommand('workspaceChanged', (data) => {
-      setWorkspaceOpen(data.isOpen);
-    });
-
-    // Listen for workspace state changes from the backend
-    const unsubscribeWorkspaceState = onMessageCommand('workspaceStateChanged', (data) => {
-      if (data?.data?.isWorkspaceOpen !== undefined) {
-        setWorkspaceOpen(!!data.data.isWorkspaceOpen);
-      }
-    });
-
-    const unsubscribeView = onMessageCommand('changeView', (msg) => {
-      const view = msg.data?.view ?? msg.view;
-      if (view) setCurrentView(view);
-    });
-
-    // Listen for onboarding tour start message
-    const unsubscribeOnboarding = onMessageCommand('startOnboardingTour', () => {
-      startTourWhenReady(() => {
-        // Tour completed or cancelled
-        postMessage('onboardingFinished');
-      });
-    });
-
-    // Handle navigation messages from command palette
-    const unsubscribeNavigate = onMessageCommand('navigateToView', (data) => {
-      console.log('App: Navigate to view:', data);
-      const { view } = data?.data || {};
-      if (view) {
-        useAppStore.getState().setSelectedNavItem(view);
-      }
-    });
-
-    const unsubscribeSetQuery = onMessageCommand('setQuery', (data) => {
-      console.log('App: Set query:', data);
-      const { query } = data?.data || {};
-      if (query) {
-        useAppStore.getState().setQuery(query);
-        useAppStore.getState().setSelectedNavItem('search');
-        useAppStore.getState().setSelectedSearchTab('query');
-      }
-    });
-
-    const unsubscribeSetSearchTab = onMessageCommand('setSearchTab', (data) => {
-      console.log('App: Set search tab:', data);
-      const { tab } = data?.data || {};
-      if (tab) {
-        useAppStore.getState().setSelectedSearchTab(tab);
-        useAppStore.getState().setSelectedNavItem('search');
-      }
-    });
-
-    // Handle initial state message from extension
-    const unsubscribeInitial = onMessageCommand('initialState', (data) => {
-      console.log('Frontend: Received initialState message:', data);
-      if (data?.data?.isWorkspaceOpen !== undefined) {
-        const isOpen = !!data.data.isWorkspaceOpen;
-        console.log('Frontend: Setting workspace open to:', isOpen);
-        setWorkspaceOpen(isOpen);
-      } else {
-        console.warn('Frontend: initialState message missing isWorkspaceOpen data');
-      }
-    });
-
-    // Request initial state from extension (support multiple endpoints)
-    if (api) {
-      console.log('Frontend: Requesting initial state from extension...');
-      // Preferred new API
-      api.postMessage({ command: 'getInitialState' });
-      // Fallback to legacy state request
-      api.postMessage({ command: 'getState' });
-      console.log('Frontend: Initial state requests sent');
-    } else {
-      console.error('Frontend: VS Code API not available, cannot request initial state');
-    }
+    vscodeApi.postMessage({ command: 'webviewReady' });
 
     return () => {
-      unsubscribeWorkspace();
-      unsubscribeWorkspaceState();
-      unsubscribeView();
-      unsubscribeFirstRun();
-      unsubscribeOnboarding();
-      unsubscribeInitial();
-      unsubscribeNavigate();
-      unsubscribeSetQuery();
-      unsubscribeSetSearchTab();
+      window.removeEventListener('message', messageListener);
     };
-  }, [setWorkspaceOpen, setCurrentView, setFirstRunComplete]);
+  }, []);
 
-  // Determine VS Code theme and map to Fluent UI themes
-  // Note: webview inherits classes like 'vscode-dark' on body
-  const vsTheme = useVscodeTheme();
-  const theme = vsTheme === 'dark' ? webDarkTheme : webLightTheme;
-
-  // Render the appropriate view based on current state
-  const renderCurrentView = () => {
-    if (!isWorkspaceOpen) {
-      return <NoWorkspaceView />;
-    }
-
-    // Use the new Layout component for workspace views
-    return <Layout />;
+  /**
+   * Handle view change
+   */
+  const handleViewChange = (view: 'settings' | 'indexing') => {
+    setState(prev => ({ ...prev, currentView: view }));
   };
+
+  /**
+   * Handle settings saved
+   */
+  const handleSettingsSaved = (settings: any) => {
+    console.log('Settings saved:', settings);
+    setState(prev => ({
+      ...prev,
+      message: {
+        type: MessageBarType.success,
+        text: 'Settings saved successfully!',
+      },
+    }));
+  };
+
+  /**
+   * Handle indexing status change
+   */
+  const handleIndexingStatusChange = (status: string) => {
+    console.log('Indexing status changed:', status);
+  };
+
+  /**
+   * Dismiss message
+   */
+  const dismissMessage = () => {
+    setState(prev => ({ ...prev, message: null }));
+  };
+
+  // Determine theme
+  const theme = state.theme === 'dark' ? webDarkTheme : webLightTheme;
+
+  // Check if workspace is open
+  if (!state.isWorkspaceOpen) {
+    return (
+      <FluentProvider theme={theme}>
+        <div className={styles.app}>
+          <Stack tokens={{ childrenGap: 20 }} horizontalAlign="center" verticalAlign="center">
+            <Text variant="xLarge">No Workspace Open</Text>
+            <Text>Please open a workspace folder to use the RAG for LLM extension.</Text>
+          </Stack>
+        </div>
+      </FluentProvider>
+    );
+  }
 
   return (
     <FluentProvider theme={theme}>
-      <ErrorBoundary
-        fallbackMessage="The Code Context Engine encountered an unexpected error."
-        showDetails={false}
-        onError={(error, errorInfo) => {
-          console.error('App Error:', error, errorInfo);
-          // Could send error to extension for logging
-        }}
-      >
-        <div className={styles.app}>
-          <ConnectionIndicator />
-          {renderCurrentView()}
+      <div className={styles.app}>
+        <div className={styles.content}>
+          {/* Header */}
+          <Stack className={styles.header} tokens={{ childrenGap: 10 }}>
+            <Text variant="xxLarge" styles={{ root: { fontWeight: 600 } }}>
+              RAG for LLM
+            </Text>
+            <Text variant="large" styles={{ root: { color: tokens.colorNeutralForeground2 } }}>
+              Retrieval-Augmented Generation for Large Language Models
+            </Text>
+          </Stack>
+
+          {/* Global Message */}
+          {state.message && (
+            <MessageBar
+              messageBarType={state.message.type}
+              onDismiss={dismissMessage}
+              styles={{ root: { marginBottom: tokens.spacingVerticalL } }}
+            >
+              {state.message.text}
+            </MessageBar>
+          )}
+
+          {/* Navigation Tabs */}
+          <Pivot
+            selectedKey={state.currentView}
+            onLinkClick={(item) => {
+              if (item?.props.itemKey) {
+                handleViewChange(item.props.itemKey as 'settings' | 'indexing');
+              }
+            }}
+            styles={{ root: { marginBottom: tokens.spacingVerticalL } }}
+          >
+            <PivotItem headerText="Settings" itemKey="settings" />
+            <PivotItem headerText="Indexing" itemKey="indexing" />
+          </Pivot>
+
+          {/* Content */}
+          <Stack>
+            {state.currentView === 'settings' && (
+              <SettingsForm
+                onSettingsSaved={handleSettingsSaved}
+              />
+            )}
+
+            {state.currentView === 'indexing' && (
+              <IndexingProgress
+                onStatusChange={handleIndexingStatusChange}
+                showStatistics={true}
+                autoRefresh={true}
+              />
+            )}
+          </Stack>
         </div>
-      </ErrorBoundary>
+      </div>
     </FluentProvider>
   );
 }

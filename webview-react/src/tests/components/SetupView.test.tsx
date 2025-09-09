@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SetupView } from '../../components/SetupView';
-import { useAppStore } from '../../stores/appStore';
+import { useAppStore, useSetupState } from '../../stores/appStore';
 
 // Mock the store
 vi.mock('../../stores/appStore');
@@ -42,9 +42,23 @@ describe('SetupView', () => {
     setCurrentView: vi.fn(),
   };
 
+  const mockSetupState = {
+    selectedDatabase: 'qdrant',
+    selectedProvider: 'ollama',
+    databaseStatus: 'unknown',
+    providerStatus: 'unknown',
+    databaseConfig: { url: 'http://localhost:6333' },
+    providerConfig: { model: 'nomic-embed-text', baseUrl: 'http://localhost:11434' },
+    validationErrors: {},
+    isSetupComplete: false,
+    availableModels: ['nomic-embed-text', 'all-minilm'],
+    isLoadingModels: false,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     (useAppStore as any).mockReturnValue(mockStore);
+    (useSetupState as any).mockReturnValue(mockSetupState);
   });
 
   describe('Database Selection', () => {

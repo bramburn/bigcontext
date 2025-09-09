@@ -175,6 +175,29 @@ The extension supports various configuration options accessible through VS Code 
 
 ## 🧪 Testing
 
+## RAG for LLM: Setup & Indexing UI (Phase 3)
+
+This repository now includes a RAG (Retrieval-Augmented Generation) setup and indexing workflow integrated into the VS Code extension.
+
+- Backend APIs (webview message handlers):
+  - GET/POST /settings
+  - GET /indexing-status
+  - POST /indexing-start
+- Frontend (React webview) in webview-react/ with Settings and Indexing views
+- Message routing integrated via RagMessageHandler and MessageRouterIntegration
+
+### Running contract tests (Vitest)
+
+```bash
+# Contract tests from the spec folder
+npx vitest run specs/001-we-currently-have/tests/contracts/ --reporter=verbose
+
+# Unit tests for services
+npx vitest run src/tests/unit --reporter=verbose
+```
+
+
+
 ```bash
 # Run all tests
 npm test
