@@ -59,6 +59,7 @@ export class MessageRouter {
     private feedbackService: FeedbackService;
     private ragIntegration?: MessageRouterIntegration;
     private fileScanService?: FileScanService;
+    private loggingService?: CentralizedLoggingService;
 
     private telemetryService?: TelemetryService;
 
@@ -83,8 +84,8 @@ export class MessageRouter {
 
         // Create a logging service for the feedback service
         this.configService = new ConfigService();
-        const loggingService = new CentralizedLoggingService(this.configService);
-        this.feedbackService = new FeedbackService(loggingService);
+        this.loggingService = new CentralizedLoggingService(this.configService);
+        this.feedbackService = new FeedbackService(this.loggingService);
     }
 
     /**
@@ -113,6 +114,15 @@ export class MessageRouter {
         this.xmlFormatterService = xmlFormatterService;
         this.telemetryService = telemetryService;
         console.log('MessageRouter: Advanced managers set');
+    }
+
+    /**
+     * Sets the workspace manager for file scanning functionality
+     * @param workspaceManager - The workspace manager instance
+     */
+    setWorkspaceManager(workspaceManager: WorkspaceManager): void {
+        this.workspaceManager = workspaceManager;
+        console.log('MessageRouter: WorkspaceManager set');
     }
 
     /**
@@ -224,6 +234,9 @@ export class MessageRouter {
                     break;
                 case 'retryIndexing':
                     await this.handleStartIndexing(message, webview);
+                    break;
+                case 'startFileScan':
+                    await this.handleStartFileScan(message, webview);
                     break;
                 case 'openFile':
                     await this.handleOpenFile(message, webview);
@@ -355,9 +368,6 @@ export class MessageRouter {
                     break;
                 case 'copyToClipboard':
                     await this.handleCopyToClipboard(message, webview);
-                    break;
-                case 'startFileScan':
-                    await this.handleStartFileScan(message, webview);
                     break;
                 default:
                     // Handle unknown commands with a warning and error response
@@ -1004,6 +1014,98 @@ export class MessageRouter {
                 command: 'indexingError',
                 requestId: message.requestId,
                 error: error instanceof Error ? error.message : 'An unknown error occurred while indexing.'
+            });
+        }
+    }
+
+    /**
+     * Handles file scan start request
+     *
+     * This handler initiates a file scan operation that traverses the workspace
+     * and sends progress updates to the webview. It uses the FileScanner to
+     * count files and identify ignored files.
+     *
+     * @param message - The incoming message from the webview
+     * @param webview - The webview to send responses to
+     */
+    private async handleStartFileScan(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling start file scan request');
+
+            if (!this.workspaceManager) {
+                await webview.postMessage({
+                    command: 'scanComplete',
+                    requestId: message.requestId,
+                    totalFiles: 0,
+                    ignoredFiles: 0,
+                    message: 'Error: Workspace manager not available'
+                });
+                return;
+            }
+
+            const workspaceRoot = this.workspaceManager.getWorkspaceRoot();
+            if (!workspaceRoot) {
+                await webview.postMessage({
+                    command: 'scanComplete',
+                    requestId: message.requestId,
+                    totalFiles: 0,
+                    ignoredFiles: 0,
+                    message: 'Error: No workspace open'
+                });
+                return;
+            }
+
+            // Send scan start message
+            await webview.postMessage({
+                command: 'scanStart',
+                requestId: message.requestId,
+                message: 'Starting file scan...'
+            });
+
+            // Create a simple message sender for progress updates
+            const messageSender = {
+                sendScanStart: async (msg: string) => {
+                    await webview.postMessage({
+                        command: 'scanStart',
+                        requestId: message.requestId,
+                        message: msg
+                    });
+                },
+                sendScanProgress: async (scannedFiles: number, ignoredFiles: number, msg: string) => {
+                    await webview.postMessage({
+                        command: 'scanProgress',
+                        requestId: message.requestId,
+                        scannedFiles,
+                        ignoredFiles,
+                        message: msg
+                    });
+                },
+                sendScanComplete: async (totalFiles: number, ignoredFiles: number, msg: string) => {
+                    await webview.postMessage({
+                        command: 'scanComplete',
+                        requestId: message.requestId,
+                        totalFiles,
+                        ignoredFiles,
+                        message: msg
+                    });
+                }
+            };
+
+            // Create file scanner and run scan
+            const { FileScanner } = await import('./indexing/fileScanner');
+            const fileScanner = new FileScanner(workspaceRoot, messageSender, this.loggingService);
+            const statistics = await fileScanner.scanWithProgress();
+
+            console.log('MessageRouter: File scan completed', statistics);
+
+        } catch (error) {
+            console.error('MessageRouter: Error during file scan:', error);
+            await webview.postMessage({
+                command: 'scanComplete',
+                requestId: message.requestId,
+                totalFiles: 0,
+                ignoredFiles: 0,
+                message: `Scan failed: ${error instanceof Error ? error.message : String(error)}`
             });
         }
     }
@@ -2755,85 +2857,4 @@ export class MessageRouter {
         }
     }
 
-    /**
-     * Handles file scan requests from the webview
-     *
-     * This method initiates a file scanning operation when the user navigates to the indexing tab.
-     * It creates a FileScanner instance and starts the scanning process with progress updates.
-     */
-    private async handleStartFileScan(message: any, webview: vscode.Webview): Promise<void> {
-        try {
-            console.log('MessageRouter: Starting file scan');
-
-            // Get the current workspace folder
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders || workspaceFolders.length === 0) {
-                await webview.postMessage({
-                    command: 'fileScanError',
-                    success: false,
-                    data: { message: 'No workspace folder is open' }
-                });
-                return;
-            }
-
-            const workspaceRoot = workspaceFolders[0].uri.fsPath;
-
-            // Import FileScanner dynamically to avoid circular dependencies
-            const { FileScanner } = await import('./indexing/fileScanner');
-
-            // Create a simple message sender that uses webview.postMessage directly
-            const messageSender = {
-                sendScanStart: (message: string) => {
-                    webview.postMessage({
-                        type: 'scanStart',
-                        payload: { message }
-                    });
-                },
-                sendScanProgress: (scannedFiles: number, ignoredFiles: number, message: string) => {
-                    webview.postMessage({
-                        type: 'scanProgress',
-                        payload: { scannedFiles, ignoredFiles, message }
-                    });
-                },
-                sendScanComplete: (totalFiles: number, ignoredFiles: number, message: string) => {
-                    webview.postMessage({
-                        type: 'scanComplete',
-                        payload: { totalFiles, ignoredFiles, message }
-                    });
-                }
-            };
-
-            // Create and start file scanner
-            const fileScanner = new FileScanner(workspaceRoot, messageSender);
-
-            // Start scanning in the background
-            fileScanner.scanWithProgress().then(stats => {
-                console.log('File scan completed:', stats);
-            }).catch(error => {
-                console.error('File scan failed:', error);
-                webview.postMessage({
-                    command: 'fileScanError',
-                    success: false,
-                    data: { message: error instanceof Error ? error.message : 'File scan failed' }
-                });
-            });
-
-            // Send immediate response that scan has started
-            await webview.postMessage({
-                command: 'fileScanStarted',
-                success: true,
-                data: { message: 'File scan initiated' }
-            });
-
-        } catch (error) {
-            console.error('MessageRouter: Error starting file scan:', error);
-            await webview.postMessage({
-                command: 'fileScanError',
-                success: false,
-                data: {
-                    message: error instanceof Error ? error.message : 'Failed to start file scan'
-                }
-            });
-        }
-    }
 }

@@ -17,6 +17,7 @@ import * as path from 'path';
 import * as glob from 'glob';
 import fastGlob from 'fast-glob';
 import ignore from 'ignore';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 /**
  * Interface for sending file scan progress messages
@@ -79,10 +80,16 @@ export class FileScanner {
   private workspaceRoot: string;
   private ignoreInstance: ReturnType<typeof ignore>;
   private messageSender?: IFileScanMessageSender;
+  private loggingService?: CentralizedLoggingService;
 
-  constructor(workspaceRoot: string, messageSender?: IFileScanMessageSender) {
+  constructor(
+    workspaceRoot: string,
+    messageSender?: IFileScanMessageSender,
+    loggingService?: CentralizedLoggingService
+  ) {
     this.workspaceRoot = workspaceRoot;
     this.messageSender = messageSender;
+    this.loggingService = loggingService;
     this.ignoreInstance = ignore();
 
     // Add common patterns to ignore by default
@@ -180,180 +187,216 @@ export class FileScanner {
    * Scan the full file structure with progress updates
    */
   public async scanWithProgress(): Promise<ScanStatistics> {
-    // Send scan start message
-    this.sendProgressMessage({
-      type: 'scanStart',
-      payload: {
-        message: 'Scanning full file structure...'
+    try {
+      this.loggingService?.info(
+        'Starting file scan with progress',
+        { workspaceRoot: this.workspaceRoot },
+        'FileScanner'
+      );
+
+      // Send scan start message
+      this.sendProgressMessage({
+        type: 'scanStart',
+        payload: {
+          message: 'Scanning full file structure...'
+        }
+      });
+
+      // Check if repository is empty
+      const isEmpty = await this.isRepositoryEmpty();
+      if (isEmpty) {
+        const stats: ScanStatistics = {
+          totalFiles: 0,
+          ignoredFiles: 0,
+          scannedFiles: 0,
+          isEmpty: true
+        };
+
+        this.sendProgressMessage({
+          type: 'scanComplete',
+          payload: {
+            totalFiles: 0,
+            ignoredFiles: 0,
+            message: 'Scan complete: Repository is empty.'
+          }
+        });
+
+        return stats;
       }
-    });
 
-    // Check if repository is empty
-    const isEmpty = await this.isRepositoryEmpty();
-    if (isEmpty) {
-      const stats: ScanStatistics = {
-        totalFiles: 0,
-        ignoredFiles: 0,
-        scannedFiles: 0,
-        isEmpty: true
-      };
+      // Load ignore patterns
+      await this.loadIgnorePatterns();
 
+      // Initialize counters
+      let totalFiles = 0;
+      let ignoredFiles = 0;
+      let scannedFiles = 0;
+
+      // Define file patterns to search for
+      const patterns = [
+        '**/*.ts',
+        '**/*.tsx',
+        '**/*.js',
+        '**/*.jsx',
+        '**/*.py',
+        '**/*.java',
+        '**/*.c',
+        '**/*.cpp',
+        '**/*.h',
+        '**/*.hpp',
+        '**/*.cs',
+        '**/*.php',
+        '**/*.rb',
+        '**/*.go',
+        '**/*.rs',
+        '**/*.swift',
+        '**/*.kt',
+        '**/*.scala',
+        '**/*.clj',
+        '**/*.hs',
+        '**/*.ml',
+        '**/*.fs',
+        '**/*.elm',
+        '**/*.dart',
+        '**/*.lua',
+        '**/*.r',
+        '**/*.m',
+        '**/*.sh',
+        '**/*.bash',
+        '**/*.zsh',
+        '**/*.fish',
+        '**/*.ps1',
+        '**/*.bat',
+        '**/*.cmd',
+        '**/*.sql',
+        '**/*.html',
+        '**/*.css',
+        '**/*.scss',
+        '**/*.sass',
+        '**/*.less',
+        '**/*.vue',
+        '**/*.svelte',
+        '**/*.md',
+        '**/*.mdx',
+        '**/*.json',
+        '**/*.yaml',
+        '**/*.yml',
+        '**/*.xml',
+        '**/*.toml',
+        '**/*.ini',
+        '**/*.cfg',
+        '**/*.conf',
+        '**/*.config',
+        '**/*.txt',
+        '**/*.dockerfile',
+        '**/Dockerfile*',
+        '**/Makefile*',
+        '**/*.mk'
+      ];
+
+      const updateInterval = 1000; // Update every 1000 files or every 2 seconds
+      let lastUpdateTime = Date.now();
+
+      try {
+        // Use fast-glob for efficient file discovery
+        const allFiles = await fastGlob(patterns, {
+          cwd: this.workspaceRoot,
+          absolute: true,
+          dot: false,
+          onlyFiles: true,
+          ignore: ['node_modules/**', '.git/**'] // Basic ignore patterns for performance
+        });
+
+        totalFiles = allFiles.length;
+
+        // Process files and apply ignore patterns
+        for (const filePath of allFiles) {
+          scannedFiles++;
+
+          // Check if file should be ignored
+          const relativePath = path.relative(this.workspaceRoot, filePath);
+          if (this.ignoreInstance.ignores(relativePath)) {
+            ignoredFiles++;
+          }
+
+          // Send progress update periodically
+          const now = Date.now();
+          if (scannedFiles % updateInterval === 0 || now - lastUpdateTime > 2000) {
+            this.sendProgressMessage({
+              type: 'scanProgress',
+              payload: {
+                scannedFiles,
+                ignoredFiles,
+                message: `Scanned ${scannedFiles} files, ${ignoredFiles} ignored...`
+              }
+            });
+            lastUpdateTime = now;
+          }
+        }
+
+        const stats: ScanStatistics = {
+          totalFiles,
+          ignoredFiles,
+          scannedFiles,
+          isEmpty: false
+        };
+
+        this.loggingService?.info(
+          'File scan completed successfully',
+          {
+            totalFiles,
+            ignoredFiles,
+            scannedFiles,
+            workspaceRoot: this.workspaceRoot
+          },
+          'FileScanner'
+        );
+
+        // Send completion message
+        this.sendProgressMessage({
+          type: 'scanComplete',
+          payload: {
+            totalFiles,
+            ignoredFiles,
+            message: `Scan complete: ${totalFiles} files in repo, ${ignoredFiles} files not considered.`
+          }
+        });
+
+        return stats;
+
+      } catch (innerError) {
+        // Handle errors from the inner try block (fast-glob operations)
+        throw innerError;
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      this.loggingService?.error(
+        'Error during file scanning',
+        {
+          error: errorMessage,
+          workspaceRoot: this.workspaceRoot,
+          scannedFiles: 0,
+          ignoredFiles: 0
+        },
+        'FileScanner'
+      );
+
+      // Send error completion message
       this.sendProgressMessage({
         type: 'scanComplete',
         payload: {
           totalFiles: 0,
           ignoredFiles: 0,
-          message: 'Scan complete: Repository is empty.'
-        }
-      });
-
-      return stats;
-    }
-
-    // Load ignore patterns
-    await this.loadIgnorePatterns();
-
-    // Define file patterns to search for
-    const patterns = [
-      '**/*.ts',
-      '**/*.tsx',
-      '**/*.js',
-      '**/*.jsx',
-      '**/*.py',
-      '**/*.java',
-      '**/*.c',
-      '**/*.cpp',
-      '**/*.h',
-      '**/*.hpp',
-      '**/*.cs',
-      '**/*.php',
-      '**/*.rb',
-      '**/*.go',
-      '**/*.rs',
-      '**/*.swift',
-      '**/*.kt',
-      '**/*.scala',
-      '**/*.clj',
-      '**/*.hs',
-      '**/*.ml',
-      '**/*.fs',
-      '**/*.elm',
-      '**/*.dart',
-      '**/*.lua',
-      '**/*.r',
-      '**/*.m',
-      '**/*.sh',
-      '**/*.bash',
-      '**/*.zsh',
-      '**/*.fish',
-      '**/*.ps1',
-      '**/*.bat',
-      '**/*.cmd',
-      '**/*.sql',
-      '**/*.html',
-      '**/*.css',
-      '**/*.scss',
-      '**/*.sass',
-      '**/*.less',
-      '**/*.vue',
-      '**/*.svelte',
-      '**/*.md',
-      '**/*.mdx',
-      '**/*.json',
-      '**/*.yaml',
-      '**/*.yml',
-      '**/*.xml',
-      '**/*.toml',
-      '**/*.ini',
-      '**/*.cfg',
-      '**/*.conf',
-      '**/*.config',
-      '**/*.txt',
-      '**/*.dockerfile',
-      '**/Dockerfile*',
-      '**/Makefile*',
-      '**/*.mk'
-    ];
-
-    let totalFiles = 0;
-    let ignoredFiles = 0;
-    let scannedFiles = 0;
-    const updateInterval = 1000; // Update every 1000 files or every 2 seconds
-    let lastUpdateTime = Date.now();
-
-    try {
-      // Use fast-glob for efficient file discovery
-      const allFiles = await fastGlob(patterns, {
-        cwd: this.workspaceRoot,
-        absolute: true,
-        dot: false,
-        onlyFiles: true,
-        ignore: ['node_modules/**', '.git/**'] // Basic ignore patterns for performance
-      });
-
-      totalFiles = allFiles.length;
-
-      // Process files and apply ignore patterns
-      for (const filePath of allFiles) {
-        scannedFiles++;
-        
-        // Check if file should be ignored
-        const relativePath = path.relative(this.workspaceRoot, filePath);
-        if (this.ignoreInstance.ignores(relativePath)) {
-          ignoredFiles++;
-        }
-
-        // Send progress update periodically
-        const now = Date.now();
-        if (scannedFiles % updateInterval === 0 || now - lastUpdateTime > 2000) {
-          this.sendProgressMessage({
-            type: 'scanProgress',
-            payload: {
-              scannedFiles,
-              ignoredFiles,
-              message: `Scanned ${scannedFiles} files, ${ignoredFiles} ignored...`
-            }
-          });
-          lastUpdateTime = now;
-        }
-      }
-
-      const stats: ScanStatistics = {
-        totalFiles,
-        ignoredFiles,
-        scannedFiles,
-        isEmpty: false
-      };
-
-      // Send completion message
-      this.sendProgressMessage({
-        type: 'scanComplete',
-        payload: {
-          totalFiles,
-          ignoredFiles,
-          message: `Scan complete: ${totalFiles} files in repo, ${ignoredFiles} files not considered.`
-        }
-      });
-
-      return stats;
-
-    } catch (error) {
-      console.error('Error during file scanning:', error);
-      
-      // Send error completion message
-      this.sendProgressMessage({
-        type: 'scanComplete',
-        payload: {
-          totalFiles: scannedFiles,
-          ignoredFiles,
-          message: `Scan completed with errors: ${scannedFiles} files scanned, ${ignoredFiles} files not considered.`
+          message: `Scan failed: ${errorMessage}`
         }
       });
 
       return {
-        totalFiles: scannedFiles,
-        ignoredFiles,
-        scannedFiles,
+        totalFiles: 0,
+        ignoredFiles: 0,
+        scannedFiles: 0,
         isEmpty: false
       };
     }

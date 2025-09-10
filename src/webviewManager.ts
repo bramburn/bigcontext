@@ -306,6 +306,13 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 console.warn('WebviewManager: Some advanced managers not available during panel creation:', error);
             }
 
+            // Set workspace manager for file scanning functionality
+            try {
+                messageRouter.setWorkspaceManager(this.extensionManager.getWorkspaceManager());
+            } catch (error) {
+                console.warn('WebviewManager: WorkspaceManager not available during panel creation:', error);
+            }
+
             panel.webview.onDidReceiveMessage(
                 message => {
                     this.logWebviewMessage(config.id, message, 'panel');

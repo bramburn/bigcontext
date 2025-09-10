@@ -196,8 +196,19 @@ function App() {
 
     // Trigger file scan when navigating to indexing tab
     if (view === 'indexing') {
-      console.log('Navigating to indexing tab, triggering file scan...');
-      postMessage('startFileScan', {});
+      try {
+        console.log('Navigating to indexing tab, triggering file scan...');
+        postMessage('startFileScan', {});
+      } catch (error) {
+        console.error('Error triggering file scan:', error);
+        setState(prev => ({
+          ...prev,
+          message: {
+            type: MessageBarType.error,
+            text: 'Failed to start file scan',
+          },
+        }));
+      }
     }
   };
 

@@ -2,17 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useProgressMessages, ProgressState } from './useProgressMessages';
 
-// Mock window.addEventListener and removeEventListener
+// Mock window object and its methods
 const mockAddEventListener = vi.fn();
 const mockRemoveEventListener = vi.fn();
 
-Object.defineProperty(window, 'addEventListener', {
-  value: mockAddEventListener,
-  writable: true,
-});
+// Create a mock window object
+const mockWindow = {
+  addEventListener: mockAddEventListener,
+  removeEventListener: mockRemoveEventListener,
+};
 
-Object.defineProperty(window, 'removeEventListener', {
-  value: mockRemoveEventListener,
+// Mock the global window object
+Object.defineProperty(global, 'window', {
+  value: mockWindow,
   writable: true,
 });
 

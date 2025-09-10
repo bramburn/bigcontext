@@ -34,14 +34,15 @@ export const useProgressMessages = () => {
   });
 
   const handleProgressMessage = useCallback((event: MessageEvent) => {
-    const message = event.data;
+    try {
+      const message = event.data;
 
-    // Check if this is a progress message
-    if (!message || !message.type) {
-      return;
-    }
+      // Check if this is a progress message
+      if (!message || !message.type) {
+        return;
+      }
 
-    switch (message.type) {
+      switch (message.type) {
       case 'scanStart':
         setProgressState({
           status: 'scanning',
@@ -62,9 +63,13 @@ export const useProgressMessages = () => {
         break;
 
       case 'scanComplete':
+        // Check if the message indicates an error
+        const isError = message.payload?.message?.toLowerCase().includes('error') ||
+                       message.payload?.message?.toLowerCase().includes('failed');
+
         setProgressState(prev => ({
           ...prev,
-          status: 'complete',
+          status: isError ? 'error' : 'complete',
           message: message.payload?.message || 'Scan complete',
           totalFiles: message.payload?.totalFiles || prev.scannedFiles,
           ignoredFiles: message.payload?.ignoredFiles || prev.ignoredFiles,
@@ -74,6 +79,14 @@ export const useProgressMessages = () => {
       default:
         // Handle other message types if needed
         break;
+    }
+    } catch (error) {
+      console.error('Error handling progress message:', error);
+      setProgressState(prev => ({
+        ...prev,
+        status: 'error',
+        message: 'Error processing progress message',
+      }));
     }
   }, []);
 
