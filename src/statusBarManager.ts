@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { NotificationService } from './notifications/notificationService';
+import { IndexState } from './types/indexing';
+import { IIndexingService } from './services/indexingService';
 
 /**
  * Status bar item configuration interface
@@ -79,6 +81,10 @@ export class StatusBarManager {
     private loggingService: CentralizedLoggingService;
     /** Notification service for user notifications */
     private notificationService: NotificationService;
+    /** Indexing service for monitoring index state */
+    private indexingService?: IIndexingService;
+    /** ID for the indexing status bar item */
+    private readonly indexingStatusId = 'bigcontext.indexing.status';
 
     /**
      * Initializes a new StatusBarManager instance
@@ -420,11 +426,11 @@ export class StatusBarManager {
 
     /**
      * Displays a temporary message in the status bar
-     * 
+     *
      * This method shows a temporary message in the VS Code status bar that
      * automatically disappears after the specified timeout. This is useful for
      * showing transient notifications or status updates.
-     * 
+     *
      * @param text - Message text to display
      * @param hideAfterTimeout - Time in milliseconds after which the message should be hidden (default: 3000ms)
      */
@@ -435,6 +441,141 @@ export class StatusBarManager {
         } catch (error) {
             console.error('StatusBarManager: Failed to show temporary message:', error);
         }
+    }
+
+    /**
+     * Sets up indexing status monitoring
+     *
+     * This method initializes the indexing status bar item and sets up
+     * automatic updates based on the IndexingService state changes.
+     *
+     * @param indexingService - The IndexingService instance to monitor
+     */
+    setupIndexingStatus(indexingService: IIndexingService): void {
+        try {
+            this.indexingService = indexingService;
+
+            // Create the indexing status bar item
+            this.createItem({
+                id: this.indexingStatusId,
+                text: '$(sync~spin) Initializing...',
+                tooltip: 'BigContext Indexing Status',
+                command: 'bigcontext.showIndexingStatus',
+                alignment: 'right',
+                priority: 100
+            });
+
+            // Set up state change listener
+            const stateChangeDisposable = indexingService.onStateChange(
+                this.updateIndexingStatus.bind(this)
+            );
+            this.disposables.push(stateChangeDisposable);
+
+            // Show the status item
+            this.showItem(this.indexingStatusId);
+
+            // Update with current state
+            this.updateIndexingStatusFromService();
+
+            this.loggingService.info('Indexing status monitoring setup complete', {}, 'StatusBarManager');
+        } catch (error) {
+            this.loggingService.error('Failed to setup indexing status monitoring', { error: error instanceof Error ? error.message : String(error) }, 'StatusBarManager');
+        }
+    }
+
+    /**
+     * Updates the indexing status bar item based on the current state
+     *
+     * @param state - The current IndexState
+     */
+    private updateIndexingStatus(state: IndexState): void {
+        try {
+            const statusConfig = this.getStatusConfigForState(state);
+            this.updateItem(this.indexingStatusId, statusConfig);
+        } catch (error) {
+            this.loggingService.error('Failed to update indexing status', { error: error instanceof Error ? error.message : String(error) }, 'StatusBarManager');
+        }
+    }
+
+    /**
+     * Gets the status bar configuration for a given IndexState
+     *
+     * @param state - The IndexState to get configuration for
+     * @returns StatusBarConfig with appropriate text, tooltip, and color
+     */
+    private getStatusConfigForState(state: IndexState): Partial<StatusBarConfig> {
+        switch (state) {
+            case 'idle':
+                return {
+                    text: '$(check) Indexed',
+                    tooltip: 'BigContext: Indexing complete - Ready for search',
+                    color: 'statusBarItem.prominentForeground'
+                };
+
+            case 'indexing':
+                return {
+                    text: '$(sync~spin) Indexing...',
+                    tooltip: 'BigContext: Indexing in progress - Click to view details',
+                    color: 'statusBarItem.prominentForeground'
+                };
+
+            case 'paused':
+                return {
+                    text: '$(debug-pause) Paused',
+                    tooltip: 'BigContext: Indexing paused - Click to resume',
+                    color: 'statusBarItem.warningForeground'
+                };
+
+            case 'error':
+                return {
+                    text: '$(error) Error',
+                    tooltip: 'BigContext: Indexing error - Click to view details',
+                    color: 'statusBarItem.errorForeground'
+                };
+
+            default:
+                return {
+                    text: '$(question) Unknown',
+                    tooltip: 'BigContext: Unknown indexing state',
+                    color: 'statusBarItem.foreground'
+                };
+        }
+    }
+
+    /**
+     * Updates the indexing status from the IndexingService
+     *
+     * This method queries the current state from the IndexingService
+     * and updates the status bar accordingly.
+     */
+    private async updateIndexingStatusFromService(): Promise<void> {
+        if (!this.indexingService) {
+            return;
+        }
+
+        try {
+            const currentState = await this.indexingService.getIndexState();
+            this.updateIndexingStatus(currentState);
+        } catch (error) {
+            this.loggingService.error('Failed to get current indexing state', { error: error instanceof Error ? error.message : String(error) }, 'StatusBarManager');
+
+            // Show error state if we can't get the current state
+            this.updateIndexingStatus('error');
+        }
+    }
+
+    /**
+     * Hides the indexing status bar item
+     */
+    hideIndexingStatus(): void {
+        this.hideItem(this.indexingStatusId);
+    }
+
+    /**
+     * Shows the indexing status bar item
+     */
+    showIndexingStatus(): void {
+        this.showItem(this.indexingStatusId);
     }
 
     /**
@@ -559,6 +700,9 @@ export class StatusBarManager {
                 clearTimeout(this.updateTimer);
                 this.updateTimer = null;
             }
+
+            // Clean up indexing service reference
+            this.indexingService = undefined;
 
             // Dispose all VS Code status bar items to free resources
             this.items.forEach(statusBarItem => {

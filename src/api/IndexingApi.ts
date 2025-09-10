@@ -177,16 +177,19 @@ export class IndexingApi {
               progress,
             });
           };
-          
-          operationResult = await this.indexingService.startIndexing(this.progressCallback);
+
+          await this.indexingService.startIndexing();
+          operationResult = { success: true, message: 'Indexing started successfully' };
           break;
-          
+
         case 'pause':
-          operationResult = await this.indexingService.pauseIndexing();
+          await this.indexingService.pauseIndexing();
+          operationResult = { success: true, message: 'Indexing paused successfully' };
           break;
-          
+
         case 'resume':
-          operationResult = await this.indexingService.resumeIndexing();
+          await this.indexingService.resumeIndexing();
+          operationResult = { success: true, message: 'Indexing resumed successfully' };
           break;
           
         case 'stop':
