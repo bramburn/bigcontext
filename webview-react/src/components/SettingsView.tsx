@@ -169,7 +169,6 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalM,
-<<<<<<< HEAD
     marginBottom: tokens.spacingVerticalL
   },
   headerIcon: {
@@ -187,30 +186,18 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalM
-=======
-    marginBottom: tokens.spacingVerticalXL
-  },
-  section: {
-    marginBottom: tokens.spacingVerticalXL
->>>>>>> master
   },
   sectionTitle: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
-<<<<<<< HEAD
     color: tokens.colorNeutralForeground1,
     fontWeight: tokens.fontWeightSemibold,
     marginBottom: tokens.spacingVerticalS
-=======
-    marginBottom: tokens.spacingVerticalM,
-    fontWeight: tokens.fontWeightSemibold
->>>>>>> master
   },
   card: {
     padding: tokens.spacingVerticalL
   },
-<<<<<<< HEAD
   formRow: {
     display: 'flex',
     flexDirection: 'column',

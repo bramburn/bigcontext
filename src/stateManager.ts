@@ -57,6 +57,7 @@ export class StateManager {
     private persistenceOptions: Map<string, StatePersistenceOptions> = new Map();
     private persistenceTimers: Map<string, NodeJS.Timeout> = new Map();
     private context: vscode.ExtensionContext | null = null;
+    private extensionManager: any = null; // ExtensionManager reference
 
     /**
      * Creates a new StateManager instance
@@ -588,5 +589,21 @@ export class StateManager {
      */
     setIndexingMessage(message: string | null): void {
         this.set('indexingMessage', message);
+    }
+
+    /**
+     * Sets the ExtensionManager reference
+     * @param extensionManager - The ExtensionManager instance
+     */
+    setExtensionManager(extensionManager: any): void {
+        this.extensionManager = extensionManager;
+    }
+
+    /**
+     * Gets the ExtensionManager reference
+     * @returns The ExtensionManager instance
+     */
+    getExtensionManager(): any {
+        return this.extensionManager;
     }
 }

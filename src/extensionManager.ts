@@ -28,6 +28,8 @@ import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { StatusBarManager } from './statusBarManager';
 import { HistoryManager } from './historyManager';
+import { StartupService } from './services/StartupService';
+import { ConfigurationService } from './services/ConfigurationService';
 
 /**
  * ExtensionManager class responsible for managing the lifecycle of all core services
@@ -68,6 +70,8 @@ export class ExtensionManager {
     private xmlFormatterService!: XmlFormatterService;
     private statusBarManager!: StatusBarManager;
     private historyManager!: HistoryManager;
+    private startupService!: StartupService;
+    private persistentConfigService!: ConfigurationService;
 
     /**
      * Creates a new ExtensionManager instance
@@ -104,6 +108,7 @@ export class ExtensionManager {
 
             // Provide extension context to StateManager for persistence support
             this.stateManager.setContext(this.context);
+            this.stateManager.setExtensionManager(this);
             this.loggingService?.info('ExtensionManager: StateManager context set for persistence', {}, 'ExtensionManager');
             // Step 2: Initialize ConfigService (no dependencies)
             // ConfigService provides configuration settings needed by other services
@@ -168,10 +173,15 @@ export class ExtensionManager {
             if (workspaceFolders && workspaceFolders.length > 0) {
                 const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
+                // Step 5.1: Initialize persistent configuration service
+                // This replaces the VS Code settings-based configuration with persistent file-based config
+                this.persistentConfigService = new ConfigurationService(workspaceRoot, this.qdrantService);
+                this.loggingService.info('Persistent ConfigurationService initialized', {}, 'ExtensionManager');
+
                 // Create all dependencies for IndexingService
                 // These services are used internally by IndexingService and don't need to be stored as class properties
                 const fileWalker = new FileWalker(workspaceRoot);
-                const astParser = new AstParser();
+                const astParser = new AstParser(this.persistentConfigService); // Pass config service for error handling
                 const chunker = new Chunker();
                 const lspService = new LSPService(workspaceRoot, this.loggingService);
 
@@ -191,6 +201,24 @@ export class ExtensionManager {
                     this.loggingService
                 );
                 this.loggingService.info('ExtensionManager: IndexingService initialized');
+
+                // Step 5.2: Initialize startup service and execute startup flow
+                // This handles configuration loading, index validation, and reindexing decisions
+                this.startupService = new StartupService(
+                    workspaceRoot,
+                    this.qdrantService,
+                    this.indexingService
+                );
+
+                // Execute startup flow to determine next steps
+                const startupResult = await this.startupService.executeStartupFlow();
+                this.loggingService.info('Startup flow completed', {
+                    success: startupResult.success,
+                    reindexingTriggered: startupResult.reindexingTriggered,
+                    shouldShowSearch: startupResult.shouldShowSearch,
+                    errors: startupResult.errors,
+                    messages: startupResult.messages
+                }, 'ExtensionManager');
 
                 // Initialize ContextService with dependencies including LoggingService
                 // ContextService provides context-aware functionality and search capabilities
@@ -477,6 +505,22 @@ export class ExtensionManager {
      */
     getHistoryManager(): HistoryManager {
         return this.historyManager;
+    }
+
+    /**
+     * Gets the StartupService instance
+     * @returns The StartupService instance that manages application startup
+     */
+    getStartupService(): StartupService {
+        return this.startupService;
+    }
+
+    /**
+     * Gets the persistent ConfigurationService instance
+     * @returns The ConfigurationService instance that manages .context/config.json
+     */
+    getPersistentConfigService(): ConfigurationService {
+        return this.persistentConfigService;
     }
 
 

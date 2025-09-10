@@ -75,8 +75,7 @@ const DATABASE_OPTIONS = [
 
 const PROVIDER_OPTIONS = [
   { value: 'ollama', label: 'Ollama' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' }
+  { value: 'openai', label: 'OpenAI' }
 ];
 
 export const SetupView: React.FC = () => {
@@ -214,13 +213,57 @@ export const SetupView: React.FC = () => {
       alert(`Setup failed: ${data.error}`);
     });
 
+    const unsubscribeConfigLoaded = onMessageCommand('configLoaded', (data) => {
+      if (data.success && data.config) {
+        console.log('Persistent config loaded:', data.config);
+        // Update the setup state with loaded configuration
+        setSelectedDatabase(data.config.database || 'qdrant');
+        setSelectedProvider(data.config.provider || 'ollama');
+        updateDatabaseConfig(data.config.databaseConfig || {});
+        updateProviderConfig(data.config.providerConfig || {});
+
+        // If index info exists and is valid, navigate to query
+        if (data.config.indexInfo) {
+          console.log('Valid index found, navigating to query');
+          setCurrentView('query');
+        }
+      }
+    });
+
+    const unsubscribeConfigSaved = onMessageCommand('configSaved', (data) => {
+      if (data.success) {
+        console.log('Persistent config saved successfully');
+      } else {
+        console.error('Failed to save persistent config:', data.error);
+      }
+    });
+
     return () => {
       unsubscribeSetupComplete();
       unsubscribeSetupError();
+      unsubscribeConfigLoaded();
+      unsubscribeConfigSaved();
     };
   }, []);
 
+  // Load persistent configuration on mount
+  useEffect(() => {
+    postMessage('loadPersistentConfig', {
+      requestId: `loadPersistentConfig_${Date.now()}`
+    });
+  }, []);
+
   const handleStartIndexing = () => {
+    // First save the configuration to persistent storage
+    postMessage('savePersistentConfig', {
+      database: setupState.selectedDatabase,
+      provider: setupState.selectedProvider,
+      databaseConfig: setupState.databaseConfig,
+      providerConfig: setupState.providerConfig,
+      requestId: `savePersistentConfig_${Date.now()}`
+    });
+
+    // Then start the setup process
     postMessage('startSetup', {
       database: setupState.selectedDatabase,
       provider: setupState.selectedProvider,
@@ -253,7 +296,6 @@ export const SetupView: React.FC = () => {
           const ollamaConfig = setupState.providerConfig as any;
           return !!(ollamaConfig.baseUrl && ollamaConfig.model);
         case 'openai':
-        case 'anthropic':
           const apiConfig = setupState.providerConfig as any;
           return !!(apiConfig.apiKey && apiConfig.model);
         default:
@@ -317,7 +359,7 @@ export const SetupView: React.FC = () => {
               placeholder="Select AI provider"
               value={setupState.selectedProvider}
               selectedOptions={[setupState.selectedProvider]}
-              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as 'ollama' | 'openai' | 'anthropic')}
+              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as 'ollama' | 'openai')}
             >
               {PROVIDER_OPTIONS.map(option => (
                 <Option key={option.value} value={option.value}>

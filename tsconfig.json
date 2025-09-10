@@ -20,7 +20,6 @@
 		"webview-simple/**/*",
 		"webview-react/**/*",
 		"src/tests/**/*",
-		"src/**/*.test.ts",
 		"tests/**/*",
 		"specs/**/*",
 		"vitest.config.ts"

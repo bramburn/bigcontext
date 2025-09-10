@@ -57,7 +57,7 @@ interface AppStore extends AppState, SetupState {
 
   // Setup actions
   setSelectedDatabase: (database: 'qdrant' | 'pinecone' | 'chroma') => void;
-  setSelectedProvider: (provider: 'ollama' | 'openai' | 'anthropic') => void;
+  setSelectedProvider: (provider: 'ollama' | 'openai') => void;
   setDatabaseStatus: (status: SetupState['databaseStatus']) => void;
   setProviderStatus: (status: SetupState['providerStatus']) => void;
   updateDatabaseConfig: (config: Partial<DatabaseConfig>) => void;
@@ -200,12 +200,6 @@ export const useAppStore = create<AppStore>()(
           newProviderConfig = {
             apiKey: '',
             model: 'text-embedding-3-small'
-          } as any;
-          break;
-        case 'anthropic':
-          newProviderConfig = {
-            apiKey: '',
-            model: 'claude-3-haiku-20240307'
           } as any;
           break;
         default:

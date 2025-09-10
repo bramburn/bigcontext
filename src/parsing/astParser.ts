@@ -8,16 +8,19 @@
  *
  * Key features:
  * - Multi-language support with extensible architecture
- * - Error recovery and reporting during parsing
+ * - Robust error recovery and reporting during parsing
+ * - Configuration-driven error handling behavior
  * - File extension to language detection
  * - AST traversal and node querying capabilities
  * - Utility functions for working with syntax nodes
+ * - Graceful handling of syntax errors with optional skipping
  */
 
 import Parser from "tree-sitter";
 import TypeScript from "tree-sitter-typescript";
 import Python from "tree-sitter-python";
 import CSharp from "tree-sitter-c-sharp";
+import { IConfigurationService } from '../services/interfaces/IConfigurationService';
 
 // TODO: (agent) Setup mono repo for our application to build and setup our ast parser modules
 
@@ -32,8 +35,25 @@ export type SupportedLanguage =
   | "csharp";
 
 /**
+ * Parse result with error information and configuration-aware behavior
+ */
+export interface ParseResult {
+  /** The parsed syntax tree, null if parsing failed completely */
+  tree: Parser.Tree | null;
+  /** Array of syntax errors encountered during parsing */
+  errors: string[];
+  /** Whether parsing was successful (tree is not null) */
+  success: boolean;
+  /** Whether syntax errors were skipped based on configuration */
+  errorsSkipped: boolean;
+  /** File path that was parsed */
+  filePath?: string;
+}
+
+/**
  * AstParser class provides functionality to parse and analyze source code
  * using the tree-sitter library across multiple programming languages.
+ * Integrates with configuration service for error handling behavior.
  */
 export class AstParser {
   /** The tree-sitter parser instance used for parsing source code */
@@ -42,13 +62,19 @@ export class AstParser {
   /** Map of supported languages to their corresponding tree-sitter grammar */
   private languages: Map<SupportedLanguage, any>;
 
+  /** Configuration service for error handling behavior */
+  private configService?: IConfigurationService;
+
   /**
    * Initializes a new instance of the AstParser class.
    * Sets up the parser and registers all supported language grammars.
+   *
+   * @param configService Optional configuration service for error handling
    */
-  constructor() {
+  constructor(configService?: IConfigurationService) {
     this.parser = new Parser();
     this.languages = new Map();
+    this.configService = configService;
 
     // Initialize supported languages
     this.languages.set("typescript", TypeScript.typescript);
@@ -154,6 +180,74 @@ export class AstParser {
   }
 
   /**
+   * Parses source code with robust error handling and configuration-aware behavior.
+   * This method integrates with the configuration service to determine whether to skip
+   * syntax errors or fail completely when errors are encountered.
+   *
+   * @param filePath - The path to the file being parsed (for logging)
+   * @param code - The source code string to parse
+   * @param language - The programming language of the source code
+   * @returns A ParseResult object with tree, errors, and metadata
+   */
+  public parseRobust(
+    filePath: string,
+    code: string,
+    language: SupportedLanguage,
+  ): ParseResult {
+    const errors: string[] = [];
+    let tree: Parser.Tree | null = null;
+    let errorsSkipped = false;
+
+    try {
+      // Check if we should skip syntax errors based on configuration
+      const shouldSkipErrors = this.shouldSkipSyntaxErrors();
+
+      // Attempt to parse the code
+      tree = this.parse(language, code);
+
+      if (tree && tree.rootNode.hasError) {
+        // Collect syntax errors
+        this.collectSyntaxErrors(tree.rootNode, errors);
+
+        if (errors.length > 0) {
+          console.warn(`AstParser: Found ${errors.length} syntax errors in ${filePath}`);
+
+          if (shouldSkipErrors) {
+            console.log(`AstParser: Skipping syntax errors in ${filePath} due to configuration`);
+            errorsSkipped = true;
+            // Keep the tree even with errors for partial processing
+          } else {
+            console.error(`AstParser: Failing parse due to syntax errors in ${filePath}`);
+            tree = null; // Fail the parse if not configured to skip errors
+          }
+        }
+      }
+
+      return {
+        tree,
+        errors,
+        success: tree !== null,
+        errorsSkipped,
+        filePath,
+      };
+
+    } catch (error) {
+      const errorMessage = `Parse error: ${error instanceof Error ? error.message : String(error)}`;
+      errors.push(errorMessage);
+
+      console.error(`AstParser: Exception during parsing of ${filePath}:`, error);
+
+      return {
+        tree: null,
+        errors,
+        success: false,
+        errorsSkipped: false,
+        filePath,
+      };
+    }
+  }
+
+  /**
    * Parses source code with error recovery, collecting syntax errors encountered during parsing.
    * This method is useful for partial or incomplete code that may contain syntax errors.
    *
@@ -171,31 +265,7 @@ export class AstParser {
       const tree = this.parse(language, code);
 
       if (tree && tree.rootNode.hasError) {
-        // Walk the tree to find error nodes
-        const cursor = tree.walk();
-
-        /**
-         * Recursive helper function to find and collect error nodes in the AST
-         * @param node - The current syntax node being examined
-         */
-        const findErrors = (node: Parser.SyntaxNode) => {
-          if (node.hasError) {
-            if (node.type === "ERROR") {
-              // Convert to 1-based line and column numbers for human readability
-              errors.push(
-                `Syntax error at line ${node.startPosition.row + 1}, column ${node.startPosition.column + 1}`,
-              );
-            }
-
-            // Recursively check all child nodes for errors
-            for (let i = 0; i < node.childCount; i++) {
-              findErrors(node.child(i)!);
-            }
-          }
-        };
-
-        // Start error detection from the root node
-        findErrors(tree.rootNode);
+        this.collectSyntaxErrors(tree.rootNode, errors);
       }
 
       return { tree, errors };
@@ -205,6 +275,50 @@ export class AstParser {
         `Parse error: ${error instanceof Error ? error.message : String(error)}`,
       );
       return { tree: null, errors };
+    }
+  }
+
+  /**
+   * Checks if the parser should skip syntax errors based on configuration.
+   *
+   * @returns True if syntax errors should be skipped
+   */
+  public shouldSkipSyntaxErrors(): boolean {
+    if (!this.configService) {
+      return true; // Default to skipping errors if no config service
+    }
+
+    try {
+      const config = this.configService.getConfiguration();
+      return config.treeSitter.skipSyntaxErrors;
+    } catch (error) {
+      console.warn('AstParser: Failed to get configuration, defaulting to skip errors:', error);
+      return true;
+    }
+  }
+
+  /**
+   * Collects syntax errors from the AST recursively.
+   *
+   * @param node - The syntax node to examine
+   * @param errors - Array to collect error messages
+   */
+  private collectSyntaxErrors(node: Parser.SyntaxNode, errors: string[]): void {
+    if (node.hasError) {
+      if (node.type === "ERROR") {
+        // Convert to 1-based line and column numbers for human readability
+        errors.push(
+          `Syntax error at line ${node.startPosition.row + 1}, column ${node.startPosition.column + 1}`,
+        );
+      }
+
+      // Recursively check all child nodes for errors
+      for (let i = 0; i < node.childCount; i++) {
+        const child = node.child(i);
+        if (child) {
+          this.collectSyntaxErrors(child, errors);
+        }
+      }
     }
   }
 
