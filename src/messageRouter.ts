@@ -15,6 +15,7 @@ import { FeedbackService } from './feedback/feedbackService';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { ConfigService } from './configService';
 import { HealthCheckService } from './validation/healthCheckService';
+import { FileScanService } from './services/fileScanService';
 
 import { MessageRouterIntegration } from './communication/MessageRouterIntegration';
 
@@ -57,6 +58,7 @@ export class MessageRouter {
     private workspaceManager?: WorkspaceManager;
     private feedbackService: FeedbackService;
     private ragIntegration?: MessageRouterIntegration;
+    private fileScanService?: FileScanService;
 
     private telemetryService?: TelemetryService;
 

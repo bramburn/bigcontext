@@ -127,6 +127,9 @@ export enum WebviewToExtensionMessageType {
   STOP_INDEXING = "stop_indexing",
   GET_INDEXING_STATUS = "get_indexing_status",
 
+  // File scanning requests
+  START_FILE_SCAN = "start_file_scan",
+
   // File operations
   OPEN_FILE = "open_file",
   SHOW_FILE_IN_EXPLORER = "show_file_in_explorer",
@@ -249,6 +252,32 @@ export interface IndexingStatusPayload {
   estimatedTimeRemaining?: number;
   /** Any errors encountered */
   errors?: string[];
+}
+
+/**
+ * File scanning progress payloads
+ */
+export interface ScanStartPayload {
+  /** Human-readable message indicating the start of the scan */
+  message: string;
+}
+
+export interface ScanProgressPayload {
+  /** Number of files processed so far */
+  scannedFiles: number;
+  /** Number of files identified as ignored so far */
+  ignoredFiles: number;
+  /** Human-readable progress message */
+  message: string;
+}
+
+export interface ScanCompletePayload {
+  /** Total number of files found in the repository */
+  totalFiles: number;
+  /** Total number of files identified as ignored */
+  ignoredFiles: number;
+  /** Final human-readable message */
+  message: string;
 }
 
 /**

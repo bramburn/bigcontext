@@ -22,6 +22,7 @@ import {
 } from '@fluentui/react-components';
 import { SettingsForm } from './components/SettingsForm';
 import { IndexingProgress } from './components/IndexingProgress';
+import { ProgressDisplay } from './components/ProgressDisplay';
 import { postMessageToVsCode } from './utils/vscode';
 
 /**
@@ -287,11 +288,14 @@ function App() {
             )}
 
             {state.currentView === 'indexing' && (
-              <IndexingProgress
-                onStatusChange={handleIndexingStatusChange}
-                showStatistics={true}
-                autoRefresh={true}
-              />
+              <Stack tokens={{ childrenGap: 20 }}>
+                <ProgressDisplay showStats={true} />
+                <IndexingProgress
+                  onStatusChange={handleIndexingStatusChange}
+                  showStatistics={true}
+                  autoRefresh={true}
+                />
+              </Stack>
             )}
           </Stack>
         </div>

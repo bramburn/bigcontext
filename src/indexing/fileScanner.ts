@@ -15,8 +15,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as glob from 'glob';
-import * as fastGlob from 'fast-glob';
+import fastGlob from 'fast-glob';
 import ignore from 'ignore';
+import { FileScanMessageSender } from '../communication/fileScanMessageSender';
 
 /**
  * Progress message types for file scanning
@@ -69,11 +70,11 @@ export interface ScanStatistics {
 export class FileScanner {
   private workspaceRoot: string;
   private ignoreInstance: ReturnType<typeof ignore>;
-  private progressCallback?: ProgressCallback;
+  private messageSender?: FileScanMessageSender;
 
-  constructor(workspaceRoot: string, progressCallback?: ProgressCallback) {
+  constructor(workspaceRoot: string, messageSender?: FileScanMessageSender) {
     this.workspaceRoot = workspaceRoot;
-    this.progressCallback = progressCallback;
+    this.messageSender = messageSender;
     this.ignoreInstance = ignore();
 
     // Add common patterns to ignore by default
@@ -139,11 +140,31 @@ export class FileScanner {
   }
 
   /**
-   * Send progress message to callback
+   * Send progress message using message sender
    */
   private sendProgressMessage(message: ProgressMessage): void {
-    if (this.progressCallback) {
-      this.progressCallback(message);
+    if (!this.messageSender) {
+      return;
+    }
+
+    switch (message.type) {
+      case 'scanStart':
+        this.messageSender.sendScanStart(message.payload.message);
+        break;
+      case 'scanProgress':
+        this.messageSender.sendScanProgress(
+          message.payload.scannedFiles,
+          message.payload.ignoredFiles,
+          message.payload.message
+        );
+        break;
+      case 'scanComplete':
+        this.messageSender.sendScanComplete(
+          message.payload.totalFiles,
+          message.payload.ignoredFiles,
+          message.payload.message
+        );
+        break;
     }
   }
 
