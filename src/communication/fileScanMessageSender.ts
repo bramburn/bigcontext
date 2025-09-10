@@ -7,18 +7,19 @@
  */
 
 import { TypeSafeCommunicationService } from './typeSafeCommunicationService';
-import { 
+import {
   ExtensionToWebviewMessageType,
   ScanStartPayload,
   ScanProgressPayload,
   ScanCompletePayload
 } from '../shared/communicationTypes';
 import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
+import { IFileScanMessageSender } from '../indexing/fileScanner';
 
 /**
  * File scan message sender service
  */
-export class FileScanMessageSender {
+export class FileScanMessageSender implements IFileScanMessageSender {
   private communicationService: TypeSafeCommunicationService;
   private loggingService?: CentralizedLoggingService;
 

@@ -23,7 +23,7 @@ import {
 import { SettingsForm } from './components/SettingsForm';
 import { IndexingProgress } from './components/IndexingProgress';
 import { ProgressDisplay } from './components/ProgressDisplay';
-import { postMessageToVsCode } from './utils/vscode';
+import { postMessage } from './utils/vscodeApi';
 
 /**
  * VS Code API interface
@@ -193,6 +193,12 @@ function App() {
    */
   const handleViewChange = (view: 'settings' | 'indexing') => {
     setState(prev => ({ ...prev, currentView: view }));
+
+    // Trigger file scan when navigating to indexing tab
+    if (view === 'indexing') {
+      console.log('Navigating to indexing tab, triggering file scan...');
+      postMessage('startFileScan', {});
+    }
   };
 
   /**

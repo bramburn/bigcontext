@@ -356,6 +356,9 @@ export class MessageRouter {
                 case 'copyToClipboard':
                     await this.handleCopyToClipboard(message, webview);
                     break;
+                case 'startFileScan':
+                    await this.handleStartFileScan(message, webview);
+                    break;
                 default:
                     // Handle unknown commands with a warning and error response
                     console.warn('MessageRouter: Unknown command:', message.command);
@@ -2749,6 +2752,88 @@ export class MessageRouter {
         } catch (error) {
             console.error('MessageRouter: Error tracking telemetry:', error);
             // Don't send error response for telemetry to avoid disrupting UI
+        }
+    }
+
+    /**
+     * Handles file scan requests from the webview
+     *
+     * This method initiates a file scanning operation when the user navigates to the indexing tab.
+     * It creates a FileScanner instance and starts the scanning process with progress updates.
+     */
+    private async handleStartFileScan(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Starting file scan');
+
+            // Get the current workspace folder
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                await webview.postMessage({
+                    command: 'fileScanError',
+                    success: false,
+                    data: { message: 'No workspace folder is open' }
+                });
+                return;
+            }
+
+            const workspaceRoot = workspaceFolders[0].uri.fsPath;
+
+            // Import FileScanner dynamically to avoid circular dependencies
+            const { FileScanner } = await import('./indexing/fileScanner');
+
+            // Create a simple message sender that uses webview.postMessage directly
+            const messageSender = {
+                sendScanStart: (message: string) => {
+                    webview.postMessage({
+                        type: 'scanStart',
+                        payload: { message }
+                    });
+                },
+                sendScanProgress: (scannedFiles: number, ignoredFiles: number, message: string) => {
+                    webview.postMessage({
+                        type: 'scanProgress',
+                        payload: { scannedFiles, ignoredFiles, message }
+                    });
+                },
+                sendScanComplete: (totalFiles: number, ignoredFiles: number, message: string) => {
+                    webview.postMessage({
+                        type: 'scanComplete',
+                        payload: { totalFiles, ignoredFiles, message }
+                    });
+                }
+            };
+
+            // Create and start file scanner
+            const fileScanner = new FileScanner(workspaceRoot, messageSender);
+
+            // Start scanning in the background
+            fileScanner.scanWithProgress().then(stats => {
+                console.log('File scan completed:', stats);
+            }).catch(error => {
+                console.error('File scan failed:', error);
+                webview.postMessage({
+                    command: 'fileScanError',
+                    success: false,
+                    data: { message: error instanceof Error ? error.message : 'File scan failed' }
+                });
+            });
+
+            // Send immediate response that scan has started
+            await webview.postMessage({
+                command: 'fileScanStarted',
+                success: true,
+                data: { message: 'File scan initiated' }
+            });
+
+        } catch (error) {
+            console.error('MessageRouter: Error starting file scan:', error);
+            await webview.postMessage({
+                command: 'fileScanError',
+                success: false,
+                data: {
+                    message: error instanceof Error ? error.message : 'Failed to start file scan'
+                }
+            });
         }
     }
 }

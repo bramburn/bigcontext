@@ -52,8 +52,8 @@ export class FileScanService {
       this.isScanning = true;
 
       // Get the current workspace root
-      const workspaceRoot = this.workspaceManager.getWorkspaceRoot();
-      if (!workspaceRoot) {
+      const currentWorkspace = this.workspaceManager.getCurrentWorkspace();
+      if (!currentWorkspace) {
         this.loggingService?.error(
           'No workspace root available for file scanning',
           {},
@@ -69,6 +69,8 @@ export class FileScanService {
         
         return null;
       }
+
+      const workspaceRoot = currentWorkspace.path;
 
       this.loggingService?.info(
         'Starting file scan',
@@ -127,10 +129,12 @@ export class FileScanService {
    */
   public async getWorkspaceStatistics(): Promise<ScanStatistics | null> {
     try {
-      const workspaceRoot = this.workspaceManager.getWorkspaceRoot();
-      if (!workspaceRoot) {
+      const currentWorkspace = this.workspaceManager.getCurrentWorkspace();
+      if (!currentWorkspace) {
         return null;
       }
+
+      const workspaceRoot = currentWorkspace.path;
 
       // Create file scanner without message sender for statistics only
       const fileScanner = new FileScanner(workspaceRoot);

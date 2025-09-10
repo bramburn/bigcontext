@@ -17,7 +17,15 @@ import * as path from 'path';
 import * as glob from 'glob';
 import fastGlob from 'fast-glob';
 import ignore from 'ignore';
-import { FileScanMessageSender } from '../communication/fileScanMessageSender';
+
+/**
+ * Interface for sending file scan progress messages
+ */
+export interface IFileScanMessageSender {
+  sendScanStart(message: string): void;
+  sendScanProgress(scannedFiles: number, ignoredFiles: number, message: string): void;
+  sendScanComplete(totalFiles: number, ignoredFiles: number, message: string): void;
+}
 
 /**
  * Progress message types for file scanning
@@ -70,9 +78,9 @@ export interface ScanStatistics {
 export class FileScanner {
   private workspaceRoot: string;
   private ignoreInstance: ReturnType<typeof ignore>;
-  private messageSender?: FileScanMessageSender;
+  private messageSender?: IFileScanMessageSender;
 
-  constructor(workspaceRoot: string, messageSender?: FileScanMessageSender) {
+  constructor(workspaceRoot: string, messageSender?: IFileScanMessageSender) {
     this.workspaceRoot = workspaceRoot;
     this.messageSender = messageSender;
     this.ignoreInstance = ignore();
