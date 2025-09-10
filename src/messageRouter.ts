@@ -351,6 +351,12 @@ export class MessageRouter {
                 case 'startSetup':
                     await this.handleStartSetup(message, webview);
                     break;
+                case 'savePersistentConfig':
+                    await this.handleSavePersistentConfig(message, webview);
+                    break;
+                case 'loadPersistentConfig':
+                    await this.handleLoadPersistentConfig(message, webview);
+                    break;
                 case 'getConfiguration':
                     await this.handleGetConfiguration(webview);
                     break;
@@ -956,6 +962,130 @@ export class MessageRouter {
             await webview.postMessage({
                 command: 'setupError',
                 error: error instanceof Error ? error.message : 'An unknown error occurred during setup.'
+            });
+        }
+    }
+
+    /**
+     * Handles saving configuration to persistent storage (.context/config.json)
+     *
+     * @param message - The message containing configuration data
+     * @param webview - The webview to send responses to
+     */
+    private async handleSavePersistentConfig(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling save persistent config request');
+
+            const { database, provider, databaseConfig, providerConfig } = message;
+
+            // Get the persistent configuration service from extension manager
+            const extensionManager = this.stateManager.getExtensionManager();
+            if (!extensionManager) {
+                throw new Error('Extension manager not available');
+            }
+
+            const configService = extensionManager.getPersistentConfigService();
+            if (!configService) {
+                throw new Error('Persistent configuration service not available');
+            }
+
+            // Convert webview config to persistent config format
+            const persistentConfig = {
+                treeSitter: {
+                    skipSyntaxErrors: true, // Default value
+                },
+                qdrant: {
+                    host: databaseConfig.url ? new URL(databaseConfig.url).hostname : 'localhost',
+                    port: databaseConfig.url ? parseInt(new URL(databaseConfig.url).port) || 6333 : 6333,
+                },
+                ollama: {
+                    model: providerConfig.model || 'nomic-embed-text',
+                    endpoint: providerConfig.baseUrl || 'http://localhost:11434',
+                },
+                git: {
+                    ignoreConfig: true,
+                },
+            };
+
+            // Save the configuration
+            await configService.saveConfiguration(persistentConfig);
+
+            // Send success response
+            await webview.postMessage({
+                command: 'configSaved',
+                requestId: message.requestId,
+                success: true,
+                message: 'Configuration saved successfully'
+            });
+
+            console.log('MessageRouter: Persistent configuration saved successfully');
+
+        } catch (error) {
+            console.error('MessageRouter: Error saving persistent config:', error);
+            await webview.postMessage({
+                command: 'configSaved',
+                requestId: message.requestId,
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to save configuration'
+            });
+        }
+    }
+
+    /**
+     * Handles loading configuration from persistent storage (.context/config.json)
+     *
+     * @param message - The message requesting configuration
+     * @param webview - The webview to send responses to
+     */
+    private async handleLoadPersistentConfig(message: any, webview: vscode.Webview): Promise<void> {
+        try {
+            console.log('MessageRouter: Handling load persistent config request');
+
+            // Get the persistent configuration service from extension manager
+            const extensionManager = this.stateManager.getExtensionManager();
+            if (!extensionManager) {
+                throw new Error('Extension manager not available');
+            }
+
+            const configService = extensionManager.getPersistentConfigService();
+            if (!configService) {
+                throw new Error('Persistent configuration service not available');
+            }
+
+            // Load the configuration
+            const config = await configService.loadConfiguration();
+
+            // Convert persistent config to webview format
+            const webviewConfig = {
+                database: 'qdrant',
+                provider: 'ollama',
+                databaseConfig: {
+                    url: `http://${config.qdrant.host}:${config.qdrant.port}`,
+                },
+                providerConfig: {
+                    model: config.ollama.model,
+                    baseUrl: config.ollama.endpoint,
+                },
+                indexInfo: config.qdrant.indexInfo,
+            };
+
+            // Send configuration response
+            await webview.postMessage({
+                command: 'configLoaded',
+                requestId: message.requestId,
+                success: true,
+                config: webviewConfig
+            });
+
+            console.log('MessageRouter: Persistent configuration loaded successfully');
+
+        } catch (error) {
+            console.error('MessageRouter: Error loading persistent config:', error);
+            await webview.postMessage({
+                command: 'configLoaded',
+                requestId: message.requestId,
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to load configuration'
             });
         }
     }
