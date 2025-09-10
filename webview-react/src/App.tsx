@@ -22,7 +22,8 @@ import {
 } from '@fluentui/react-components';
 import { SettingsForm } from './components/SettingsForm';
 import { IndexingProgress } from './components/IndexingProgress';
-import { postMessageToVsCode } from './utils/vscode';
+import { ProgressDisplay } from './components/ProgressDisplay';
+import { postMessage } from './utils/vscodeApi';
 
 /**
  * VS Code API interface
@@ -192,6 +193,23 @@ function App() {
    */
   const handleViewChange = (view: 'settings' | 'indexing') => {
     setState(prev => ({ ...prev, currentView: view }));
+
+    // Trigger file scan when navigating to indexing tab
+    if (view === 'indexing') {
+      try {
+        console.log('Navigating to indexing tab, triggering file scan...');
+        postMessage('startFileScan', {});
+      } catch (error) {
+        console.error('Error triggering file scan:', error);
+        setState(prev => ({
+          ...prev,
+          message: {
+            type: MessageBarType.error,
+            text: 'Failed to start file scan',
+          },
+        }));
+      }
+    }
   };
 
   /**
@@ -287,11 +305,14 @@ function App() {
             )}
 
             {state.currentView === 'indexing' && (
-              <IndexingProgress
-                onStatusChange={handleIndexingStatusChange}
-                showStatistics={true}
-                autoRefresh={true}
-              />
+              <Stack tokens={{ childrenGap: 20 }}>
+                <ProgressDisplay showStats={true} />
+                <IndexingProgress
+                  onStatusChange={handleIndexingStatusChange}
+                  showStatistics={true}
+                  autoRefresh={true}
+                />
+              </Stack>
             )}
           </Stack>
         </div>

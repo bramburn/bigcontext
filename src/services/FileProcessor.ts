@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as glob from 'glob';
+import ignore from 'ignore';
 import { 
   ProjectFileMetadata, 
   DetailedFileMetadata,
@@ -84,7 +85,10 @@ export class FileProcessor {
   
   /** File filter configuration */
   private filterConfig: FileFilterConfig;
-  
+
+  /** Gitignore instance for respecting ignore patterns */
+  private ignoreInstance: ReturnType<typeof ignore> | null = null;
+
   /** Default chunk options */
   private defaultChunkOptions: ChunkOptions = {
     targetSize: 1000,
@@ -104,6 +108,52 @@ export class FileProcessor {
     this.context = context;
     this.filterConfig = filterConfig || DEFAULT_FILE_FILTER;
   }
+
+  /**
+   * Load .gitignore patterns for the workspace
+   *
+   * @param workspaceRoot Workspace root directory
+   */
+  private async loadGitignorePatterns(workspaceRoot: string): Promise<void> {
+    if (this.ignoreInstance) {
+      return; // Already loaded
+    }
+
+    this.ignoreInstance = ignore();
+
+    // Add common patterns to ignore by default
+    this.ignoreInstance.add([
+      'node_modules/**',
+      '.git/**',
+      'dist/**',
+      'build/**',
+      'out/**',
+      '*.min.js',
+      '*.map',
+      '.vscode/**',
+      '.idea/**',
+      '*.log',
+      'coverage/**',
+      '.nyc_output/**',
+    ]);
+
+    // Load .gitignore file if it exists
+    try {
+      const gitignorePath = path.join(workspaceRoot, '.gitignore');
+      const gitignoreContent = await fs.readFile(gitignorePath, 'utf8');
+
+      const lines = gitignoreContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+
+      this.ignoreInstance.add(lines);
+      console.log(`FileProcessor: Loaded ${lines.length} patterns from .gitignore`);
+    } catch (error) {
+      // .gitignore file not found or not readable, continue with default patterns
+      console.log('FileProcessor: No .gitignore file found, using default ignore patterns');
+    }
+  }
   
   /**
    * Discover files in workspace
@@ -121,10 +171,13 @@ export class FileProcessor {
   ): Promise<ProjectFileMetadata[]> {
     try {
       const files: ProjectFileMetadata[] = [];
-      
+
+      // Load .gitignore patterns first
+      await this.loadGitignorePatterns(workspaceRoot);
+
       // Use glob patterns to find files
-      const patterns = config.includePatterns.length > 0 
-        ? config.includePatterns 
+      const patterns = config.includePatterns.length > 0
+        ? config.includePatterns
         : this.filterConfig.include;
       
       for (const pattern of patterns) {
@@ -523,20 +576,25 @@ export class FileProcessor {
     config: IndexingConfiguration
   ): boolean {
     const relativePath = path.relative(workspaceRoot, filePath);
-    
+
+    // Check .gitignore patterns first
+    if (this.ignoreInstance && this.ignoreInstance.ignores(relativePath)) {
+      return true;
+    }
+
     // Check exclude patterns
     for (const pattern of config.excludePatterns) {
       if (this.matchesPattern(relativePath, pattern)) {
         return true;
       }
     }
-    
+
     // Check file extension
     const ext = path.extname(filePath).toLowerCase();
     if (config.supportedExtensions.length > 0 && !config.supportedExtensions.includes(ext)) {
       return true;
     }
-    
+
     return false;
   }
   

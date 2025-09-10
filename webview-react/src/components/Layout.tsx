@@ -194,7 +194,6 @@ export default function Layout() {
       case 'setup':
       case 'setup.basic':
         return <SetupView />;
-<<<<<<< HEAD
       case 'setup.advanced':
         return <SettingsView />;
       case 'settings':

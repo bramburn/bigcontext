@@ -180,11 +180,20 @@ export class WorkspaceManager {
 
     /**
      * Gets the currently active workspace
-     * 
+     *
      * @returns The current workspace info or null if no workspace is active
      */
     public getCurrentWorkspace(): WorkspaceInfo | null {
         return this.currentWorkspace;
+    }
+
+    /**
+     * Gets the root path of the currently active workspace
+     *
+     * @returns The workspace root path or null if no workspace is active
+     */
+    public getWorkspaceRoot(): string | null {
+        return this.currentWorkspace?.path || null;
     }
 
     /**

@@ -20,6 +20,7 @@
 
 import * as vscode from 'vscode';
 import { IndexingService } from './indexing/indexingService';
+import { IIndexingService } from './services/indexingService';
 import { WebviewManager } from './webviewManager';
 import { NotificationService } from './notifications/notificationService';
 
@@ -39,6 +40,7 @@ import { NotificationService } from './notifications/notificationService';
 export class CommandManager {
     // Service dependencies injected via constructor
     private indexingService: IndexingService;
+    private enhancedIndexingService?: IIndexingService;
     private webviewManager: WebviewManager;
     private notificationService: NotificationService;
 
@@ -58,6 +60,15 @@ export class CommandManager {
         this.indexingService = indexingService;
         this.webviewManager = webviewManager;
         this.notificationService = notificationService;
+    }
+
+    /**
+     * Sets the enhanced indexing service for pause/resume functionality
+     *
+     * @param enhancedIndexingService - The enhanced IndexingService instance
+     */
+    setEnhancedIndexingService(enhancedIndexingService: IIndexingService): void {
+        this.enhancedIndexingService = enhancedIndexingService;
     }
 
     /**
@@ -116,6 +127,31 @@ export class CommandManager {
             this.handleOpenDiagnostics.bind(this)
         );
         disposables.push(openDiagnosticsDisposable);
+
+        // Register enhanced indexing control commands
+        const pauseIndexingDisposable = vscode.commands.registerCommand(
+            'bigcontext.pauseIndexing',
+            this.handlePauseIndexing.bind(this)
+        );
+        disposables.push(pauseIndexingDisposable);
+
+        const resumeIndexingDisposable = vscode.commands.registerCommand(
+            'bigcontext.resumeIndexing',
+            this.handleResumeIndexing.bind(this)
+        );
+        disposables.push(resumeIndexingDisposable);
+
+        const showIndexingStatusDisposable = vscode.commands.registerCommand(
+            'bigcontext.showIndexingStatus',
+            this.handleShowIndexingStatus.bind(this)
+        );
+        disposables.push(showIndexingStatusDisposable);
+
+        const triggerFullReindexDisposable = vscode.commands.registerCommand(
+            'bigcontext.triggerFullReindex',
+            this.handleTriggerFullReindex.bind(this)
+        );
+        disposables.push(triggerFullReindexDisposable);
 
         console.log('CommandManager: All commands registered successfully');
         return disposables;
@@ -413,6 +449,170 @@ export class CommandManager {
             console.error('CommandManager: Failed to open diagnostics panel:', error);
             // Show user-friendly error message
             vscode.window.showErrorMessage('Failed to open Code Context Engine diagnostics');
+        }
+    }
+
+    /**
+     * Handles the pause indexing command
+     *
+     * Pauses the current indexing process if it's running.
+     * Shows appropriate user feedback based on the current state.
+     */
+    private async handlePauseIndexing(): Promise<void> {
+        try {
+            console.log('CommandManager: Pausing indexing...');
+
+            if (!this.enhancedIndexingService) {
+                vscode.window.showWarningMessage('Enhanced indexing service not available');
+                return;
+            }
+
+            const currentState = await this.enhancedIndexingService.getIndexState();
+
+            if (currentState !== 'indexing') {
+                vscode.window.showInformationMessage('No active indexing process to pause');
+                return;
+            }
+
+            await this.enhancedIndexingService.pauseIndexing();
+            vscode.window.showInformationMessage('Indexing paused successfully');
+
+        } catch (error) {
+            console.error('CommandManager: Error pausing indexing:', error);
+            vscode.window.showErrorMessage(`Failed to pause indexing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Handles the resume indexing command
+     *
+     * Resumes a paused indexing process.
+     * Shows appropriate user feedback based on the current state.
+     */
+    private async handleResumeIndexing(): Promise<void> {
+        try {
+            console.log('CommandManager: Resuming indexing...');
+
+            if (!this.enhancedIndexingService) {
+                vscode.window.showWarningMessage('Enhanced indexing service not available');
+                return;
+            }
+
+            const currentState = await this.enhancedIndexingService.getIndexState();
+
+            if (currentState !== 'paused') {
+                vscode.window.showInformationMessage('No paused indexing process to resume');
+                return;
+            }
+
+            await this.enhancedIndexingService.resumeIndexing();
+            vscode.window.showInformationMessage('Indexing resumed successfully');
+
+        } catch (error) {
+            console.error('CommandManager: Error resuming indexing:', error);
+            vscode.window.showErrorMessage(`Failed to resume indexing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Handles the show indexing status command
+     *
+     * Displays detailed information about the current indexing state.
+     */
+    private async handleShowIndexingStatus(): Promise<void> {
+        try {
+            console.log('CommandManager: Showing indexing status...');
+
+            if (!this.enhancedIndexingService) {
+                vscode.window.showWarningMessage('Enhanced indexing service not available');
+                return;
+            }
+
+            const currentState = await this.enhancedIndexingService.getIndexState();
+
+            let message: string;
+            let actions: string[] = [];
+
+            switch (currentState) {
+                case 'idle':
+                    message = 'Indexing is complete and ready for search';
+                    actions = ['Start Reindexing'];
+                    break;
+                case 'indexing':
+                    message = 'Indexing is currently in progress';
+                    actions = ['Pause Indexing'];
+                    break;
+                case 'paused':
+                    message = 'Indexing is paused and can be resumed';
+                    actions = ['Resume Indexing', 'Stop Indexing'];
+                    break;
+                case 'error':
+                    message = 'Indexing encountered an error';
+                    actions = ['Retry Indexing', 'View Logs'];
+                    break;
+                default:
+                    message = `Unknown indexing state: ${currentState}`;
+                    actions = ['Refresh Status'];
+            }
+
+            const action = await vscode.window.showInformationMessage(message, ...actions);
+
+            // Handle user action
+            switch (action) {
+                case 'Start Reindexing':
+                case 'Retry Indexing':
+                    await this.handleTriggerFullReindex();
+                    break;
+                case 'Pause Indexing':
+                    await this.handlePauseIndexing();
+                    break;
+                case 'Resume Indexing':
+                    await this.handleResumeIndexing();
+                    break;
+                case 'View Logs':
+                    vscode.commands.executeCommand('workbench.action.toggleDevTools');
+                    break;
+                case 'Refresh Status':
+                    await this.handleShowIndexingStatus();
+                    break;
+            }
+
+        } catch (error) {
+            console.error('CommandManager: Error showing indexing status:', error);
+            vscode.window.showErrorMessage(`Failed to get indexing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Handles the trigger full reindex command
+     *
+     * Starts a complete reindexing of the workspace.
+     */
+    private async handleTriggerFullReindex(): Promise<void> {
+        try {
+            console.log('CommandManager: Triggering full reindex...');
+
+            if (!this.enhancedIndexingService) {
+                vscode.window.showWarningMessage('Enhanced indexing service not available');
+                return;
+            }
+
+            const confirmation = await vscode.window.showWarningMessage(
+                'This will reindex all files in the workspace. Continue?',
+                'Yes, Reindex',
+                'Cancel'
+            );
+
+            if (confirmation !== 'Yes, Reindex') {
+                return;
+            }
+
+            await this.enhancedIndexingService.triggerFullReindex();
+            vscode.window.showInformationMessage('Full reindexing started');
+
+        } catch (error) {
+            console.error('CommandManager: Error triggering full reindex:', error);
+            vscode.window.showErrorMessage(`Failed to start reindexing: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 }
