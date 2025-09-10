@@ -278,7 +278,34 @@ async function processFile(
     }
 
     if (!parseResult.tree) {
-      throw new Error(`Failed to parse AST for ${filePath} - parser returned null tree`);
+      console.warn(`IndexingWorker: AST parsing failed for ${filePath}, falling back to simple text chunking`);
+      errors.push(`AST parsing failed for ${filePath}, using simple text chunking as fallback`);
+
+      // Fall back to simple text chunking when AST parsing fails
+      const simpleChunks = createSimpleTextChunks(filePath, content, language);
+
+      // Generate embeddings for simple chunks
+      const chunkContents = simpleChunks.map((chunk) => chunk.content);
+      console.log(`IndexingWorker: Generating embeddings for ${chunkContents.length} simple text chunks (AST fallback)`);
+
+      const embeddings = await embeddingProvider.generateEmbeddings(chunkContents);
+      console.log(`IndexingWorker: Generated ${embeddings.length} embeddings (AST fallback)`);
+
+      if (embeddings.length !== simpleChunks.length) {
+        throw new Error(
+          `Embedding count mismatch: ${embeddings.length} embeddings for ${simpleChunks.length} chunks`,
+        );
+      }
+
+      return {
+        filePath,
+        chunks: simpleChunks,
+        embeddings,
+        language,
+        lineCount,
+        byteCount,
+        errors,
+      };
     }
     console.log(`IndexingWorker: AST parsing successful`);
 

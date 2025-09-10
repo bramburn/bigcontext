@@ -107,12 +107,43 @@ export class AstParser {
       // Additional validation before parsing
       console.log(`AstParser: Parsing ${language} code (${code.length} characters)`);
 
-      const tree = this.parser.parse(code);
+      // Try parsing with additional error handling for tree-sitter issues
+      let tree: Parser.Tree | null = null;
+      try {
+        tree = this.parser.parse(code);
+      } catch (parseError) {
+        console.error(`AstParser: Tree-sitter parse error for ${language}:`, parseError);
+        // For Python files, try to handle encoding issues
+        if (language === 'python') {
+          try {
+            // Try parsing with normalized line endings
+            const normalizedCode = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            tree = this.parser.parse(normalizedCode);
+            if (tree) {
+              console.log(`AstParser: Successfully parsed ${language} after normalizing line endings`);
+            }
+          } catch (retryError) {
+            console.error(`AstParser: Retry parse failed for ${language}:`, retryError);
+          }
+        }
 
-      if (!tree) {
-        throw new Error(`Failed to parse code for language: ${language}`);
+        if (!tree) {
+          throw new Error(`Tree-sitter parse failed for ${language}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+        }
       }
 
+      if (!tree) {
+        // Provide more detailed error information
+        const codePreview = code.substring(0, 200).replace(/\n/g, '\\n');
+        throw new Error(`Failed to parse code for language: ${language}. Code preview: "${codePreview}..."`);
+      }
+
+      // Validate the parsed tree
+      if (!tree.rootNode) {
+        throw new Error(`Parsed tree has no root node for language: ${language}`);
+      }
+
+      console.log(`AstParser: Successfully parsed ${language} code - root node type: ${tree.rootNode.type}`);
       return tree;
     } catch (error) {
       console.error(`Error parsing code for language ${language}:`, error);
