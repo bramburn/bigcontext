@@ -1,6 +1,6 @@
 # bigcontext Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2025-09-09
+Auto-generated from all feature plans. Last updated: 2025-09-10
 
 ## Active Technologies
 -  +  (001-we-currently-have)
@@ -17,8 +17,6 @@ tests/
 ## Code Style
 : Follow standard conventions
 
-## Recent Changes
-- 001-we-currently-have: Added  + 
-
+- 003-when-we-go: Added  + 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

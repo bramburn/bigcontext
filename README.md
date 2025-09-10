@@ -15,6 +15,15 @@ Transform your development workflow with intelligent code search, semantic under
 - ⚡ **Keyboard Shortcuts**: Quick access with customizable hotkeys
 - 🎨 **Modern UI**: SvelteKit-based interface with VS Code theme integration
 
+### 🚀 Enhanced Indexing Features
+- ⏸️ **Pause/Resume Control**: Full control over indexing process with real-time state management
+- 📁 **Smart File Monitoring**: Automatic re-indexing when files are created, modified, or deleted
+- 🔄 **Auto-Reindex on Config Changes**: Automatically triggers re-indexing when embedding models or database settings change
+- 📊 **Live Status Display**: Real-time indexing status in VS Code status bar with visual indicators
+- 🚫 **Gitignore Respect**: Automatically excludes files and directories specified in .gitignore
+- 📏 **Intelligent File Filtering**: Skips binary files and large files (configurable size limit)
+- ⚡ **Debounced Processing**: Prevents performance issues during rapid file changes
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -113,6 +122,16 @@ All major sprints have been completed! The Code Context Engine is now a fully fu
 - 🐳 **Docker Integration**: Automated testing with Qdrant services
 - 📚 **Complete Documentation**: User guide, contributor guide, and technical documentation
 
+### ✅ Sprint 7: Enhanced Indexing & File Monitoring (Complete)
+- ⏸️ **Pause/Resume Indexing**: Full control over indexing process with state management
+- 📁 **Real-time File Monitoring**: Automatic re-indexing on file changes with debouncing
+- 🔄 **Configuration Change Detection**: Automatic re-indexing when settings change
+- 📊 **Status Bar Integration**: Live indexing status display in VS Code status bar
+- 🎛️ **Indexing Control Commands**: Dedicated commands for pause, resume, and status
+- 🚫 **Gitignore Integration**: Respects .gitignore patterns during file discovery
+- 📏 **Smart File Filtering**: Binary file detection and configurable size limits
+- ⚡ **Debounced Events**: Prevents event storms during rapid file changes
+
 ## 🏗️ Architecture Overview
 
 The extension follows a modern, modular architecture:
@@ -163,6 +182,24 @@ The extension follows a modern, modular architecture:
 - `Code Context: Open Settings`
 - `Code Context: Open Diagnostics`
 
+#### Enhanced Indexing Commands
+- `BigContext: Pause Indexing` - Pause the current indexing process
+- `BigContext: Resume Indexing` - Resume a paused indexing process
+- `BigContext: Show Indexing Status` - Display detailed indexing status with interactive options
+- `BigContext: Trigger Full Reindex` - Start a complete reindexing of the workspace
+
+### Status Bar Integration
+The extension displays real-time indexing status in the VS Code status bar:
+
+| Status | Icon | Description | Click Action |
+|--------|------|-------------|--------------|
+| **Idle** | ✅ `Indexed` | Indexing complete, ready for search | Show status details |
+| **Indexing** | 🔄 `Indexing...` | Indexing in progress | Show status details |
+| **Paused** | ⏸️ `Paused` | Indexing paused by user | Resume indexing |
+| **Error** | ❌ `Error` | Indexing error occurred | Show error details |
+
+Click the status bar item to access quick actions and detailed information about the current indexing state.
+
 ## 🔧 Configuration
 
 The extension supports various configuration options accessible through VS Code settings:
@@ -170,8 +207,17 @@ The extension supports various configuration options accessible through VS Code 
 - **Database Settings**: Configure Qdrant connection details
 - **Embedding Providers**: Choose and configure AI embedding services
 - **Indexing Options**: Control file filters, chunk sizes, and processing limits
+- **File Monitoring**: Configure debounce delays, file patterns, and size limits
+- **Gitignore Integration**: Enable/disable .gitignore pattern respect
 - **UI Preferences**: Customize interface behavior and appearance
 - **Performance Tuning**: Adjust timeouts, batch sizes, and resource limits
+
+### Enhanced Indexing Configuration
+- **Debounce Delay**: Configure how long to wait before processing file changes (default: 500ms)
+- **File Patterns**: Specify which file types to monitor and index
+- **Max File Size**: Set maximum file size for indexing (default: 2MB)
+- **Binary File Detection**: Automatically skip binary files during indexing
+- **Auto-Reindex Triggers**: Configure which configuration changes trigger automatic re-indexing
 
 ## 🧪 Testing
 

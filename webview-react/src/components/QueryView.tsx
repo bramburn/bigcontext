@@ -359,7 +359,26 @@ export const QueryView: React.FC = () => {
             data-tour="search-input"
             aria-label="Search query input"
             aria-describedby="search-description"
-          </>
+          />
+        </Card>
+      </section>
+
+      {/* Search Results */}
+      <div className={styles.resultsContainer}>
+        {searchState.isLoading ? (
+          <div className={styles.loadingState}>
+            <Spinner size="large" />
+            <Text>Searching...</Text>
+          </div>
+        ) : searchState.results.length > 0 ? (
+          <div className={styles.results}>
+            {searchState.results.map((result, index) => (
+              <Card key={index} className={styles.resultCard}>
+                <Text weight="semibold">{result.title}</Text>
+                <Body1>{result.content}</Body1>
+              </Card>
+            ))}
+          </div>
         ) : searchState.query ? (
           <div className={styles.emptyState}>
             <Text size={400}>

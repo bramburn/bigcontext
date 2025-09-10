@@ -158,23 +158,10 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium
   }
 });
-=======
-  Switch,
-  makeStyles,
-  tokens,
-  Divider,
-  Field,
-  Input,
-  Dropdown,
-  Option
-} from '@fluentui/react-components';
-import { Settings24Regular, Save24Regular, Shield24Regular } from '@fluentui/react-icons';
-import { postMessage, onMessageCommand } from '../utils/vscodeApi';
 
 const useStyles = makeStyles({
   container: {
     padding: tokens.spacingVerticalXL,
->>>>>>> master
     maxWidth: '800px',
     margin: '0 auto'
   },

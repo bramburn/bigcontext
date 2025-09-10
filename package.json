@@ -502,6 +502,8 @@
     "eslint": "^8.28.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "happy-dom": "^18.0.1",
+    "jsdom": "^26.1.0",
     "mocha": "^11.7.1",
     "prettier": "^3.6.2",
     "rimraf": "^5.0.10",
@@ -512,6 +514,7 @@
   "dependencies": {
     "@qdrant/js-client-rest": "^1.7.0",
     "axios": "^1.6.0",
+    "fast-glob": "^3.3.3",
     "glob": "^8.0.3",
     "ignore": "^5.2.4",
     "tree-sitter": "^0.21.1",

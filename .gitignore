@@ -28,3 +28,10 @@ repomix-output.xml
 # Database storage directories
 qdrant_storage/
 ollama_data/
+
+
+#repomix
+repomix-output.md
+repomix-output.xml
+
+**.md

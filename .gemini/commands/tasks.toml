@@ -56,6 +56,7 @@ Given the context provided as an argument, do this:
    - Clear file paths for each task
    - Dependency notes
    - Parallel execution guidance
+   - it must atomic instructions which includes file name, method name, and any other relevant details of the action.
 
 Context for task generation: {{args}}
 

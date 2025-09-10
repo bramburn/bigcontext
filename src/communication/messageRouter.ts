@@ -32,6 +32,8 @@ import { IndexingService } from "../indexing/indexingService";
 import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
 import { NotificationService } from "../notifications/notificationService";
 import { ConfigurationValidationService } from "../validation/configurationValidationService";
+import { FileScanService } from "../services/fileScanService";
+import { WorkspaceManager } from "../workspaceManager";
 
 /**
  * Message router service
@@ -44,15 +46,26 @@ export class MessageRouter {
   private loggingService?: CentralizedLoggingService;
   private notificationService?: NotificationService;
   private validationService?: ConfigurationValidationService;
+  private fileScanService?: FileScanService;
+  private workspaceManager?: WorkspaceManager;
 
   constructor(
     communicationService: TypeSafeCommunicationService,
     configService: ConfigService,
+    workspaceManager: WorkspaceManager,
     loggingService?: CentralizedLoggingService,
   ) {
     this.communicationService = communicationService;
     this.configService = configService;
+    this.workspaceManager = workspaceManager;
     this.loggingService = loggingService;
+
+    // Initialize file scan service
+    this.fileScanService = new FileScanService(
+      communicationService,
+      workspaceManager,
+      loggingService
+    );
 
     this.registerHandlers();
   }
@@ -128,6 +141,12 @@ export class MessageRouter {
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.GET_INDEXING_STATUS,
       this.handleGetIndexingStatus.bind(this),
+    );
+
+    // File scanning handlers
+    this.communicationService.registerMessageHandler(
+      WebviewToExtensionMessageType.START_FILE_SCAN,
+      this.handleStartFileScan.bind(this),
     );
 
     // File operation handlers
@@ -497,6 +516,34 @@ export class MessageRouter {
           error: error instanceof Error ? error.message : String(error),
         },
         "MessageRouter",
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Handle start file scan request
+   */
+  private async handleStartFileScan(): Promise<void> {
+    try {
+      if (!this.fileScanService) {
+        throw new Error("File scan service not available");
+      }
+
+      this.loggingService?.info(
+        "Starting file scan",
+        {},
+        "MessageRouter"
+      );
+
+      // Start the file scan (this will send progress messages automatically)
+      await this.fileScanService.startFileScan();
+
+    } catch (error) {
+      this.loggingService?.error(
+        "Failed to start file scan",
+        { error: error instanceof Error ? error.message : String(error) },
+        "MessageRouter"
       );
       throw error;
     }
