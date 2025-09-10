@@ -512,6 +512,7 @@
   "dependencies": {
     "@qdrant/js-client-rest": "^1.7.0",
     "axios": "^1.6.0",
+    "fast-glob": "^3.3.3",
     "glob": "^8.0.3",
     "ignore": "^5.2.4",
     "tree-sitter": "^0.21.1",

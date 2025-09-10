@@ -92,6 +92,11 @@ export enum ExtensionToWebviewMessageType {
   INDEXING_COMPLETE = "indexing_complete",
   INDEXING_ERROR = "indexing_error",
 
+  // File scanning progress messages
+  SCAN_START = "scanStart",
+  SCAN_PROGRESS = "scanProgress",
+  SCAN_COMPLETE = "scanComplete",
+
   // State messages
   STATE_UPDATE = "state_update",
   THEME_UPDATE = "theme_update",
