@@ -364,12 +364,5 @@ export const RECOMMENDED_MODELS = {
       'gpt-4o-mini',
       'gpt-3.5-turbo'
     ]
-  },
-  anthropic: {
-    chat: [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-haiku-20240307',
-      'claude-3-sonnet-20240229'
-    ]
   }
 };

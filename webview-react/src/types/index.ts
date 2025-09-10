@@ -55,18 +55,12 @@ export interface OpenAIConfig {
   timeout?: number;
 }
 
-export interface AnthropicConfig {
-  apiKey: string;
-  model: string;
-  timeout?: number;
-}
-
-export type ProviderConfig = OllamaConfig | OpenAIConfig | AnthropicConfig;
+export type ProviderConfig = OllamaConfig | OpenAIConfig;
 
 // Setup state types
 export interface SetupState {
   selectedDatabase: 'qdrant' | 'pinecone' | 'chroma';
-  selectedProvider: 'ollama' | 'openai' | 'anthropic';
+  selectedProvider: 'ollama' | 'openai';
   databaseStatus: 'unknown' | 'connected' | 'error' | 'testing';
   providerStatus: 'unknown' | 'connected' | 'error' | 'testing';
   databaseConfig: DatabaseConfig;

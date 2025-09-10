@@ -75,8 +75,7 @@ const DATABASE_OPTIONS = [
 
 const PROVIDER_OPTIONS = [
   { value: 'ollama', label: 'Ollama' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' }
+  { value: 'openai', label: 'OpenAI' }
 ];
 
 export const SetupView: React.FC = () => {
@@ -253,7 +252,6 @@ export const SetupView: React.FC = () => {
           const ollamaConfig = setupState.providerConfig as any;
           return !!(ollamaConfig.baseUrl && ollamaConfig.model);
         case 'openai':
-        case 'anthropic':
           const apiConfig = setupState.providerConfig as any;
           return !!(apiConfig.apiKey && apiConfig.model);
         default:
@@ -317,7 +315,7 @@ export const SetupView: React.FC = () => {
               placeholder="Select AI provider"
               value={setupState.selectedProvider}
               selectedOptions={[setupState.selectedProvider]}
-              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as 'ollama' | 'openai' | 'anthropic')}
+              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as 'ollama' | 'openai')}
             >
               {PROVIDER_OPTIONS.map(option => (
                 <Option key={option.value} value={option.value}>

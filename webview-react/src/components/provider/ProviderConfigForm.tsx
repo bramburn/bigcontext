@@ -19,7 +19,7 @@ import { ArrowClockwise24Regular, CheckmarkCircle24Regular } from '@fluentui/rea
 import { ValidatedInput } from '../ValidatedInput';
 import { ConnectionTester } from '../ConnectionTester';
 import { ProviderSetupGuide } from '../common/ProviderSetupGuide';
-import { OllamaConfig, OpenAIConfig, AnthropicConfig, ValidationResult } from '../../types';
+import { OllamaConfig, OpenAIConfig, ValidationResult } from '../../types';
 
 const useStyles = makeStyles({
   modelSection: {
@@ -48,11 +48,11 @@ const useStyles = makeStyles({
 });
 
 interface ProviderConfigFormProps {
-  providerType: 'ollama' | 'openai' | 'anthropic';
-  config: OllamaConfig | OpenAIConfig | AnthropicConfig;
+  providerType: 'ollama' | 'openai';
+  config: OllamaConfig | OpenAIConfig;
   availableModels: string[];
   isLoadingModels: boolean;
-  onConfigChange: (config: Partial<OllamaConfig | OpenAIConfig | AnthropicConfig>) => void;
+  onConfigChange: (config: Partial<OllamaConfig | OpenAIConfig>) => void;
   onLoadModels: () => void;
   onTest: () => Promise<any>;
 }
@@ -101,8 +101,7 @@ const validateRequired = (value: string, fieldName: string): ValidationResult =>
 // Default models for each provider
 const DEFAULT_MODELS = {
   ollama: ['nomic-embed-text', 'all-minilm', 'mxbai-embed-large'],
-  openai: ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],
-  anthropic: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229']
+  openai: ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002']
 };
 
 export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
@@ -227,32 +226,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     </>
   );
 
-  const renderAnthropicConfig = (config: AnthropicConfig) => (
-    <>
-      <ValidatedInput
-        label="API Key"
-        type="password"
-        value={config.apiKey}
-        onChange={(value) => onConfigChange({ apiKey: value })}
-        validator={validateApiKey}
-        placeholder="sk-ant-..."
-        required
-      />
-      
-      <Dropdown
-        placeholder="Select model"
-        value={config.model}
-        selectedOptions={[config.model]}
-        onOptionSelect={(_, data) => onConfigChange({ model: data.optionValue as string })}
-      >
-        {DEFAULT_MODELS.anthropic.map(model => (
-          <Option key={model} value={model}>
-            {model}
-          </Option>
-        ))}
-      </Dropdown>
-    </>
-  );
+
 
   const getConnectionDescription = () => {
     switch (providerType) {
@@ -260,8 +234,6 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         return 'Test connection to Ollama and verify model availability.';
       case 'openai':
         return 'Test connection to OpenAI API and verify model access.';
-      case 'anthropic':
-        return 'Test connection to Anthropic API and verify model access.';
       default:
         return 'Test your AI provider connection.';
     }
@@ -273,7 +245,6 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
 
       {providerType === 'ollama' && renderOllamaConfig(config as OllamaConfig)}
       {providerType === 'openai' && renderOpenAIConfig(config as OpenAIConfig)}
-      {providerType === 'anthropic' && renderAnthropicConfig(config as AnthropicConfig)}
 
       <ConnectionTester
         title="AI Provider Connection"

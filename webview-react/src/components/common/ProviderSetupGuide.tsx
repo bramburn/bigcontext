@@ -31,7 +31,7 @@ const useStyles = makeStyles({
 });
 
 interface ProviderSetupGuideProps {
-  providerType: 'ollama' | 'openai' | 'anthropic';
+  providerType: 'ollama' | 'openai';
 }
 
 const SETUP_GUIDES = {
@@ -126,53 +126,6 @@ const SETUP_GUIDES = {
         title: 'Test your setup',
         description: 'Verify your API key works:',
         command: 'curl https://api.openai.com/v1/models -H "Authorization: Bearer YOUR_API_KEY"',
-        note: 'Replace YOUR_API_KEY with your actual API key'
-      }
-    ] as SetupStep[]
-  },
-  
-  anthropic: {
-    title: 'How to set up Anthropic Claude',
-    steps: [
-      {
-        title: 'Create an Anthropic account',
-        description: 'Sign up for an Anthropic account:',
-        link: {
-          url: 'https://console.anthropic.com/',
-          text: 'Sign up for Anthropic'
-        }
-      },
-      {
-        title: 'Get API access',
-        description: 'Request access to the Anthropic API:',
-        note: 'Anthropic may have a waitlist for API access. You\'ll need to apply and wait for approval.'
-      },
-      {
-        title: 'Add billing information',
-        description: 'Set up billing in your Anthropic console:',
-        link: {
-          url: 'https://console.anthropic.com/account/billing',
-          text: 'Set up billing'
-        }
-      },
-      {
-        title: 'Create an API key',
-        description: 'Generate a new API key in your dashboard:',
-        link: {
-          url: 'https://console.anthropic.com/account/keys',
-          text: 'Create API key'
-        },
-        warning: 'API keys start with "sk-ant-" and should be kept secure'
-      },
-      {
-        title: 'Choose a model',
-        description: 'Select an appropriate Claude model:',
-        note: 'claude-3-haiku: Fast and cost-effective\nclaude-3-sonnet: Balanced performance\nclaude-3-opus: Highest capability (most expensive)'
-      },
-      {
-        title: 'Test your setup',
-        description: 'Verify your API key works:',
-        command: 'curl https://api.anthropic.com/v1/messages -H "x-api-key: YOUR_API_KEY" -H "anthropic-version: 2023-06-01"',
         note: 'Replace YOUR_API_KEY with your actual API key'
       }
     ] as SetupStep[]
