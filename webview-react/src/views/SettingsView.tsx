@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
+import { Disclosure } from '../ui/Disclosure';
 
 export type Provider = 'OpenAI' | 'Mimic Embed';
 
@@ -67,22 +68,21 @@ export default function SettingsView() {
   const onReset = () => { setSettings(DEFAULT_SETTINGS); setMessage({ type: 'info', text: 'Settings reset to defaults (not saved).' }); };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <header>
         <h2 className="text-lg font-semibold">Extension Settings</h2>
         <p className="text-sm opacity-80">Configure your embedding model and vector database</p>
       </header>
 
       {message && (
-        <div className={`rounded border px-3 py-2 text-sm ${message.type==='success'?'border-green-600/40 bg-green-500/10':message.type==='error'?'border-red-600/40 bg-red-500/10':'border-blue-600/40 bg-blue-500/10'}`}>{message.text}</div>
+        <div className={`rounded border px-2 py-1 text-sm ${message.type==='success'?'border-green-600/40 bg-green-500/10':message.type==='error'?'border-red-600/40 bg-red-500/10':'border-blue-600/40 bg-blue-500/10'}`}>{message.text}</div>
       )}
 
       {loading && <div className="text-sm opacity-80">Loading settings…</div>}
 
-      <section className="space-y-3">
-        <h3 className="font-medium">Embedding Model</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
+      <Disclosure title="Embedding Model" defaultOpen>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+          <div className="space-y-1">
             <Label htmlFor="provider-select">Provider</Label>
             <Select
               value={settings.embeddingModel.provider}
@@ -98,7 +98,7 @@ export default function SettingsView() {
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="api-key-input">API Key</Label>
             <Input
               id="api-key-input"
@@ -110,7 +110,7 @@ export default function SettingsView() {
           </div>
 
           {settings.embeddingModel.provider === 'OpenAI' ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="model-select">Model</Label>
               <Select
                 value={settings.embeddingModel.modelName}
@@ -127,7 +127,7 @@ export default function SettingsView() {
               </Select>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="model-name-input">Model Name</Label>
               <Input
                 id="model-name-input"
@@ -139,7 +139,7 @@ export default function SettingsView() {
           )}
 
           {settings.embeddingModel.provider === 'Mimic Embed' && (
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-1 md:col-span-2">
               <Label htmlFor="endpoint-input">Endpoint URL</Label>
               <Input
                 id="endpoint-input"
@@ -150,12 +150,11 @@ export default function SettingsView() {
             </div>
           )}
         </div>
-      </section>
+      </Disclosure>
 
-      <section className="space-y-3">
-        <h3 className="font-medium">Qdrant Database</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
+      <Disclosure title="Qdrant Database" defaultOpen>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+          <div className="space-y-1">
             <Label htmlFor="host-input">Host</Label>
             <Input
               id="host-input"
@@ -164,7 +163,7 @@ export default function SettingsView() {
               placeholder="localhost"
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="port-input">Port</Label>
             <Input
               id="port-input"
@@ -174,7 +173,7 @@ export default function SettingsView() {
               placeholder="6333"
             />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-1 md:col-span-2">
             <Label htmlFor="collection-input">Collection Name</Label>
             <Input
               id="collection-input"
@@ -183,7 +182,7 @@ export default function SettingsView() {
               placeholder="code-embeddings"
             />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-1 md:col-span-2">
             <Label htmlFor="db-api-key-input">API Key (Optional)</Label>
             <Input
               id="db-api-key-input"
@@ -194,9 +193,9 @@ export default function SettingsView() {
             />
           </div>
         </div>
-      </section>
+      </Disclosure>
 
-      <div className="flex gap-2">
+      <div className="flex gap-1">
         <Button disabled={saving || loading} onClick={onSave}>
           {saving ? 'Saving...' : 'Save Settings'}
         </Button>

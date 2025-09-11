@@ -46,15 +46,60 @@ function App() {
           });
           log('Sent webviewReady message');
 
-          // Tailwind class check - log computed styles
+          // Enhanced Tailwind class check - log computed styles
           setTimeout(() => {
-            const flexElement = document.querySelector('.flex');
-            if (flexElement) {
-              const computedStyle = window.getComputedStyle(flexElement);
-              log(`Tailwind class check: .flex element display = ${computedStyle.display} (expected: flex)`);
-            } else {
-              log('Tailwind class check: .flex element not found');
-            }
+            const performCSSCheck = () => {
+              // Test multiple Tailwind classes
+              const testClasses = [
+                { selector: '.flex', property: 'display', expected: 'flex' },
+                { selector: '.p-4', property: 'padding', expected: '16px' },
+                { selector: '.min-h-screen', property: 'minHeight', expected: '100vh' },
+                { selector: '.w-full', property: 'width', expected: '100%' }
+              ];
+
+              const results = testClasses.map(test => {
+                const element = document.querySelector(test.selector);
+                if (element) {
+                  const computedStyle = window.getComputedStyle(element);
+                  const actualValue = computedStyle[test.property as any];
+                  const isWorking = actualValue === test.expected || actualValue !== '' && actualValue !== 'auto';
+                  return {
+                    selector: test.selector,
+                    property: test.property,
+                    expected: test.expected,
+                    actual: actualValue,
+                    working: isWorking
+                  };
+                }
+                return {
+                  selector: test.selector,
+                  property: test.property,
+                  expected: test.expected,
+                  actual: 'element not found',
+                  working: false
+                };
+              });
+
+              log(`CSS Diagnostics: ${JSON.stringify(results, null, 2)}`);
+
+              // Check for CSS variables
+              const rootStyles = window.getComputedStyle(document.documentElement);
+              const vsCodeVars = [
+                '--vscode-font-family',
+                '--vscode-foreground',
+                '--vscode-editor-background',
+                '--vscode-panel-border'
+              ];
+
+              const varResults = vsCodeVars.map(varName => ({
+                variable: varName,
+                value: rootStyles.getPropertyValue(varName) || 'not defined'
+              }));
+
+              log(`VS Code CSS Variables: ${JSON.stringify(varResults, null, 2)}`);
+            };
+
+            performCSSCheck();
           }, 100);
 
           // Post asset loading information

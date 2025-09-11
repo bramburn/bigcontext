@@ -18,6 +18,7 @@ class MockConfigurationService {
   private config: Configuration = { ...DEFAULT_CONFIGURATION };
   private shouldThrow = false;
   private fileExists = false; // New property to control file existence
+  private mockContentHash = 'mock-hash-stable';
 
   async loadConfiguration(): Promise<Configuration> {
     if (this.shouldThrow) {
@@ -36,7 +37,7 @@ class MockConfigurationService {
   }
 
   async generateContentHash(workspacePath: string): Promise<string> {
-    return 'mock-hash-' + Date.now();
+    return this.mockContentHash;
   }
 
   async isReindexingNeeded(workspacePath: string): Promise<boolean> {
@@ -57,6 +58,10 @@ class MockConfigurationService {
 
   setShouldThrow(shouldThrow: boolean): void {
     this.shouldThrow = shouldThrow;
+  }
+
+  setMockContentHash(hash: string): void {
+    this.mockContentHash = hash;
   }
 }
 
@@ -142,7 +147,8 @@ describe('StartupService', () => {
     });
 
     it('should proceed to search when everything is valid', async () => {
-      // Set up valid configuration with index info
+      // Set up valid configuration with index info that matches the mock content hash
+      const stableHash = 'mock-hash-stable';
       const configWithIndex: Configuration = {
         ...DEFAULT_CONFIGURATION,
         qdrant: {
@@ -150,16 +156,17 @@ describe('StartupService', () => {
           indexInfo: {
             collectionName: 'test-collection',
             lastIndexedTimestamp: new Date().toISOString(),
-            contentHash: 'mock-hash-' + Date.now(),
+            contentHash: stableHash,
           },
         },
       };
-      
+
       mockConfigService.setConfiguration(configWithIndex);
+      mockConfigService.setMockContentHash(stableHash); // Ensure content hash matches
       mockConfigService.setFileExists(true); // Simulate config file exists
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionExists(true);
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
 
       assert.strictEqual(result.action, 'proceedToSearch');
