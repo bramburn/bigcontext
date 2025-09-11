@@ -30,6 +30,9 @@ import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { StatusBarManager } from './statusBarManager';
 import { HistoryManager } from './historyManager';
+import { SidecarManager } from './services/SidecarManager';
+import { SidecarHealthMonitor } from './services/SidecarHealthMonitor';
+import { SidecarConfigManager } from './configuration/sidecarConfig';
 
 /**
  * ExtensionManager class responsible for managing the lifecycle of all core services
@@ -72,6 +75,11 @@ export class ExtensionManager {
     private historyManager!: HistoryManager;
     private startupService!: StartupService;
     private persistentConfigService!: ConfigurationService;
+
+    // Sidecar services
+    private sidecarManager!: SidecarManager;
+    private sidecarHealthMonitor!: SidecarHealthMonitor;
+    private sidecarConfigManager!: SidecarConfigManager;
 
     /**
      * Creates a new ExtensionManager instance
@@ -337,6 +345,45 @@ export class ExtensionManager {
             this.disposables.push(this.historyManager);
             console.log('ExtensionManager: HistoryManager initialized');
 
+            // Step 14: Initialize Sidecar Services
+            // Initialize sidecar configuration manager
+            this.sidecarConfigManager = new SidecarConfigManager(this.loggingService);
+            this.disposables.push(this.sidecarConfigManager);
+            this.loggingService.info('SidecarConfigManager initialized', {}, 'ExtensionManager');
+
+            // Initialize sidecar manager
+            this.sidecarManager = new SidecarManager(this.configService, this.loggingService);
+            this.disposables.push(this.sidecarManager);
+            this.loggingService.info('SidecarManager initialized', {}, 'ExtensionManager');
+
+            // Initialize sidecar health monitor
+            this.sidecarHealthMonitor = new SidecarHealthMonitor(this.sidecarManager, this.loggingService);
+            this.disposables.push(this.sidecarHealthMonitor);
+            this.loggingService.info('SidecarHealthMonitor initialized', {}, 'ExtensionManager');
+
+            // Start sidecar if auto-start is enabled
+            const sidecarConfig = this.sidecarConfigManager.getConfiguration();
+            if (sidecarConfig.autoStart) {
+                try {
+                    const started = await this.sidecarManager.start();
+                    if (started) {
+                        this.sidecarHealthMonitor.start();
+                        this.loggingService.info('Sidecar started automatically', {}, 'ExtensionManager');
+
+                        // Register database connections if auto-register is enabled
+                        if (sidecarConfig.autoRegisterDatabases) {
+                            await this.registerDatabaseConnections();
+                        }
+                    } else {
+                        this.loggingService.warn('Failed to auto-start sidecar', {}, 'ExtensionManager');
+                    }
+                } catch (error) {
+                    this.loggingService.error('Error during sidecar auto-start', {
+                        error: error instanceof Error ? error.message : String(error),
+                    }, 'ExtensionManager');
+                }
+            }
+
             this.loggingService.info('All services initialized successfully', {}, 'ExtensionManager');
 
         } catch (error) {
@@ -550,6 +597,62 @@ export class ExtensionManager {
      */
     getWorkspaceManager(): WorkspaceManager {
         return this.workspaceManager;
+    }
+
+    /**
+     * Register database connections with the sidecar
+     */
+    private async registerDatabaseConnections(): Promise<void> {
+        try {
+            const sidecarConfig = this.sidecarConfigManager.getConfiguration();
+
+            for (const dbConfig of sidecarConfig.databaseConnections) {
+                if (dbConfig.enabled && dbConfig.autoRegister) {
+                    try {
+                        await this.sidecarManager.registerDatabaseConnection({
+                            connection_string: dbConfig.connectionString,
+                            connection_type: dbConfig.connectionType,
+                            timeout_seconds: dbConfig.timeout / 1000,
+                        });
+
+                        this.loggingService.info('Database connection registered with sidecar', {
+                            name: dbConfig.name,
+                            type: dbConfig.connectionType,
+                        }, 'ExtensionManager');
+                    } catch (error) {
+                        this.loggingService.error('Failed to register database connection', {
+                            name: dbConfig.name,
+                            error: error instanceof Error ? error.message : String(error),
+                        }, 'ExtensionManager');
+                    }
+                }
+            }
+        } catch (error) {
+            this.loggingService.error('Error registering database connections', {
+                error: error instanceof Error ? error.message : String(error),
+            }, 'ExtensionManager');
+        }
+    }
+
+    /**
+     * Get sidecar manager instance
+     */
+    getSidecarManager(): SidecarManager {
+        return this.sidecarManager;
+    }
+
+    /**
+     * Get sidecar health monitor instance
+     */
+    getSidecarHealthMonitor(): SidecarHealthMonitor {
+        return this.sidecarHealthMonitor;
+    }
+
+    /**
+     * Get sidecar configuration manager instance
+     */
+    getSidecarConfigManager(): SidecarConfigManager {
+        return this.sidecarConfigManager;
     }
 
     /**

@@ -28,6 +28,25 @@
   --radix-select-item-hover: var(--vscode-list-hoverBackground, #2a2d2e);
   --radix-select-item-focus: var(--vscode-list-focusBackground, #094771);
 
+  /* Button customizations */
+  --radix-button-primary-bg: var(--vscode-button-background, #0e639c);
+  --radix-button-primary-fg: var(--vscode-button-foreground, #ffffff);
+  --radix-button-primary-hover: var(--vscode-button-hoverBackground, #1177bb);
+  --radix-button-secondary-bg: var(--vscode-button-secondaryBackground, #3c3c3c);
+  --radix-button-secondary-fg: var(--vscode-button-secondaryForeground, #cccccc);
+  --radix-button-secondary-hover: var(--vscode-button-secondaryHoverBackground, #4c4c4c);
+
+  /* Input customizations */
+  --radix-input-background: var(--vscode-input-background, #3c3c3c);
+  --radix-input-foreground: var(--vscode-input-foreground, #cccccc);
+  --radix-input-border: var(--vscode-input-border, #3c3c3c);
+  --radix-input-placeholder: var(--vscode-input-placeholderForeground, #a6a6a6);
+
+  /* Checkbox and Switch customizations */
+  --radix-checkbox-background: var(--vscode-checkbox-background, #3c3c3c);
+  --radix-checkbox-foreground: var(--vscode-checkbox-foreground, #ffffff);
+  --radix-checkbox-border: var(--vscode-checkbox-border, #3c3c3c);
+
   /* Dialog customizations */
   --radix-dialog-overlay-background: rgba(0, 0, 0, 0.5);
   --radix-dialog-content-background: var(--vscode-editor-background, #1e1e1e);
@@ -248,4 +267,199 @@ select:focus-visible {
   .card {
     transition: none;
   }
+}
+
+/* Enhanced Radix UI Component Styling */
+
+/* Select Component */
+[data-radix-select-content] {
+  background: var(--radix-select-content-background) !important;
+  border: 1px solid var(--radix-select-content-border) !important;
+  color: var(--vscode-foreground, #cccccc) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+[data-radix-select-item] {
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+[data-radix-select-item]:hover,
+[data-radix-select-item][data-highlighted] {
+  background: var(--radix-select-item-hover) !important;
+  color: var(--vscode-list-hoverForeground, #ffffff) !important;
+}
+
+[data-radix-select-item]:focus,
+[data-radix-select-item][data-state="checked"] {
+  background: var(--radix-select-item-focus) !important;
+  color: var(--vscode-list-focusForeground, #ffffff) !important;
+}
+
+/* Toast Component */
+[data-radix-toast-root] {
+  background: var(--radix-toast-background) !important;
+  border: 1px solid var(--radix-toast-border) !important;
+  color: var(--radix-toast-foreground) !important;
+}
+
+/* Dialog Component */
+[data-radix-dialog-overlay] {
+  background: var(--radix-dialog-overlay-background) !important;
+}
+
+[data-radix-dialog-content] {
+  background: var(--radix-dialog-content-background) !important;
+  border: 1px solid var(--radix-dialog-content-border) !important;
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+/* Tooltip Component */
+[data-radix-tooltip-content] {
+  background: var(--radix-tooltip-background) !important;
+  border: 1px solid var(--radix-tooltip-border) !important;
+  color: var(--radix-tooltip-foreground) !important;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Progress Component */
+[data-radix-progress-root] {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+[data-radix-progress-indicator] {
+  background: var(--radix-progress-indicator) !important;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Slider Component */
+[data-radix-slider-track] {
+  background: var(--radix-slider-track) !important;
+  border-radius: 9999px;
+}
+
+[data-radix-slider-range] {
+  background: var(--radix-slider-range) !important;
+  border-radius: 9999px;
+}
+
+[data-radix-slider-thumb] {
+  background: var(--radix-slider-thumb) !important;
+  border: 2px solid var(--radix-slider-range);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+[data-radix-slider-thumb]:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb) !important;
+}
+
+/* Checkbox Component */
+[data-radix-checkbox-root] {
+  background: var(--radix-checkbox-background) !important;
+  border: 1px solid var(--radix-checkbox-border) !important;
+  color: var(--radix-checkbox-foreground) !important;
+}
+
+[data-radix-checkbox-root][data-state="checked"] {
+  background: var(--vscode-checkbox-selectBackground, #0e639c) !important;
+  border-color: var(--vscode-checkbox-selectBorder, #0e639c) !important;
+}
+
+/* Switch Component */
+[data-radix-switch-root] {
+  background: var(--vscode-checkbox-background, #3c3c3c) !important;
+  border: 1px solid var(--vscode-checkbox-border, #3c3c3c) !important;
+}
+
+[data-radix-switch-root][data-state="checked"] {
+  background: var(--vscode-checkbox-selectBackground, #0e639c) !important;
+}
+
+[data-radix-switch-thumb] {
+  background: var(--vscode-checkbox-foreground, #ffffff) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Collapsible Component */
+[data-radix-collapsible-content] {
+  overflow: hidden;
+}
+
+[data-radix-collapsible-content][data-state="open"] {
+  animation: collapsible-down 150ms ease-out;
+}
+
+[data-radix-collapsible-content][data-state="closed"] {
+  animation: collapsible-up 150ms ease-out;
+}
+
+/* Ensure proper z-index for overlays */
+[data-radix-portal] {
+  z-index: 9999;
+}
+
+/* Fix for animation classes that might be purged */
+.animate-in {
+  animation-name: enter;
+  animation-duration: 150ms;
+  animation-timing-function: ease-out;
+}
+
+.animate-out {
+  animation-name: exit;
+  animation-duration: 150ms;
+  animation-timing-function: ease-in;
+}
+
+.fade-in-0 {
+  animation-name: fade-in;
+}
+
+.fade-out-0 {
+  animation-name: fade-out;
+}
+
+.zoom-in-95 {
+  animation-name: zoom-in;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zoom-out-95 {
+  animation-name: zoom-out;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zoom-in {
+  from { transform: scale(0.95); }
+  to { transform: scale(1); }
+}
+
+@keyframes zoom-out {
+  from { transform: scale(1); }
+  to { transform: scale(0.95); }
+}
+
+@keyframes enter {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
 }
