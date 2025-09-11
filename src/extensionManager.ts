@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 // Core service imports
 import { ConfigService } from './configService';
+import { ConfigurationService } from './services/ConfigurationService';
+import { StartupService } from './services/StartupService';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { NotificationService } from './notifications/notificationService';
 import { QdrantService } from './db/qdrantService';
@@ -28,8 +30,6 @@ import { StateManager } from './stateManager';
 import { XmlFormatterService } from './formatting/XmlFormatterService';
 import { StatusBarManager } from './statusBarManager';
 import { HistoryManager } from './historyManager';
-import { StartupService } from './services/StartupService';
-import { ConfigurationService } from './services/ConfigurationService';
 
 /**
  * ExtensionManager class responsible for managing the lifecycle of all core services
@@ -202,22 +202,25 @@ export class ExtensionManager {
                 );
                 this.loggingService.info('ExtensionManager: IndexingService initialized');
 
-                // Step 5.2: Initialize startup service and execute startup flow
+                // Step 5.2: Initialize configuration service
+                const configurationService = new ConfigurationService(workspaceRoot, this.qdrantService);
+
+                // Step 5.3: Initialize startup service and execute startup flow
                 // This handles configuration loading, index validation, and reindexing decisions
                 this.startupService = new StartupService(
-                    workspaceRoot,
-                    this.qdrantService,
-                    this.indexingService
+                    configurationService,
+                    this.qdrantService
                 );
 
                 // Execute startup flow to determine next steps
-                const startupResult = await this.startupService.executeStartupFlow();
+                const startupResult = await this.startupService.executeStartupFlow(workspaceRoot);
                 this.loggingService.info('Startup flow completed', {
-                    success: startupResult.success,
-                    reindexingTriggered: startupResult.reindexingTriggered,
-                    shouldShowSearch: startupResult.shouldShowSearch,
-                    errors: startupResult.errors,
-                    messages: startupResult.messages
+                    action: startupResult.action,
+                    reason: startupResult.reason,
+                    configurationLoaded: startupResult.configurationLoaded,
+                    qdrantConnected: startupResult.qdrantConnected,
+                    indexValid: startupResult.indexValid,
+                    reindexingNeeded: startupResult.reindexingNeeded
                 }, 'ExtensionManager');
 
                 // Initialize ContextService with dependencies including LoggingService

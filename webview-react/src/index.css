@@ -1,3 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
 /* VS Code theme variables */
 :root {
   --vscode-font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;

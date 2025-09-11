@@ -1,51 +1,10 @@
-/**
- * AI Provider Configuration Form Component
- * 
- * Renders provider-specific configuration forms with dynamic model selection,
- * validation, and provider-specific features like Ollama model detection.
- */
+import { useEffect, useState } from 'react';
+import ValidatedInput, { ValidationResult } from './ValidatedInput';
+import ConnectionTester, { ConnectionTestResult } from './ConnectionTester';
+import SetupGuide from './SetupGuides';
 
-import React, { useEffect, useState } from 'react';
-import { 
-  Dropdown, 
-  Option, 
-  Button, 
-  Spinner, 
-  Text,
-  makeStyles,
-  tokens
-} from '@fluentui/react-components';
-import { ArrowClockwise24Regular, CheckmarkCircle24Regular } from '@fluentui/react-icons';
-import { ValidatedInput } from '../ValidatedInput';
-import { ConnectionTester } from '../ConnectionTester';
-import { ProviderSetupGuide } from '../common/ProviderSetupGuide';
-import { OllamaConfig, OpenAIConfig, ValidationResult } from '../../types';
-
-const useStyles = makeStyles({
-  modelSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-  },
-  modelRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-  },
-  modelStatus: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalXS,
-    fontSize: tokens.fontSizeBase200,
-  },
-  suggestion: {
-    padding: tokens.spacingVerticalXS,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusSmall,
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground2,
-  }
-});
+interface OllamaConfig { baseUrl: string; model: string; }
+interface OpenAIConfig { apiKey: string; model: string; organization?: string; }
 
 interface ProviderConfigFormProps {
   providerType: 'ollama' | 'openai';
@@ -54,15 +13,11 @@ interface ProviderConfigFormProps {
   isLoadingModels: boolean;
   onConfigChange: (config: Partial<OllamaConfig | OpenAIConfig>) => void;
   onLoadModels: () => void;
-  onTest: () => Promise<any>;
+  onTest: () => Promise<ConnectionTestResult>;
 }
 
-// Validation functions
 const validateUrl = (value: string): ValidationResult => {
-  if (!value.trim()) {
-    return { isValid: false, message: 'Base URL is required' };
-  }
-  
+  if (!value.trim()) return { isValid: false, message: 'Base URL is required' };
   try {
     new URL(value);
     return { isValid: true, message: 'Valid URL format' };
@@ -76,10 +31,7 @@ const validateUrl = (value: string): ValidationResult => {
 };
 
 const validateApiKey = (value: string): ValidationResult => {
-  if (!value.trim()) {
-    return { isValid: false, message: 'API key is required' };
-  }
-  
+  if (!value.trim()) return { isValid: false, message: 'API key is required' };
   if (value.length < 10) {
     return { 
       isValid: false, 
@@ -87,24 +39,20 @@ const validateApiKey = (value: string): ValidationResult => {
       suggestions: ['Check that you copied the complete API key']
     };
   }
-  
   return { isValid: true, message: 'API key format looks valid' };
 };
 
 const validateRequired = (value: string, fieldName: string): ValidationResult => {
-  if (!value.trim()) {
-    return { isValid: false, message: `${fieldName} is required` };
-  }
+  if (!value.trim()) return { isValid: false, message: `${fieldName} is required` };
   return { isValid: true, message: `${fieldName} is valid` };
 };
 
-// Default models for each provider
 const DEFAULT_MODELS = {
   ollama: ['nomic-embed-text', 'all-minilm', 'mxbai-embed-large'],
   openai: ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002']
 };
 
-export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
+export default function ProviderConfigForm({
   providerType,
   config,
   availableModels,
@@ -112,17 +60,15 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   onConfigChange,
   onLoadModels,
   onTest
-}) => {
-  const styles = useStyles();
+}: ProviderConfigFormProps) {
   const [modelSuggestions, setModelSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
-    // Set default model suggestions based on provider
     setModelSuggestions(DEFAULT_MODELS[providerType] || []);
   }, [providerType]);
 
   const renderOllamaConfig = (config: OllamaConfig) => (
-    <>
+    <div className="space-y-3">
       <ValidatedInput
         label="Base URL"
         value={config.baseUrl}
@@ -132,33 +78,36 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         required
       />
       
-      <div className={styles.modelSection}>
-        <div className={styles.modelRow}>
-          <Text weight="semibold">Model</Text>
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={isLoadingModels ? <Spinner size="tiny" /> : <ArrowClockwise24Regular />}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">Model</span>
+          <button
+            className="rounded border px-2 py-1 text-xs hover:bg-white/5 disabled:opacity-50"
             onClick={onLoadModels}
             disabled={isLoadingModels}
           >
-            {isLoadingModels ? 'Loading...' : 'Detect Models'}
-          </Button>
+            {isLoadingModels ? (
+              <span className="flex items-center gap-1">
+                <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                Loading...
+              </span>
+            ) : (
+              '🔄 Detect Models'
+            )}
+          </button>
         </div>
         
         {availableModels.length > 0 ? (
-          <Dropdown
-            placeholder="Select a model"
+          <select
+            className="w-full rounded border bg-transparent px-2 py-1"
             value={config.model}
-            selectedOptions={[config.model]}
-            onOptionSelect={(_, data) => onConfigChange({ model: data.optionValue as string })}
+            onChange={(e) => onConfigChange({ model: e.target.value })}
           >
+            <option value="">Select a model</option>
             {availableModels.map(model => (
-              <Option key={model} value={model}>
-                {model}
-              </Option>
+              <option key={model} value={model}>{model}</option>
             ))}
-          </Dropdown>
+          </select>
         ) : (
           <ValidatedInput
             label=""
@@ -171,29 +120,25 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         )}
         
         {availableModels.length === 0 && !isLoadingModels && (
-          <div className={styles.suggestion}>
-            <Text size={200}>
-              💡 Suggested models: {modelSuggestions.join(', ')}
-            </Text>
+          <div className="rounded border border-yellow-600/40 bg-yellow-500/10 px-2 py-1 text-xs">
+            💡 Suggested models: {modelSuggestions.join(', ')}
             <br />
-            <Text size={200}>
-              Run: <code>ollama pull {modelSuggestions[0]}</code> to install the recommended model
-            </Text>
+            Run: <code>ollama pull {modelSuggestions[0]}</code> to install the recommended model
           </div>
         )}
         
         {availableModels.length > 0 && (
-          <div className={styles.modelStatus}>
-            <CheckmarkCircle24Regular color={tokens.colorPaletteGreenForeground1} />
-            <Text size={200}>Found {availableModels.length} available models</Text>
+          <div className="flex items-center gap-1 text-xs text-green-400">
+            <div className="h-3 w-3 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+            Found {availableModels.length} available models
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 
   const renderOpenAIConfig = (config: OpenAIConfig) => (
-    <>
+    <div className="space-y-3">
       <ValidatedInput
         label="API Key"
         type="password"
@@ -204,18 +149,19 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         required
       />
       
-      <Dropdown
-        placeholder="Select embedding model"
-        value={config.model}
-        selectedOptions={[config.model]}
-        onOptionSelect={(_, data) => onConfigChange({ model: data.optionValue as string })}
-      >
-        {DEFAULT_MODELS.openai.map(model => (
-          <Option key={model} value={model}>
-            {model}
-          </Option>
-        ))}
-      </Dropdown>
+      <label className="text-sm">
+        <span className="block mb-1">Embedding Model</span>
+        <select
+          className="w-full rounded border bg-transparent px-2 py-1"
+          value={config.model}
+          onChange={(e) => onConfigChange({ model: e.target.value })}
+        >
+          <option value="">Select embedding model</option>
+          {DEFAULT_MODELS.openai.map(model => (
+            <option key={model} value={model}>{model}</option>
+          ))}
+        </select>
+      </label>
       
       <ValidatedInput
         label="Organization (Optional)"
@@ -223,10 +169,8 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         onChange={(value) => onConfigChange({ organization: value })}
         placeholder="org-..."
       />
-    </>
+    </div>
   );
-
-
 
   const getConnectionDescription = () => {
     switch (providerType) {
@@ -240,8 +184,8 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   };
 
   return (
-    <>
-      <ProviderSetupGuide providerType={providerType} />
+    <div className="space-y-4">
+      <SetupGuide type={providerType} />
 
       {providerType === 'ollama' && renderOllamaConfig(config as OllamaConfig)}
       {providerType === 'openai' && renderOpenAIConfig(config as OpenAIConfig)}
@@ -251,8 +195,6 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         description={getConnectionDescription()}
         testFunction={onTest}
       />
-    </>
+    </div>
   );
-};
-
-export default ProviderConfigForm;
+}

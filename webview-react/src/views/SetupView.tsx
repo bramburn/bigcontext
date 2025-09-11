@@ -1,71 +1,8 @@
-/**
- * SetupView Component
- * 
- * Main setup view for configuring database and provider connections.
- * Allows users to select and configure their preferred services.
- */
-
-import React, { useCallback, useEffect } from 'react';
-import {
-  Card,
-  Button,
-  Text,
-  Body1,
-  Dropdown,
-  Option,
-  makeStyles,
-  tokens
-} from '@fluentui/react-components';
-import { Settings24Regular, Play24Regular } from '@fluentui/react-icons';
-import { useAppStore, useSetupState } from '../stores/appStore';
-import { DatabaseConfigForm } from './database/DatabaseConfigForm';
-import { ProviderConfigForm } from './provider/ProviderConfigForm';
-import { ConnectionTestResult } from '../types';
+import { useCallback, useEffect } from 'react';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
-
-const useStyles = makeStyles({
-  container: {
-    padding: tokens.spacingVerticalXL,
-    maxWidth: '800px',
-    margin: '0 auto'
-  },
-  header: {
-    marginBottom: tokens.spacingVerticalXL,
-    textAlign: 'center'
-  },
-  title: {
-    marginBottom: tokens.spacingVerticalS
-  },
-  description: {
-    color: tokens.colorNeutralForeground2
-  },
-  section: {
-    marginBottom: tokens.spacingVerticalXL
-  },
-  sectionTitle: {
-    marginBottom: tokens.spacingVerticalM,
-    fontWeight: tokens.fontWeightSemibold
-  },
-  card: {
-    padding: tokens.spacingVerticalL,
-    marginBottom: tokens.spacingVerticalM
-  },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: tokens.spacingHorizontalL,
-    marginBottom: tokens.spacingVerticalM,
-    '@media (max-width: 768px)': {
-      gridTemplateColumns: '1fr'
-    }
-  },
-  actions: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: tokens.spacingHorizontalM,
-    marginTop: tokens.spacingVerticalXL
-  }
-});
+import DatabaseConfigForm from '../ui/DatabaseConfigForm';
+import ProviderConfigForm from '../ui/ProviderConfigForm';
+import { useAppStore, useSetupState } from '../stores/appStore';
 
 const DATABASE_OPTIONS = [
   { value: 'qdrant', label: 'Qdrant' },
@@ -78,8 +15,7 @@ const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' }
 ];
 
-export const SetupView: React.FC = () => {
-  const styles = useStyles();
+export default function SetupView() {
   const setupState = useSetupState();
   const {
     setSelectedDatabase,
@@ -129,7 +65,7 @@ export const SetupView: React.FC = () => {
   }, [setupState.selectedProvider, setupState.providerConfig, setAvailableModels, setLoadingModels]);
 
   // Test functions
-  const testDatabaseConnection = useCallback(async (): Promise<ConnectionTestResult> => {
+  const testDatabaseConnection = useCallback(async (): Promise<any> => {
     return new Promise((resolve) => {
       // Send test request to extension
       postMessage('testDatabaseConnection', {
@@ -164,7 +100,7 @@ export const SetupView: React.FC = () => {
     });
   }, [setupState.selectedDatabase, setupState.databaseConfig]);
 
-  const testProviderConnection = useCallback(async (): Promise<ConnectionTestResult> => {
+  const testProviderConnection = useCallback(async (): Promise<any> => {
     return new Promise((resolve) => {
       // Send test request to extension
       postMessage('testProviderConnection', {
@@ -203,26 +139,21 @@ export const SetupView: React.FC = () => {
   useEffect(() => {
     const unsubscribeSetupComplete = onMessageCommand('setupComplete', (data) => {
       console.log('Setup completed successfully:', data);
-      // The view change is already handled by the button click,
-      // but we could add additional logic here if needed
     });
 
     const unsubscribeSetupError = onMessageCommand('setupError', (data) => {
       console.error('Setup error:', data.error);
-      // Show error to user and stay on setup view
       alert(`Setup failed: ${data.error}`);
     });
 
     const unsubscribeConfigLoaded = onMessageCommand('configLoaded', (data) => {
       if (data.success && data.config) {
         console.log('Persistent config loaded:', data.config);
-        // Update the setup state with loaded configuration
         setSelectedDatabase(data.config.database || 'qdrant');
         setSelectedProvider(data.config.provider || 'ollama');
         updateDatabaseConfig(data.config.databaseConfig || {});
         updateProviderConfig(data.config.providerConfig || {});
 
-        // If index info exists and is valid, navigate to query
         if (data.config.indexInfo) {
           console.log('Valid index found, navigating to query');
           setCurrentView('query');
@@ -307,37 +238,28 @@ export const SetupView: React.FC = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <Text size={800} weight="bold" className={styles.title}>
-          <Settings24Regular style={{ marginRight: tokens.spacingHorizontalS }} />
-          Setup Code Context Engine
-        </Text>
-        <Body1 className={styles.description}>
-          Configure your database and AI provider to get started with intelligent code search.
-        </Body1>
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-2">⚙️ Setup Code Context Engine</h1>
+        <p className="text-sm opacity-80">Configure your database and AI provider to get started with intelligent code search.</p>
       </div>
 
       {/* Database Configuration */}
-      <div className={styles.section}>
-        <Text size={600} className={styles.sectionTitle}>
-          Database Configuration
-        </Text>
-        <Card className={styles.card}>
-          <div className={styles.formRow}>
-            <Dropdown
-              placeholder="Select database"
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Database Configuration</h2>
+        <div className="rounded border p-4 space-y-4">
+          <label className="text-sm">
+            <span className="block mb-1">Database Type</span>
+            <select
+              className="w-full rounded border bg-transparent px-2 py-1"
               value={setupState.selectedDatabase}
-              selectedOptions={[setupState.selectedDatabase]}
-              onOptionSelect={(_, data) => setSelectedDatabase(data.optionValue as 'qdrant' | 'pinecone' | 'chroma')}
+              onChange={(e) => setSelectedDatabase(e.target.value as any)}
             >
               {DATABASE_OPTIONS.map(option => (
-                <Option key={option.value} value={option.value}>
-                  {option.label}
-                </Option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
-            </Dropdown>
-          </div>
+            </select>
+          </label>
 
           <DatabaseConfigForm
             databaseType={setupState.selectedDatabase}
@@ -345,29 +267,25 @@ export const SetupView: React.FC = () => {
             onConfigChange={updateDatabaseConfig}
             onTest={testDatabaseConnection}
           />
-        </Card>
-      </div>
+        </div>
+      </section>
 
       {/* Provider Configuration */}
-      <div className={styles.section}>
-        <Text size={600} className={styles.sectionTitle}>
-          AI Provider Configuration
-        </Text>
-        <Card className={styles.card}>
-          <div className={styles.formRow}>
-            <Dropdown
-              placeholder="Select AI provider"
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">AI Provider Configuration</h2>
+        <div className="rounded border p-4 space-y-4">
+          <label className="text-sm">
+            <span className="block mb-1">AI Provider</span>
+            <select
+              className="w-full rounded border bg-transparent px-2 py-1"
               value={setupState.selectedProvider}
-              selectedOptions={[setupState.selectedProvider]}
-              onOptionSelect={(_, data) => setSelectedProvider(data.optionValue as 'ollama' | 'openai')}
+              onChange={(e) => setSelectedProvider(e.target.value as any)}
             >
               {PROVIDER_OPTIONS.map(option => (
-                <Option key={option.value} value={option.value}>
-                  {option.label}
-                </Option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
-            </Dropdown>
-          </div>
+            </select>
+          </label>
 
           <ProviderConfigForm
             providerType={setupState.selectedProvider}
@@ -378,22 +296,18 @@ export const SetupView: React.FC = () => {
             onLoadModels={handleLoadModels}
             onTest={testProviderConnection}
           />
-        </Card>
-      </div>
+        </div>
+      </section>
 
-      <div className={styles.actions}>
-        <Button
-          appearance="primary"
-          size="large"
-          icon={<Play24Regular />}
+      <div className="flex justify-center">
+        <button
+          className="rounded bg-[var(--vscode-button-background,#0e639c)] px-6 py-2 text-white disabled:opacity-50"
           disabled={!isSetupValid()}
           onClick={handleStartIndexing}
         >
-          Start Indexing
-        </Button>
+          ▶️ Start Indexing
+        </button>
       </div>
     </div>
   );
-};
-
-export default SetupView;
+}

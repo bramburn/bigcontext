@@ -52,14 +52,14 @@ class MockConfigurationService {
 
 class MockQdrantService {
   private connectionStatus = true;
-  private collectionExists = true;
+  private collectionExistsStatus = true;
 
   async testConnection(): Promise<boolean> {
     return this.connectionStatus;
   }
 
   async collectionExists(collectionName: string): Promise<boolean> {
-    return this.collectionExists;
+    return this.collectionExistsStatus;
   }
 
   setConnectionStatus(status: boolean): void {
@@ -67,7 +67,7 @@ class MockQdrantService {
   }
 
   setCollectionExists(exists: boolean): void {
-    this.collectionExists = exists;
+    this.collectionExistsStatus = exists;
   }
 }
 

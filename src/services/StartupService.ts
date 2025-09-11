@@ -9,24 +9,25 @@ import * as vscode from 'vscode';
 import { ConfigurationService } from './ConfigurationService';
 import { QdrantService } from '../db/qdrantService';
 import { IndexingService } from '../indexing/indexingService';
+import { GitIgnoreManager } from './GitIgnoreManager';
 import { Configuration } from '../types/configuration';
 
 /**
  * Startup flow result
  */
 export interface StartupResult {
-  /** Whether startup was successful */
-  success: boolean;
-  /** The loaded configuration */
-  configuration: Configuration;
-  /** Whether reindexing was triggered */
-  reindexingTriggered: boolean;
-  /** Whether the user should be directed to search */
-  shouldShowSearch: boolean;
-  /** Any errors encountered during startup */
-  errors: string[];
-  /** Informational messages */
-  messages: string[];
+  /** The action to take next */
+  action: 'showSetup' | 'proceedToSearch' | 'triggerReindexing';
+  /** The reason for the action */
+  reason: string;
+  /** Whether configuration was loaded successfully */
+  configurationLoaded: boolean;
+  /** Whether Qdrant connection was successful */
+  qdrantConnected: boolean;
+  /** Whether the index is valid */
+  indexValid: boolean;
+  /** Whether reindexing is needed */
+  reindexingNeeded: boolean;
 }
 
 /**
@@ -35,113 +36,128 @@ export interface StartupResult {
 export class StartupService {
   private configurationService: ConfigurationService;
   private qdrantService?: QdrantService;
-  private indexingService?: IndexingService;
-  private workspaceRoot: string;
+  private gitIgnoreManager: GitIgnoreManager;
 
   /**
    * Creates a new startup service
-   * 
-   * @param workspaceRoot The workspace root directory
+   *
+   * @param configurationService The configuration service
    * @param qdrantService Optional Qdrant service for index validation
-   * @param indexingService Optional indexing service for reindexing
+   * @param gitIgnoreManager Git ignore manager for .gitignore operations
    */
   constructor(
-    workspaceRoot: string,
+    configurationService: ConfigurationService,
     qdrantService?: QdrantService,
-    indexingService?: IndexingService
+    gitIgnoreManager?: GitIgnoreManager
   ) {
-    this.workspaceRoot = workspaceRoot;
+    this.configurationService = configurationService;
     this.qdrantService = qdrantService;
-    this.indexingService = indexingService;
-    this.configurationService = new ConfigurationService(workspaceRoot, qdrantService);
+    this.gitIgnoreManager = gitIgnoreManager || new GitIgnoreManager();
   }
 
   /**
    * Executes the startup flow
-   * 
+   *
+   * @param workspacePath The workspace path to analyze
    * @returns Startup result with configuration and next steps
    */
-  public async executeStartupFlow(): Promise<StartupResult> {
+  public async executeStartupFlow(workspacePath: string): Promise<StartupResult> {
     const result: StartupResult = {
-      success: false,
-      configuration: {} as Configuration,
-      reindexingTriggered: false,
-      shouldShowSearch: false,
-      errors: [],
-      messages: [],
+      action: 'showSetup',
+      reason: 'No configuration found',
+      configurationLoaded: false,
+      qdrantConnected: false,
+      indexValid: false,
+      reindexingNeeded: false,
     };
 
     try {
       console.log('StartupService: Beginning startup flow...');
-      
+
       // Step 1: Load configuration
-      result.configuration = await this.configurationService.loadConfiguration();
-      result.messages.push('Configuration loaded successfully');
-      
-      // Step 2: Validate configuration
-      const validation = this.configurationService.validateConfiguration(result.configuration);
-      if (!validation.isValid) {
-        result.errors.push(...validation.errors);
-        result.messages.push('Configuration validation failed - using defaults');
-        
-        // Show error to user but continue with defaults
-        vscode.window.showWarningMessage(
-          'Configuration validation failed. Using default settings. ' +
-          'Please check your .context/config.json file.'
-        );
-      }
-      
-      if (validation.warnings.length > 0) {
-        result.messages.push(...validation.warnings);
-      }
-      
-      // Step 3: Check if Qdrant and Ollama settings are valid
-      const hasValidSettings = await this.validateExternalServices(result.configuration);
-      if (!hasValidSettings) {
-        result.errors.push('Qdrant or Ollama settings are invalid');
-        result.messages.push('External services not available - setup required');
-        result.success = true; // Still successful, but user needs to configure
+      try {
+        await this.configurationService.loadConfiguration();
+        result.configurationLoaded = true;
+      } catch (error) {
+        result.reason = `Failed to load configuration: ${error instanceof Error ? error.message : String(error)}`;
         return result;
       }
-      
-      // Step 4: Check if reindexing is needed
-      const needsReindexing = await this.configurationService.isReindexingNeeded();
-      
-      if (needsReindexing) {
-        result.messages.push('Reindexing needed due to missing or invalid index');
-        
-        // Trigger reindexing if indexing service is available
-        if (this.indexingService) {
-          result.reindexingTriggered = await this.triggerReindexing();
-          if (result.reindexingTriggered) {
-            result.messages.push('Reindexing started successfully');
-          } else {
-            result.errors.push('Failed to start reindexing');
-          }
-        } else {
-          result.messages.push('Indexing service not available - manual indexing required');
+
+      // Step 2: Check if configuration file exists
+      const configExists = await this.configurationService.configurationFileExists();
+      if (!configExists) {
+        result.reason = 'No configuration found';
+        result.action = 'showSetup';
+
+        // Ensure .gitignore is set up
+        try {
+          await this.gitIgnoreManager.ensureConfigPatternPresent(workspacePath);
+        } catch (error) {
+          console.warn('Failed to update .gitignore:', error);
+        }
+
+        return result;
+      }
+
+      // Step 3: Test Qdrant connection
+      if (this.qdrantService) {
+        try {
+          result.qdrantConnected = await this.qdrantService.healthCheck();
+        } catch (error) {
+          result.qdrantConnected = false;
+        }
+      }
+
+      if (!result.qdrantConnected) {
+        result.reason = 'Qdrant connection failed';
+        result.action = 'showSetup';
+        return result;
+      }
+
+      // Step 4: Check if index is valid
+      const config = this.configurationService.getConfiguration();
+      if (config.qdrant.indexInfo?.collectionName && this.qdrantService) {
+        try {
+          result.indexValid = await this.qdrantService.collectionExists(config.qdrant.indexInfo.collectionName);
+        } catch (error) {
+          result.indexValid = false;
+        }
+      }
+
+      // Step 5: Check if reindexing is needed
+      if (result.indexValid) {
+        try {
+          result.reindexingNeeded = await this.configurationService.isReindexingNeeded(workspacePath);
+        } catch (error) {
+          result.reindexingNeeded = false;
         }
       } else {
-        result.messages.push('Index is valid - no reindexing needed');
-        result.shouldShowSearch = true;
+        result.reindexingNeeded = true;
       }
-      
-      result.success = true;
+
+      // Step 6: Determine action
+      if (!result.indexValid) {
+        result.action = 'triggerReindexing';
+        result.reason = 'Index collection does not exist';
+        result.reindexingNeeded = true;
+      } else if (result.reindexingNeeded) {
+        result.action = 'triggerReindexing';
+        result.reason = 'Content has changed since last indexing';
+      } else {
+        result.action = 'proceedToSearch';
+        result.reason = 'Configuration valid, index exists';
+      }
+
       console.log('StartupService: Startup flow completed successfully');
-      
+
     } catch (error) {
       const errorMessage = `Startup flow failed: ${error instanceof Error ? error.message : String(error)}`;
-      result.errors.push(errorMessage);
       console.error('StartupService:', errorMessage, error);
-      
-      // Even on error, try to provide a basic configuration
-      try {
-        result.configuration = this.configurationService.getConfiguration();
-      } catch {
-        // Use empty configuration as last resort
-      }
+
+      result.action = 'showSetup';
+      result.reason = errorMessage;
     }
-    
+
     return result;
   }
 
@@ -150,89 +166,5 @@ export class StartupService {
    */
   public getConfigurationService(): ConfigurationService {
     return this.configurationService;
-  }
-
-  /**
-   * Validates external services (Qdrant and Ollama)
-   * 
-   * @param config The configuration to validate
-   * @returns True if services are accessible
-   */
-  private async validateExternalServices(config: Configuration): Promise<boolean> {
-    try {
-      // Check Qdrant connection
-      if (this.qdrantService) {
-        const qdrantHealthy = await this.qdrantService.healthCheck();
-        if (!qdrantHealthy) {
-          console.warn('StartupService: Qdrant service is not healthy');
-          return false;
-        }
-      }
-      
-      // TODO: Add Ollama validation when available
-      // For now, assume Ollama is available if endpoint is configured
-      if (!config.ollama.endpoint || !config.ollama.model) {
-        console.warn('StartupService: Ollama configuration is incomplete');
-        return false;
-      }
-      
-      return true;
-      
-    } catch (error) {
-      console.error('StartupService: Error validating external services:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Triggers the reindexing process
-   * 
-   * @returns True if reindexing was started successfully
-   */
-  private async triggerReindexing(): Promise<boolean> {
-    try {
-      if (!this.indexingService) {
-        console.error('StartupService: No indexing service available for reindexing');
-        return false;
-      }
-      
-      console.log('StartupService: Starting reindexing process...');
-      
-      // Clear existing index info since we're reindexing
-      await this.configurationService.clearQdrantIndexInfo();
-      
-      // Start indexing (this is typically an async operation)
-      // The indexing service should update the configuration when complete
-      await this.indexingService.startIndexing();
-      
-      return true;
-      
-    } catch (error) {
-      console.error('StartupService: Failed to trigger reindexing:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Updates the Qdrant index information after successful indexing
-   * This should be called by the indexing service when indexing completes
-   * 
-   * @param collectionName The name of the collection that was indexed
-   */
-  public async updateIndexInfo(collectionName: string): Promise<void> {
-    try {
-      const contentHash = await this.configurationService.generateContentHash();
-      
-      await this.configurationService.updateQdrantIndexInfo({
-        collectionName,
-        lastIndexedTimestamp: new Date().toISOString(),
-        contentHash,
-      });
-      
-      console.log('StartupService: Index information updated successfully');
-      
-    } catch (error) {
-      console.error('StartupService: Failed to update index info:', error);
-    }
   }
 }
