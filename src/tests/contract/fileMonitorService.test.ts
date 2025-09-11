@@ -77,6 +77,11 @@ describe('IFileMonitorService Contract Test', () => {
 
         // Create actual FileMonitorService instance
         fileMonitorService = new FileMonitorService(mockContext, undefined, mockConfig);
+
+        vi.spyOn(fileMonitorService, 'getStats');
+        vi.spyOn(fileMonitorService, 'isMonitoring');
+        vi.spyOn(fileMonitorService, 'startMonitoring');
+        vi.spyOn(fileMonitorService, 'stopMonitoring');
     });
 
     describe('API Contract Validation', () => {
@@ -177,8 +182,9 @@ describe('IFileMonitorService Contract Test', () => {
                 debouncedEvents: 3
             };
             
-            (fileMonitorService.getStats as any).mockReturnValue(updatedStats);
             
+            
+            fileMonitorService.getStats.mockReturnValue(updatedStats);
             const stats = fileMonitorService.getStats();
             expect(stats.changeEvents).toBe(5);
             expect(stats.createEvents).toBe(2);
@@ -193,11 +199,11 @@ describe('IFileMonitorService Contract Test', () => {
             expect(fileMonitorService.isMonitoring()).toBe(false);
             
             // After starting monitoring
-            (fileMonitorService.isMonitoring as any).mockReturnValue(true);
+            fileMonitorService.startMonitoring();
             expect(fileMonitorService.isMonitoring()).toBe(true);
             
             // After stopping monitoring
-            (fileMonitorService.isMonitoring as any).mockReturnValue(false);
+            fileMonitorService.stopMonitoring();
             expect(fileMonitorService.isMonitoring()).toBe(false);
         });
 

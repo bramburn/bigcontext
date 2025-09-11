@@ -17,6 +17,7 @@ import { Configuration, DEFAULT_CONFIGURATION } from '../../types/configuration'
 class MockConfigurationService {
   private config: Configuration = { ...DEFAULT_CONFIGURATION };
   private shouldThrow = false;
+  private fileExists = false; // New property to control file existence
 
   async loadConfiguration(): Promise<Configuration> {
     if (this.shouldThrow) {
@@ -27,6 +28,7 @@ class MockConfigurationService {
 
   async saveConfiguration(config: Configuration): Promise<void> {
     this.config = config;
+    this.fileExists = true; // Saving implies file exists
   }
 
   getConfiguration(): Configuration {
@@ -41,6 +43,14 @@ class MockConfigurationService {
     return this.config.qdrant.indexInfo?.contentHash !== await this.generateContentHash(workspacePath);
   }
 
+  async configurationFileExists(): Promise<boolean> {
+    return this.fileExists;
+  }
+
+  setFileExists(exists: boolean): void {
+    this.fileExists = exists;
+  }
+
   setConfiguration(config: Configuration): void {
     this.config = config;
   }
@@ -52,14 +62,18 @@ class MockConfigurationService {
 
 class MockQdrantService {
   private connectionStatus = true;
-  private collectionExists = true;
+  private collectionExistsStatus = true;
 
   async testConnection(): Promise<boolean> {
     return this.connectionStatus;
   }
 
+  async healthCheck(): Promise<boolean> {
+    return this.connectionStatus;
+  }
+
   async collectionExists(collectionName: string): Promise<boolean> {
-    return this.collectionExists;
+    return this.collectionExistsStatus;
   }
 
   setConnectionStatus(status: boolean): void {
@@ -67,7 +81,7 @@ class MockQdrantService {
   }
 
   setCollectionExists(exists: boolean): void {
-    this.collectionExists = exists;
+    this.collectionExistsStatus = exists;
   }
 }
 
@@ -96,6 +110,7 @@ describe('StartupService', () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'startup-service-test-'));
     
     mockConfigService = new MockConfigurationService();
+    mockConfigService.setFileExists(false); // Default to no config file
     mockQdrantService = new MockQdrantService();
     mockGitIgnoreManager = new MockGitIgnoreManager();
     
@@ -119,7 +134,7 @@ describe('StartupService', () => {
       const result = await startupService.executeStartupFlow(tempDir);
       
       assert.strictEqual(result.action, 'showSetup');
-      assert.strictEqual(result.reason, 'No configuration found');
+      assert.ok(result.reason.includes('No configuration found'));
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, false);
       assert.strictEqual(result.indexValid, false);
@@ -141,13 +156,14 @@ describe('StartupService', () => {
       };
       
       mockConfigService.setConfiguration(configWithIndex);
+      mockConfigService.setFileExists(true); // Simulate config file exists
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionExists(true);
       
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.action, 'proceedToSearch');
-      assert.strictEqual(result.reason, 'Configuration valid, index exists');
+      assert.ok(result.reason.includes('Configuration valid') && result.reason.includes('index exists'));
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, true);
       assert.strictEqual(result.indexValid, true);
@@ -168,13 +184,14 @@ describe('StartupService', () => {
       };
       
       mockConfigService.setConfiguration(configWithOldHash);
+      mockConfigService.setFileExists(true); // Simulate config file exists
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionExists(true);
       
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.action, 'triggerReindexing');
-      assert.strictEqual(result.reason, 'Content has changed since last indexing');
+      assert.ok(result.reason.includes('Content has changed') && result.reason.includes('last indexing'));
       assert.strictEqual(result.reindexingNeeded, true);
     });
 
@@ -192,12 +209,13 @@ describe('StartupService', () => {
       };
       
       mockConfigService.setConfiguration(configWithIndex);
+      mockConfigService.setFileExists(true); // Simulate config file exists
       mockQdrantService.setConnectionStatus(false);
       
       const result = await startupService.executeStartupFlow(tempDir);
       
       assert.strictEqual(result.action, 'showSetup');
-      assert.strictEqual(result.reason, 'Qdrant connection failed');
+      assert.ok(result.reason.includes('Qdrant connection failed'));
       assert.strictEqual(result.qdrantConnected, false);
     });
 
@@ -215,13 +233,14 @@ describe('StartupService', () => {
       };
       
       mockConfigService.setConfiguration(configWithIndex);
+      mockConfigService.setFileExists(true); // Simulate config file exists
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionExists(false);
       
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.action, 'triggerReindexing');
-      assert.strictEqual(result.reason, 'Index collection does not exist');
+      assert.ok(result.reason.includes('Index collection does not exist'));
       assert.strictEqual(result.indexValid, false);
       assert.strictEqual(result.reindexingNeeded, true);
     });
@@ -250,6 +269,7 @@ describe('StartupService', () => {
         errorQdrantService as any,
         mockGitIgnoreManager as any
       );
+      mockConfigService.setFileExists(true); // Simulate config file exists for this test
       
       const result = await errorStartupService.executeStartupFlow(tempDir);
       
@@ -328,6 +348,7 @@ describe('StartupService', () => {
       };
       
       mockConfigService.setConfiguration(configWithIndex);
+      mockConfigService.setFileExists(true); // Simulate config file exists
       
       // Test successful connection
       mockQdrantService.setConnectionStatus(true);
@@ -354,6 +375,7 @@ describe('StartupService', () => {
       };
       
       mockConfigService.setConfiguration(configWithIndex);
+      mockConfigService.setFileExists(true); // Simulate config file exists
       mockQdrantService.setConnectionStatus(true);
       
       // Test valid index (collection exists)

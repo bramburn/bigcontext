@@ -22,12 +22,12 @@ import {
  * testable, and maintainable by allowing dependencies to be provided rather
  * than created internally.
  */
-suite('Dependency Injection Tests', () => {
+describe('Dependency Injection Tests', () => {
     let configService: ConfigService;
     let mockQdrantService: MockQdrantService;
     let mockEmbeddingProvider: MockEmbeddingProvider;
 
-    setup(() => {
+    beforeEach(() => {
         // Initialize real and mock services for testing
         // ConfigService is real as it doesn't require external dependencies
         configService = new ConfigService();

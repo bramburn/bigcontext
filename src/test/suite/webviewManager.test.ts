@@ -10,12 +10,12 @@ import { WebviewManager } from '../../webviewManager';
  * responsible for creating the main panel, settings panel, and diagnostics panel,
  * as well as managing their lifecycle and communication with the extension.
  */
-suite('WebviewManager Tests', () => {
+describe('WebviewManager Tests', () => {
     let webviewManager: WebviewManager;
     let mockContext: vscode.ExtensionContext;
     let mockExtensionManager: any;
 
-    setup(() => {
+    beforeEach(() => {
         // Create a mock extension context for testing
         // This simulates the VS Code extension context provided at runtime
         mockContext = {
@@ -54,7 +54,7 @@ suite('WebviewManager Tests', () => {
         webviewManager = new WebviewManager(mockContext, mockExtensionManager, mockLoggingService as any, {} as any);
     });
 
-    teardown(() => {
+    afterEach(() => {
         // Clean up resources after each test
         if (webviewManager) {
             webviewManager.dispose();

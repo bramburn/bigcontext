@@ -342,9 +342,10 @@ export class ConfigurationService implements IConfigurationService {
   /**
    * Checks if reindexing is needed based on content changes
    *
+   * @param workspacePath Optional workspace path to check (defaults to current workspace)
    * @returns True if reindexing is needed
    */
-  public async isReindexingNeeded(): Promise<boolean> {
+  public async isReindexingNeeded(workspacePath?: string): Promise<boolean> {
     try {
       const indexInfo = this.currentConfig.qdrant.indexInfo;
       if (!indexInfo) {
@@ -360,7 +361,7 @@ export class ConfigurationService implements IConfigurationService {
       }
 
       // Generate current content hash
-      const currentHash = await this.generateContentHash();
+      const currentHash = await this.generateContentHash(workspacePath);
 
       // Compare with stored hash
       if (currentHash !== indexInfo.contentHash) {

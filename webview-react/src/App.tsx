@@ -1,323 +1,143 @@
-/**
- * Main App Component
- *
- * Root component for the RAG for LLM VS Code extension React webview.
- * Handles routing between settings and indexing views, manages global state,
- * and provides communication with the VS Code extension backend.
- */
-
-import React, { useEffect, useState } from 'react';
-import {
-  FluentProvider,
-  webLightTheme,
-  webDarkTheme,
-  makeStyles,
-  tokens,
-  Stack,
-  Pivot,
-  PivotItem,
-  Text,
-  MessageBar,
-  MessageBarType,
-} from '@fluentui/react-components';
-import { SettingsForm } from './components/SettingsForm';
-import { IndexingProgress } from './components/IndexingProgress';
-import { ProgressDisplay } from './components/ProgressDisplay';
-import { postMessage } from './utils/vscodeApi';
-
-/**
- * VS Code API interface
- */
-interface VSCodeAPI {
-  postMessage: (message: any) => void;
-  setState: (state: any) => void;
-  getState: () => any;
-}
-
-declare global {
-  interface Window {
-    acquireVsCodeApi?: () => VSCodeAPI;
-  }
-}
-
-/**
- * App state interface
- */
-interface AppState {
-  currentView: 'settings' | 'indexing';
-  isWorkspaceOpen: boolean;
-  message: {
-    type: MessageBarType;
-    text: string;
-  } | null;
-  theme: 'light' | 'dark';
-}
-
-const useStyles = makeStyles({
-  app: {
-    minHeight: '100vh',
-    backgroundColor: tokens.colorNeutralBackground1,
-    color: tokens.colorNeutralForeground1,
-    fontFamily: tokens.fontFamilyBase,
-    padding: tokens.spacingVerticalM,
-  },
-  header: {
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    paddingBottom: tokens.spacingVerticalM,
-    marginBottom: tokens.spacingVerticalL,
-  },
-  content: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-  },
-});
+import { useState, useEffect } from 'react';
 
 function App() {
-  const styles = useStyles();
+  const [status, setStatus] = useState('Initializing...');
+  const [logs, setLogs] = useState<string[]>([]);
+  const [vscode, setVscode] = useState<any>(null);
+  const [message, setMessage] = useState('');
+  const [isDark, setIsDark] = useState(true);
 
-  const [state, setState] = useState<AppState>({
-    currentView: 'settings',
-    isWorkspaceOpen: true, // Assume workspace is open for now
-    message: null,
-    theme: 'light',
-  });
+  const log = (msg: string) => {
+    const timestamp = new Date().toISOString();
+    setLogs(prev => [...prev, `${timestamp} - ${msg}`]);
+  };
 
-  /**
-   * Initialize VS Code API and set up message listeners
-   */
-  useEffect(() => {
-    // Initialize VS Code API
-    const vscodeApi = window.acquireVsCodeApi?.();
-
-    if (!vscodeApi) {
-      console.error('VS Code API not available');
-      setState(prev => ({
-        ...prev,
-        message: {
-          type: MessageBarType.error,
-          text: 'VS Code API not available. Please reload the extension.',
-        },
-      }));
-      return;
+  const sendMessage = () => {
+    if (vscode && message.trim()) {
+      vscode.postMessage({
+        command: 'testMessage',
+        data: message.trim(),
+        timestamp: Date.now()
+      });
+      log(`Sent: ${message.trim()}`);
+      setMessage('');
     }
+  };
 
-    // Detect VS Code theme
-    const detectTheme = () => {
-      const body = document.body;
-      const isDark = body.classList.contains('vscode-dark') ||
-                    body.classList.contains('vscode-high-contrast');
-      setState(prev => ({ ...prev, theme: isDark ? 'dark' : 'light' }));
-    };
+  useEffect(() => {
+    log('React app mounted');
+    let retries = 0;
+    const maxRetries = 10;
 
-    detectTheme();
-
-    // Set up message listener for responses from extension
-    const messageListener = (event: MessageEvent) => {
-      const message = event.data;
-
-      switch (message.command) {
-        case 'getSettingsResponse':
-          // Handle settings response
-          console.log('Received settings:', message.settings);
-          break;
-
-        case 'postSettingsResponse':
-          // Handle save settings response
-          if (message.success) {
-            setState(prev => ({
-              ...prev,
-              message: {
-                type: MessageBarType.success,
-                text: 'Settings saved successfully!',
-              },
-            }));
-          } else {
-            setState(prev => ({
-              ...prev,
-              message: {
-                type: MessageBarType.error,
-                text: message.message || 'Failed to save settings',
-              },
-            }));
-          }
-          break;
-
-        case 'getIndexingStatusResponse':
-          // Handle indexing status response
-          console.log('Received indexing status:', message.progress);
-          break;
-
-        case 'postIndexingStartResponse':
-          // Handle indexing operation response
-          if (message.success) {
-            setState(prev => ({
-              ...prev,
-              message: {
-                type: MessageBarType.success,
-                text: message.message,
-              },
-            }));
-          } else {
-            setState(prev => ({
-              ...prev,
-              message: {
-                type: MessageBarType.error,
-                text: message.message || 'Operation failed',
-              },
-            }));
-          }
-          break;
-
-        case 'indexingProgressUpdate':
-          // Handle real-time progress updates
-          console.log('Indexing progress update:', message.progress);
-          break;
-
-        default:
-          console.log('Unhandled message:', message);
+    const initVSCode = () => {
+      if (typeof window !== 'undefined' && window.acquireVsCodeApi) {
+        try {
+          const api = window.acquireVsCodeApi();
+          setVscode(api);
+          setStatus('VS Code API acquired successfully');
+          log('VS Code API acquired');
+          
+          // Send ready message
+          api.postMessage({
+            command: 'webviewReady',
+            source: 'react-app',
+            timestamp: Date.now()
+          });
+          log('Sent webviewReady message');
+          
+          // Listen for messages from extension
+          const handleMessage = (event: MessageEvent) => {
+            const msg = event.data;
+            log(`Received from extension: ${JSON.stringify(msg)}`);
+          };
+          
+          window.addEventListener('message', handleMessage);
+          return () => {
+            window.removeEventListener('message', handleMessage);
+          };
+        } catch (error) {
+          setStatus(`Error acquiring VS Code API: ${error}`);
+          log(`Error: ${error}`);
+        }
+      } else if (retries < maxRetries) {
+        retries++;
+        setStatus(`VS Code API not ready, retry ${retries}/${maxRetries}`);
+        log(`Retry ${retries}/${maxRetries}`);
+        setTimeout(initVSCode, 100);
+      } else {
+        setStatus('VS Code API unavailable after retries');
+        log('Failed to acquire VS Code API after retries');
       }
     };
 
-    window.addEventListener('message', messageListener);
-
-    // Notify extension that webview is ready
-    vscodeApi.postMessage({ command: 'webviewReady' });
-
-    return () => {
-      window.removeEventListener('message', messageListener);
-    };
+    initVSCode();
   }, []);
 
-  /**
-   * Handle view change
-   */
-  const handleViewChange = (view: 'settings' | 'indexing') => {
-    setState(prev => ({ ...prev, currentView: view }));
-
-    // Trigger file scan when navigating to indexing tab
-    if (view === 'indexing') {
-      try {
-        console.log('Navigating to indexing tab, triggering file scan...');
-        postMessage('startFileScan', {});
-      } catch (error) {
-        console.error('Error triggering file scan:', error);
-        setState(prev => ({
-          ...prev,
-          message: {
-            type: MessageBarType.error,
-            text: 'Failed to start file scan',
-          },
-        }));
-      }
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      sendMessage();
     }
   };
 
-  /**
-   * Handle settings saved
-   */
-  const handleSettingsSaved = (settings: any) => {
-    console.log('Settings saved:', settings);
-    setState(prev => ({
-      ...prev,
-      message: {
-        type: MessageBarType.success,
-        text: 'Settings saved successfully!',
-      },
-    }));
-  };
-
-  /**
-   * Handle indexing status change
-   */
-  const handleIndexingStatusChange = (status: string) => {
-    console.log('Indexing status changed:', status);
-  };
-
-  /**
-   * Dismiss message
-   */
-  const dismissMessage = () => {
-    setState(prev => ({ ...prev, message: null }));
-  };
-
-  // Determine theme
-  const theme = state.theme === 'dark' ? webDarkTheme : webLightTheme;
-
-  // Check if workspace is open
-  if (!state.isWorkspaceOpen) {
-    return (
-      <FluentProvider theme={theme}>
-        <div className={styles.app}>
-          <Stack tokens={{ childrenGap: 20 }} horizontalAlign="center" verticalAlign="center">
-            <Text variant="xLarge">No Workspace Open</Text>
-            <Text>Please open a workspace folder to use the RAG for LLM extension.</Text>
-          </Stack>
-        </div>
-      </FluentProvider>
-    );
-  }
-
   return (
-    <FluentProvider theme={theme}>
-      <div className={styles.app}>
-        <div className={styles.content}>
-          {/* Header */}
-          <Stack className={styles.header} tokens={{ childrenGap: 10 }}>
-            <Text variant="xxLarge" styles={{ root: { fontWeight: 600 } }}>
-              RAG for LLM
-            </Text>
-            <Text variant="large" styles={{ root: { color: tokens.colorNeutralForeground2 } }}>
-              Retrieval-Augmented Generation for Large Language Models
-            </Text>
-          </Stack>
-
-          {/* Global Message */}
-          {state.message && (
-            <MessageBar
-              messageBarType={state.message.type}
-              onDismiss={dismissMessage}
-              styles={{ root: { marginBottom: tokens.spacingVerticalL } }}
+    <div className={`min-h-screen w-full ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-white text-black'} p-4`}>
+      <div className="p-4 h-screen overflow-auto">
+        <div className="border border-[var(--vscode-panel-border,#3c3c3c)] rounded-md overflow-hidden">
+          <div className="flex justify-between items-center p-4 border-b border-[var(--vscode-panel-border,#3c3c3c)]">
+            <h2 className="font-semibold">React Webview Test</h2>
+            <button 
+              className="px-3 py-1 text-sm rounded-md bg-[var(--vscode-button-background,#0e639c)] hover:bg-[var(--vscode-button-hoverBackground,#1177bb)] text-[var(--vscode-button-foreground,white)]"
+              onClick={() => setIsDark(!isDark)}
             >
-              {state.message.text}
-            </MessageBar>
-          )}
-
-          {/* Navigation Tabs */}
-          <Pivot
-            selectedKey={state.currentView}
-            onLinkClick={(item) => {
-              if (item?.props.itemKey) {
-                handleViewChange(item.props.itemKey as 'settings' | 'indexing');
-              }
-            }}
-            styles={{ root: { marginBottom: tokens.spacingVerticalL } }}
-          >
-            <PivotItem headerText="Settings" itemKey="settings" />
-            <PivotItem headerText="Indexing" itemKey="indexing" />
-          </Pivot>
-
-          {/* Content */}
-          <Stack>
-            {state.currentView === 'settings' && (
-              <SettingsForm
-                onSettingsSaved={handleSettingsSaved}
+              {isDark ? 'Light' : 'Dark'}
+            </button>
+          </div>
+          
+          <div className="p-4">
+            <div className={`p-2 rounded-md my-2 ${
+              status.includes('successfully') 
+                ? 'bg-[#063b49] border border-[#007acc]' 
+                : status.includes('Error') 
+                  ? 'bg-[#5a1d1d] border border-[#be1100]' 
+                  : 'bg-[#664d00] border border-[#ffcc00]'
+            }`}>
+              <p>Status: {status}</p>
+            </div>
+            
+            <div className="flex gap-2 my-4 items-center">
+              <input 
+                value={message} 
+                onChange={(e) => setMessage(e.target.value)} 
+                onKeyDown={handleKeyPress} 
+                placeholder="Type a test message" 
+                className="flex-1 p-2 rounded-md bg-[var(--vscode-input-background,#3c3c3c)] text-[var(--vscode-input-foreground,#cccccc)] border border-[var(--vscode-input-border,#3c3c3c)]"
               />
-            )}
-
-            {state.currentView === 'indexing' && (
-              <Stack tokens={{ childrenGap: 20 }}>
-                <ProgressDisplay showStats={true} />
-                <IndexingProgress
-                  onStatusChange={handleIndexingStatusChange}
-                  showStatistics={true}
-                  autoRefresh={true}
-                />
-              </Stack>
-            )}
-          </Stack>
+              
+              <button 
+                className={`px-3 py-2 rounded-md ${
+                  !vscode || !message.trim() 
+                    ? 'bg-[#3c3c3c] text-[#888888] cursor-not-allowed' 
+                    : 'bg-[var(--vscode-button-background,#0e639c)] hover:bg-[var(--vscode-button-hoverBackground,#1177bb)] text-[var(--vscode-button-foreground,white)]'
+                }`}
+                disabled={!vscode || !message.trim()} 
+                onClick={sendMessage}
+              >
+                Send Message
+              </button>
+            </div>
+            
+            <div className="mt-4">
+              <p className="font-semibold">Logs:</p>
+              <div className="bg-[#0f0f0f] border border-[#3c3c3c] rounded-md p-2 max-h-[200px] overflow-y-auto mt-2">
+                <pre className="font-mono text-xs whitespace-pre-wrap">
+                  {logs.join('\n')}
+                </pre>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </FluentProvider>
+    </div>
   );
 }
 

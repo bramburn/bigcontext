@@ -18,25 +18,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { FileChangeEvent, FileMonitorStats } from '../../types/indexing';
-
-// Mock VS Code API
-const mockVscode = {
-    workspace: {
-        createFileSystemWatcher: vi.fn(),
-        workspaceFolders: [{ uri: { fsPath: '/mock/workspace' } }]
-    },
-    Uri: {
-        file: (path: string) => ({ fsPath: path, toString: () => path })
-    },
-    FileSystemWatcher: class {
-        onDidCreate = vi.fn();
-        onDidChange = vi.fn();
-        onDidDelete = vi.fn();
-        dispose = vi.fn();
-    }
-};
-
-vi.mock('vscode', () => mockVscode);
+import { FileMonitorService } from '../../services/fileMonitorService';
+import { mockVscode } from '../../test/setup';
 
 describe('File Monitoring Integration Test', () => {
     let fileMonitorService: any;
@@ -46,42 +29,66 @@ describe('File Monitoring Integration Test', () => {
     beforeEach(() => {
         // Reset mocks
         vi.clearAllMocks();
+        vi.useFakeTimers(); // Enable fake timers
         
-        // Mock file system watcher
-        mockWatcher = new mockVscode.FileSystemWatcher();
+        // Mock file system watcher with event emitters
+        let onDidChangeHandler: any;
+        let onDidCreateHandler: any;
+        let onDidDeleteHandler: any;
+
+        mockWatcher = {
+            onDidCreate: vi.fn((handler) => { onDidCreateHandler = handler; }),
+            onDidChange: vi.fn((handler) => { onDidChangeHandler = handler; }),
+            onDidDelete: vi.fn((handler) => { onDidDeleteHandler = handler; }),
+            dispose: vi.fn()
+        };
+
+        // Add fire methods for testing that call the actual handlers
+        mockWatcher.onDidCreate.fire = (uri: any) => onDidCreateHandler && onDidCreateHandler(uri);
+        mockWatcher.onDidChange.fire = (uri: any) => onDidChangeHandler && onDidChangeHandler(uri);
+        mockWatcher.onDidDelete.fire = (uri: any) => onDidDeleteHandler && onDidDeleteHandler(uri);
+
         mockVscode.workspace.createFileSystemWatcher.mockReturnValue(mockWatcher);
         
-        // This will fail until we implement the services
-        // fileMonitorService = new FileMonitorService();
-        // indexingService = new IndexingService();
-        
-        // Mock services for testing the integration flow
-        fileMonitorService = {
-            startMonitoring: vi.fn(),
-            stopMonitoring: vi.fn(),
-            isMonitoring: vi.fn().mockReturnValue(false),
-            getStats: vi.fn().mockReturnValue({
-                watchedFiles: 0,
-                changeEvents: 0,
-                createEvents: 0,
-                deleteEvents: 0,
-                debouncedEvents: 0,
-                startTime: Date.now()
-            }),
-            onFileChange: vi.fn(),
-            shouldProcessFile: vi.fn().mockReturnValue(true)
-        };
-        
+        // Create actual FileMonitorService instance
+        const mockContext = {
+            extensionPath: '/mock/path',
+            globalState: { get: vi.fn(), update: vi.fn() },
+            workspaceState: { get: vi.fn(), update: vi.fn() }
+        } as any;
+
+        const mockLoggingService = {
+            info: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            debug: vi.fn(),
+        } as any;
+
+        // Mock indexingService as it's a dependency of FileMonitorService's internal logic
         indexingService = {
             updateFileInIndex: vi.fn(),
             removeFileFromIndex: vi.fn(),
             addFileToIndex: vi.fn(),
             isFileIndexed: vi.fn().mockReturnValue(false)
         };
+
+        const mockConfig = {
+            debounceDelay: 100, // Example value
+            patterns: ['**/*'],
+            respectGitignore: true,
+            maxFileSize: 1024 * 1024,
+            skipBinaryFiles: true
+        };
+
+        fileMonitorService = new FileMonitorService(mockContext, indexingService, mockConfig);
+
+        // Start monitoring so that events are processed
+        fileMonitorService.startMonitoring();
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
+        vi.useRealTimers(); // Restore real timers
     });
 
     describe('File Creation Events', () => {
@@ -89,8 +96,8 @@ describe('File Monitoring Integration Test', () => {
             // Arrange: New file created
             const newFilePath = '/mock/workspace/src/newFile.ts';
             const fileUri = mockVscode.Uri.file(newFilePath);
-            
-            fileMonitorService.shouldProcessFile.mockReturnValue(true);
+
+            vi.spyOn(fileMonitorService, 'shouldProcessFile').mockReturnValue(true);
             indexingService.addFileToIndex.mockResolvedValue(undefined);
             
             // Act: Simulate file creation event
@@ -113,7 +120,7 @@ describe('File Monitoring Integration Test', () => {
             // Arrange: Binary file created
             const binaryFilePath = '/mock/workspace/image.png';
             
-            fileMonitorService.shouldProcessFile.mockReturnValue(false);
+            vi.spyOn(fileMonitorService, 'shouldProcessFile').mockReturnValue(false);
             
             // Act: Simulate binary file creation
             const createEvent: FileChangeEvent = {
@@ -133,7 +140,7 @@ describe('File Monitoring Integration Test', () => {
             // Arrange: File in node_modules (typically in .gitignore)
             const ignoredFilePath = '/mock/workspace/node_modules/package/index.js';
             
-            fileMonitorService.shouldProcessFile.mockReturnValue(false);
+            vi.spyOn(fileMonitorService, 'shouldProcessFile').mockReturnValue(false);
             
             // Act: Simulate ignored file creation
             const shouldProcess = fileMonitorService.shouldProcessFile(ignoredFilePath);
@@ -170,35 +177,24 @@ describe('File Monitoring Integration Test', () => {
         });
 
         it('should handle debouncing for rapid file changes', async () => {
-            // Arrange: Multiple rapid changes to the same file
             const filePath = '/mock/workspace/src/rapidChanges.ts';
-            const events: FileChangeEvent[] = [
-                { type: 'change', filePath, timestamp: Date.now() },
-                { type: 'change', filePath, timestamp: Date.now() + 100 },
-                { type: 'change', filePath, timestamp: Date.now() + 200 }
-            ];
-            
-            // Mock debouncing behavior
-            let debouncedEvents = 0;
-            fileMonitorService.onFileChange.mockImplementation((event: FileChangeEvent) => {
-                if (event.debounced) {
-                    debouncedEvents++;
-                }
-            });
-            
-            // Act: Simulate rapid file changes
-            events.forEach(event => {
-                // Simulate debouncing - only the last event should be processed
-                if (event === events[events.length - 1]) {
-                    fileMonitorService.onFileChange(event);
-                } else {
-                    fileMonitorService.onFileChange({ ...event, debounced: true });
-                    debouncedEvents++;
-                }
-            });
-            
-            // Assert: Should debounce rapid changes
-            expect(debouncedEvents).toBe(2); // First two events should be debounced
+            const fileUri = mockVscode.Uri.file(filePath);
+
+            // Spy on the indexing service update method
+            vi.spyOn(indexingService, 'updateFileInIndex');
+
+            // Simulate rapid file changes by triggering onDidChange multiple times
+            // with a small delay, then a longer delay to allow debounce to fire.
+            mockWatcher.onDidChange.fire(fileUri);
+            vi.advanceTimersByTime(50); // Advance by 50ms
+            mockWatcher.onDidChange.fire(fileUri);
+            vi.advanceTimersByTime(50); // Advance by another 50ms (total 100ms)
+            mockWatcher.onDidChange.fire(fileUri);
+            vi.advanceTimersByTime(100); // Advance by 100ms (debounce delay)
+
+            // Expect updateFileInIndex to be called only once due to debouncing
+            expect(indexingService.updateFileInIndex).toHaveBeenCalledTimes(1);
+            expect(indexingService.updateFileInIndex).toHaveBeenCalledWith(fileUri);
         });
     });
 
@@ -247,7 +243,7 @@ describe('File Monitoring Integration Test', () => {
             // Arrange: Large file (exceeds 2MB limit)
             const largeFilePath = '/mock/workspace/large-file.txt';
             
-            fileMonitorService.shouldProcessFile.mockImplementation((path: string) => {
+            vi.spyOn(fileMonitorService, 'shouldProcessFile').mockImplementation((path: string) => {
                 // Simulate size check - reject large files
                 return !path.includes('large-file');
             });
@@ -269,7 +265,7 @@ describe('File Monitoring Integration Test', () => {
                 '/mock/workspace/config.json'
             ];
             
-            fileMonitorService.shouldProcessFile.mockReturnValue(true);
+            vi.spyOn(fileMonitorService, 'shouldProcessFile').mockReturnValue(true);
             
             // Act & Assert: All supported files should be processed
             supportedFiles.forEach(filePath => {
@@ -291,7 +287,7 @@ describe('File Monitoring Integration Test', () => {
                 startTime: Date.now()
             };
             
-            fileMonitorService.getStats.mockReturnValue(initialStats);
+            vi.spyOn(fileMonitorService, 'getStats').mockReturnValue(initialStats);
             
             // Act: Get initial stats
             let stats = fileMonitorService.getStats();

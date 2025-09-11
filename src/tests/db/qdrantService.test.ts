@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { QdrantClient } from '@qdrant/js-client-rest';
 import { QdrantService, QdrantServiceConfig } from '../../db/qdrantService';
 import { CentralizedLoggingService } from '../../logging/centralizedLoggingService';
 import { CodeChunk } from '../../parsing/chunker';
@@ -15,6 +16,24 @@ vi.mock('@qdrant/js-client-rest', () => ({
     getCollection: vi.fn(),
   })),
 }));
+
+// Helper function to create mock chunks
+function createMockChunk(id: number): CodeChunk {
+  return {
+    id: `chunk_${id}`,
+    content: `Mock content for chunk ${id}`,
+    filePath: `/mock/path/file${id}.ts`,
+    startLine: id * 10,
+    endLine: (id * 10) + 5,
+    language: 'typescript',
+    metadata: {
+      functionName: `mockFunction${id}`,
+      className: `MockClass${id}`,
+      imports: [],
+      exports: [],
+    },
+  };
+}
 
 describe('QdrantService', () => {
   let qdrantService: QdrantService;
@@ -44,12 +63,22 @@ describe('QdrantService', () => {
       healthCheckIntervalMs: 5000,
     };
 
+    // Create mock client with all methods
+    mockQdrantClient = {
+      getCollections: vi.fn(),
+      createCollection: vi.fn(),
+      upsert: vi.fn(),
+      search: vi.fn(),
+      delete: vi.fn(),
+      deleteCollection: vi.fn(),
+      getCollection: vi.fn(),
+    };
+
+    // Mock the QdrantClient constructor to return our mock
+    vi.mocked(QdrantClient).mockImplementation(() => mockQdrantClient);
+
     // Create QdrantService instance
     qdrantService = new QdrantService(config, mockLoggingService);
-
-    // Get the mock client instance
-    const { QdrantClient } = require('@qdrant/js-client-rest');
-    mockQdrantClient = QdrantClient.mock.results[QdrantClient.mock.results.length - 1].value;
   });
 
   afterEach(() => {
@@ -170,7 +199,8 @@ describe('QdrantService', () => {
       const result = await qdrantService.createCollectionIfNotExists('test_collection', 768);
 
       expect(result).toBe(true);
-      expect(mockQdrantClient.getCollections).toHaveBeenCalledTimes(2);
+      // Expect 3 calls: 1 for health check + 1 failed attempt + 1 successful retry
+      expect(mockQdrantClient.getCollections).toHaveBeenCalledTimes(3);
     });
   });
 

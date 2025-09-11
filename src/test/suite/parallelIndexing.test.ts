@@ -9,6 +9,24 @@
  */
 
 import * as assert from 'assert';
+import { vi } from 'vitest';
+
+vi.mock('vscode', () => ({
+    workspace: {
+        onDidChangeWorkspaceFolders: vi.fn(),
+        workspaceFolders: [],
+        getConfiguration: vi.fn(() => ({
+            get: vi.fn(),
+            update: vi.fn(),
+            has: vi.fn()
+        }))
+    },
+    Uri: {
+        file: (path: string) => ({ fsPath: path, toString: () => path }),
+        parse: (path: string) => ({ fsPath: path, toString: () => path }),
+        joinPath: (...paths: any[]) => ({ fsPath: paths.join('/'), toString: () => paths.join('/') })
+    }
+}));
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -24,14 +42,14 @@ import { WorkspaceManager } from '../../workspaceManager';
 import { LSPService } from '../../lsp/lspService';
 import { EmbeddingProviderFactory } from '../../embeddings/embeddingProvider';
 
-suite('Parallel Indexing Tests', () => {
+describe('Parallel Indexing Tests', () => {
     let indexingService: IndexingService;
     let tempWorkspaceDir: string;
     let configService: ConfigService;
     let stateManager: StateManager;
     let workspaceManager: WorkspaceManager;
 
-    suiteSetup(async () => {
+    beforeAll(async () => {
         // Set up the test environment with a temporary workspace and test files
         // This ensures tests are isolated and don't interfere with each other
         
@@ -82,7 +100,7 @@ suite('Parallel Indexing Tests', () => {
         );
     });
 
-    suiteTeardown(async () => {
+    afterAll(async () => {
         // Clean up resources after all tests have completed
         // This ensures no temporary files or resources are left behind
         
@@ -113,10 +131,9 @@ suite('Parallel Indexing Tests', () => {
         console.log(`Test environment has ${numCpus} CPU cores available`);
     });
 
-    test('should process files and generate chunks', async function() {
+    test('should process files and generate chunks', async () => {
         // Test the complete indexing process with parallel processing
         // This verifies that files are discovered, parsed, chunked, and stored correctly
-        this.timeout(30000); // 30 second timeout for indexing to complete
 
         let progressUpdates: any[] = [];
         
@@ -147,10 +164,9 @@ suite('Parallel Indexing Tests', () => {
         console.log(`Indexing completed: ${result.processedFiles} files, ${result.chunks.length} chunks, ${result.duration}ms`);
     });
 
-    test('should handle worker errors gracefully', async function() {
+    test('should handle worker errors gracefully', async () => {
         // Test that the system handles errors in worker threads gracefully
         // This ensures that errors don't crash the entire indexing process
-        this.timeout(10000);
 
         // This test verifies that the system handles worker errors without crashing
         // We'll trigger this by trying to index a non-existent directory

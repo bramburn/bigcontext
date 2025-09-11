@@ -1385,9 +1385,14 @@ export class WebviewManager implements vscode.WebviewViewProvider {
      * Focus the main panel if it exists
      */
     focusMainPanel(): void {
-        const mainPanel = this.panels.get('main');
-        if (mainPanel) {
-            mainPanel.panel.reveal();
+        // Prefer the tracked mainPanel; fall back to panels map using the correct id
+        if (this.mainPanel) {
+            this.mainPanel.reveal();
+            return;
+        }
+        const entry = this.panels.get('codeContextMain');
+        if (entry) {
+            entry.panel.reveal();
         }
     }
 
@@ -1395,9 +1400,14 @@ export class WebviewManager implements vscode.WebviewViewProvider {
      * Post a message to the main panel
      */
     postMessageToMainPanel(message: any): void {
-        const mainPanel = this.panels.get('main');
-        if (mainPanel) {
-            mainPanel.panel.webview.postMessage(message);
+        // Prefer the tracked mainPanel; fall back to panels map using the correct id
+        if (this.mainPanel) {
+            this.mainPanel.webview.postMessage(message);
+            return;
+        }
+        const entry = this.panels.get('codeContextMain');
+        if (entry) {
+            entry.panel.webview.postMessage(message);
         }
     }
 

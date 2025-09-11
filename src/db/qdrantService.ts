@@ -618,6 +618,19 @@ export class QdrantService {
   }
 
   /**
+   * Check if a collection exists
+   */
+  async collectionExists(collectionName: string): Promise<boolean> {
+    try {
+      const collections = await this.getCollections();
+      return collections.includes(collectionName);
+    } catch (error) {
+      console.error(`Failed to check if collection '${collectionName}' exists:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Delete all vectors associated with a specific file path
    *
    * This method removes all points from the collection that have a matching

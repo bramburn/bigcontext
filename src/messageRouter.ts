@@ -1132,9 +1132,13 @@ export class MessageRouter {
             await webview.postMessage({
                 command: 'indexingComplete',
                 requestId: message.requestId,
-                chunksCreated: result.chunks.length,
-                duration: result.duration,
-                errors: result.errors
+                result: {
+                    chunksCreated: result.chunks.length,
+                    duration: result.duration,
+                    errors: result.errors,
+                    success: result.success,
+                    totalFiles: result.totalFiles
+                }
             });
             console.log('MessageRouter: Indexing completed');
 
@@ -1803,7 +1807,7 @@ export class MessageRouter {
         await webview.postMessage({
             command: 'error',
             requestId: requestId,
-            message: errorMessage
+            error: errorMessage
         });
     }
 

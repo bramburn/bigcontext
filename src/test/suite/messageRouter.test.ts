@@ -1,5 +1,26 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { vi } from 'vitest';
+
+vi.mock('vscode', () => ({
+    window: {
+        createOutputChannel: vi.fn(() => ({ appendLine: vi.fn(), show: vi.fn(), dispose: vi.fn() }))
+    },
+    Uri: {
+        file: (path: string) => ({ fsPath: path, toString: () => path }),
+        parse: (path: string) => ({ fsPath: path, toString: () => path }),
+        joinPath: (...paths: any[]) => ({ fsPath: paths.join('/'), toString: () => paths.join('/') })
+    },
+    workspace: {
+        workspaceFolders: [{ uri: { fsPath: '/mock/workspace' } }],
+        getConfiguration: vi.fn(() => ({
+            get: vi.fn(),
+            update: vi.fn(),
+            has: vi.fn()
+        })),
+        onDidChangeConfiguration: vi.fn()
+    }
+}));
 import { MessageRouter } from '../../messageRouter';
 import { StateManager } from '../../stateManager';
 
@@ -11,7 +32,7 @@ import { StateManager } from '../../stateManager';
  * responsible for processing messages from the UI, routing them to the
  * appropriate services, and returning responses to the UI.
  */
-suite('MessageRouter Tests', () => {
+describe('MessageRouter Tests', () => {
     let messageRouter: MessageRouter;
     let mockContext: vscode.ExtensionContext;
     let mockStateManager: StateManager;
@@ -20,7 +41,7 @@ suite('MessageRouter Tests', () => {
     let mockWebview: any;
     let receivedMessages: any[];
 
-    setup(() => {
+    beforeEach(() => {
         // Create mock services for testing
         // This isolates tests from real dependencies and ensures consistent behavior
         mockContext = {
@@ -55,6 +76,13 @@ suite('MessageRouter Tests', () => {
             })
         };
 
+        // Mock SearchManager for search operations
+        const mockSearchManager = {
+            search: (query: string, filters?: any) => Promise.resolve([
+                { file: 'search-result.ts', content: 'search result content', similarity: 0.9 }
+            ])
+        };
+
         // Create a mock webview that captures posted messages for verification
         // This allows us to test that messages are correctly sent back to the UI
         receivedMessages = [];
@@ -72,9 +100,17 @@ suite('MessageRouter Tests', () => {
             mockContext,
             mockStateManager
         );
+
+        // Set up advanced managers including SearchManager
+        messageRouter.setAdvancedManagers(
+            mockSearchManager as any,
+            {} as any, // legacyConfigurationManager
+            {} as any, // performanceManager
+            {} as any  // xmlFormatterService
+        );
     });
 
-    teardown(() => {
+    afterEach(() => {
         // Clean up resources after each test
         if (mockStateManager) {
             mockStateManager.dispose();

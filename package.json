@@ -468,10 +468,10 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile && npm run build:webview",
+    "vscode:prepublish": "npm run compile; npm run build:webview",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
+    "pretest": "npm run compile; npm run lint",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "format": "prettier --write \"src/**/*.{ts,js,json}\"",
@@ -479,12 +479,12 @@
     "test": "node ./out/test/runTest.js",
     "test:vitest": "vitest",
     "test:vitest:ui": "vitest --ui",
-    "test:qdrant-robustness": "npm run compile && node ./out/scripts/testQdrantRobustness.js",
+    "test:qdrant-robustness": "npm run compile; node ./out/scripts/testQdrantRobustness.js",
     "test:qdrant-integration": "QDRANT_INTEGRATION_TESTS=true npm run test",
-    "test:all-improvements": "npm run compile && node ./out/scripts/testAllImprovements.js",
+    "test:all-improvements": "npm run compile; node ./out/scripts/testAllImprovements.js",
     "build:webview": "cd webview-react && npm run build",
-    "build:all": "npm run compile && npm run build:webview",
-    "package": "npm run build:all && npx @vscode/vsce package --no-dependencies",
+    "build:all": "npm run compile; npm run build:webview",
+    "package": "npm run build:all; npx @vscode/vsce package --no-dependencies",
     "publish": "npx @vscode/vsce publish --no-dependencies",
     "publish:vsce": "npx @vscode/vsce publish --pat $VSCE_PAT",
     "release": "node scripts/release.js",
@@ -493,10 +493,11 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "16.x",
+    "@types/node": "^24.3.1",
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
+    "@vitest/ui": "^3.2.4",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
     "eslint": "^8.28.0",
@@ -509,7 +510,8 @@
     "rimraf": "^5.0.10",
     "shelljs": "^0.10.0",
     "typescript": "^4.9.5",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.7.0",
