@@ -498,183 +498,147 @@ export class CentralizedLoggingService implements vscode.Disposable {
         this.logFileStream = undefined;
       }
     }
-    // Reinitialize logger if transports need to change
-    if (newConfig.enableConsoleLogging !== undefined || 
-        newConfig.enableFileLogging !== undefined || 
-        newConfig.enableOutputChannel !== undefined) {
-      this.initializeLogging();
+    // Reinitialize logger with new configuration
+    this.initializeLogging();
+  }
+  /**
+   * Get current log level
+   */
+  public getLogLevel(): LogLevel {
+    return this.config.level;
+  }
+  /**
+   * Set log level
+   */
+  public setLogLevel(level: LogLevel): void {
+    this.config.level = level;
+    if (this.logger) {
+      this.logger.level = LogLevel[level].toLowerCase();
     }
   }
   /**
-   * Get current configuration
+   * Get log directory
    */
-  public getConfig(): LoggingConfig {
-    return { ...this.config };
+  public getLogDirectory(): string {
+    return this.logDirectory;
   }
   /**
-   * Show output channel
+   * Get output channel
    */
-  public showOutputChannel(): void {
-    this.outputChannel.show();
+  public getOutputChannel(): vscode.OutputChannel {
+    return this.outputChannel;
   }
   /**
-   * Get log aggregator instance
-   */
-  public getLogAggregator(): LogAggregator {
-    return this.logAggregator;
-  }
-
-  /**
-   * Get performance logger instance
-   */
-  public getPerformanceLogger(): PerformanceLogger {
-    return this.performanceLogger;
-  }
-
-  /**
-   * Get log exporter instance
-   */
-  public getLogExporter(): LogExporter {
-    return this.logExporter;
-  }
-
-  /**
-   * Get correlation service instance
-   */
-  public getCorrelationService(): CorrelationService {
-    return this.correlationService;
-  }
-
-  /**
-   * Log with correlation tracking
+   * Log with correlation ID for request tracking
    */
   public logWithCorrelation(
-    level: 'debug' | 'info' | 'warn' | 'error',
+    level: LogLevel,
     message: string,
-    metadata: Record<string, any> = {},
-    source: string = 'Extension',
-    correlationId?: string
-  ): void {
-    // Add to aggregator
-    this.logAggregator.addLog({
-      timestamp: new Date(),
-      level,
-      message,
-      source,
-      correlationId,
-      metadata,
-    });
-
-    // Log normally - convert string level to LogLevel enum
-    const logLevel = level === 'debug' ? LogLevel.DEBUG :
-                       level === 'info' ? LogLevel.INFO :
-                       level === 'warn' ? LogLevel.WARN :
-                       level === 'error' ? LogLevel.ERROR : LogLevel.INFO;
-    this.log(logLevel, message, metadata, source);
-  }
-
-  /**
-   * Start performance tracking for an operation
-   */
-  public startPerformanceTracking(
-    operationName: string,
-    metadata?: Record<string, any>
-  ): string {
-    return this.correlationService.startOperation(operationName, undefined, metadata);
-  }
-
-  /**
-   * End performance tracking for an operation
-   */
-  public endPerformanceTracking(
     correlationId: string,
-    success: boolean = true,
-    error?: string,
-    additionalMetadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    source?: string,
   ): void {
-    const metrics = this.correlationService.endOperation(correlationId, success, error, additionalMetadata);
-
-    if (metrics) {
-      this.performanceLogger.logPerformance(
-        metrics.operationName,
-        metrics.duration,
-        correlationId,
-        metrics.metadata
-      );
-    }
+    this.log(level, message, { ...metadata, correlationId }, source);
   }
-
   /**
-   * Export logs with options
+   * Start performance tracking
+   */
+  public startPerformanceTracking(operation: string, metadata?: Record<string, any>): string {
+    return this.performanceLogger.startTracking(operation, metadata);
+  }
+  /**
+   * End performance tracking and log results
+   */
+  public endPerformanceTracking(operation: string, trackingId?: string, metadata?: Record<string, any>): void {
+    this.performanceLogger.endTracking(operation, trackingId, metadata);
+  }
+  /**
+   * Export logs to file
    */
   public async exportLogs(options: {
-    format?: 'json' | 'csv' | 'txt' | 'html';
-    includePerformanceData?: boolean;
-    maxEntries?: number;
-  } = {}): Promise<void> {
-    const exportOptions = {
-      format: options.format || 'json' as const,
-      includeMetadata: true,
-      includePerformanceData: options.includePerformanceData || true,
-      includeCorrelationData: true,
-      maxEntries: options.maxEntries,
-    };
-
-    const result = await this.logExporter.exportWithPicker(exportOptions);
-
-    if (result.success) {
-      vscode.window.showInformationMessage(
-        `Logs exported successfully to ${result.filePath}. ${result.entriesExported} entries exported.`
-      );
-    } else {
-      vscode.window.showErrorMessage(`Failed to export logs: ${result.error}`);
-    }
+    format?: 'json' | 'csv' | 'txt';
+    includeMetadata?: boolean;
+    dateRange?: { start: Date; end: Date };
+    level?: LogLevel;
+    source?: string;
+  } = {}): Promise<string> {
+    return this.logExporter.exportLogs(options);
   }
-
   /**
-   * Create diagnostic package
+   * Create a diagnostic package with logs and system information
    */
   public async createDiagnosticPackage(): Promise<void> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    const defaultPath = workspaceFolder ? workspaceFolder.uri.fsPath : require('os').homedir();
-
-    const uri = await vscode.window.showOpenDialog({
-      canSelectFiles: false,
-      canSelectFolders: true,
-      canSelectMany: false,
-      defaultUri: vscode.Uri.file(defaultPath),
-      openLabel: 'Select Output Directory',
-    });
-
-    if (!uri || uri.length === 0) {
-      return;
-    }
-
-    const result = await this.logExporter.createDiagnosticPackage(uri[0].fsPath);
-
-    if (result.success) {
+    try {
+      const options = {
+        format: 'json' as const,
+        includeMetadata: true,
+      };
+      
+      const logData = await this.exportLogs(options);
+      
+      // Create diagnostic package
+      const diagnosticPackage = {
+        timestamp: new Date().toISOString(),
+        version: vscode.version,
+        platform: process.platform,
+        arch: process.arch,
+        logs: logData,
+        config: this.config,
+        systemInfo: {
+          memoryUsage: process.memoryUsage(),
+          uptime: process.uptime(),
+          versions: {
+            node: process.version,
+            vscode: vscode.version,
+            winston: winston.version,
+          },
+        },
+      };
+      
+      // Save diagnostic package to file
+      const diagnosticFileName = `diagnostic-${new Date().toISOString().split('T')[0]}.json`;
+      const diagnosticFilePath = path.join(this.logDirectory, diagnosticFileName);
+      
+      await fs.promises.writeFile(
+        diagnosticFilePath,
+        JSON.stringify(diagnosticPackage, null, 2)
+      );
+      
+      // Show notification with option to open file
       vscode.window.showInformationMessage(
-        `Diagnostic package created at ${result.filePath}`,
-        'Open Folder'
+        'Diagnostic package created successfully. Would you like to open the file?',
+        'Open File',
+        'Cancel'
       ).then(selection => {
-        if (selection === 'Open Folder') {
-          vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(result.filePath!));
+        if (selection === 'Open File') {
+          vscode.workspace.openTextDocument(diagnosticFilePath)
+            .then(doc => vscode.window.showTextDocument(doc));
         }
       });
-    } else {
-      vscode.window.showErrorMessage(`Failed to create diagnostic package: ${result.error}`);
+      
+      this.info('Diagnostic package created', { 
+        path: diagnosticFilePath,
+        size: Buffer.byteLength(JSON.stringify(diagnosticPackage, null, 2))
+      });
+      
+    } catch (error) {
+      this.error('Failed to create diagnostic package', { error: (error as Error).message });
+      throw error;
     }
   }
-
   /**
-   * Dispose of resources
+   * Dispose resources
    */
   public dispose(): void {
+    if (this.logger) {
+      this.logger.close();
+    }
     if (this.logFileStream) {
       this.logFileStream.end();
     }
-    this.outputChannel.dispose();
-    this.logAggregator.clear();
-    this.performanceLogger.clear();
+    if (this.outputChannel) {
+      this.outputChannel.dispose();
+    }
+    this.performanceLogger.dispose();
   }
 }
