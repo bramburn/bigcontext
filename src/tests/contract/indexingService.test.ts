@@ -102,22 +102,22 @@ describe('IIndexingService Contract Test', () => {
 
         it('should have pauseIndexing method that returns Promise<void>', async () => {
             expect(typeof indexingService.pauseIndexing).toBe('function');
-            
+
             const result = indexingService.pauseIndexing();
             expect(result).toBeInstanceOf(Promise);
-            
-            const resolvedValue = await result;
-            expect(resolvedValue).toBeUndefined();
+
+            // Should throw error when no active session
+            await expect(result).rejects.toThrow('No active indexing session to pause');
         });
 
         it('should have resumeIndexing method that returns Promise<void>', async () => {
             expect(typeof indexingService.resumeIndexing).toBe('function');
-            
+
             const result = indexingService.resumeIndexing();
             expect(result).toBeInstanceOf(Promise);
-            
-            const resolvedValue = await result;
-            expect(resolvedValue).toBeUndefined();
+
+            // Should throw error when no paused session
+            await expect(result).rejects.toThrow('No paused indexing session to resume');
         });
 
         it('should have getIndexState method that returns Promise<IndexState>', async () => {

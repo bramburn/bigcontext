@@ -17,7 +17,8 @@ vi.mock('vscode', () => ({
             get: vi.fn(),
             update: vi.fn(),
             has: vi.fn()
-        }))
+        })),
+        onDidChangeConfiguration: vi.fn()
     }
 }));
 import { MessageRouter } from '../../messageRouter';
@@ -75,6 +76,13 @@ describe('MessageRouter Tests', () => {
             })
         };
 
+        // Mock SearchManager for search operations
+        const mockSearchManager = {
+            search: (query: string, filters?: any) => Promise.resolve([
+                { file: 'search-result.ts', content: 'search result content', similarity: 0.9 }
+            ])
+        };
+
         // Create a mock webview that captures posted messages for verification
         // This allows us to test that messages are correctly sent back to the UI
         receivedMessages = [];
@@ -91,6 +99,14 @@ describe('MessageRouter Tests', () => {
             mockIndexingService,
             mockContext,
             mockStateManager
+        );
+
+        // Set up advanced managers including SearchManager
+        messageRouter.setAdvancedManagers(
+            mockSearchManager as any,
+            {} as any, // legacyConfigurationManager
+            {} as any, // performanceManager
+            {} as any  // xmlFormatterService
         );
     });
 

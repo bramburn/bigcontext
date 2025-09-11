@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node', // Use node environment for VS Code extension tests
     setupFiles: ['./src/test/setup.ts'],
+    testTimeout: 10000, // 10 seconds timeout for tests
     include: [
       'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
       'specs/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',

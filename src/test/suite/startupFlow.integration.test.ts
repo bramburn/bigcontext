@@ -27,6 +27,10 @@ class MockQdrantService {
     return this.shouldConnect;
   }
 
+  async healthCheck(): Promise<boolean> {
+    return this.shouldConnect;
+  }
+
   async collectionExists(collectionName: string): Promise<boolean> {
     return this.hasValidCollection;
   }
@@ -83,16 +87,20 @@ describe('Startup Flow Integration Tests', () => {
       assert.strictEqual(result.reindexingNeeded, false);
     });
 
-    it('should create default configuration on first run', async () => {
-      await startupService.executeStartupFlow(tempDir);
-      
-      // Verify configuration file was created
+    it('should load default configuration on first run without creating file', async () => {
+      const result = await startupService.executeStartupFlow(tempDir);
+
+      // Verify configuration file was NOT created (StartupService doesn't save defaults)
       const configExists = await configService.configurationFileExists();
-      assert.strictEqual(configExists, true);
-      
-      // Verify configuration content
+      assert.strictEqual(configExists, false);
+
+      // Verify that default configuration is loaded in memory
       const config = await configService.loadConfiguration();
       assert.deepStrictEqual(config, DEFAULT_CONFIGURATION);
+
+      // Verify startup result
+      assert.strictEqual(result.action, 'showSetup');
+      assert.strictEqual(result.configurationLoaded, true);
     });
 
     it('should set up .gitignore on first run', async () => {
@@ -110,6 +118,9 @@ describe('Startup Flow Integration Tests', () => {
 
   describe('Existing Configuration Flow', () => {
     beforeEach(async () => {
+      // Generate the actual content hash for the temp directory
+      const actualContentHash = await configService.generateContentHash(tempDir);
+
       // Set up existing configuration
       const testConfig: Configuration = {
         ...DEFAULT_CONFIGURATION,
@@ -120,22 +131,22 @@ describe('Startup Flow Integration Tests', () => {
           indexInfo: {
             collectionName: 'test-collection',
             lastIndexedTimestamp: new Date().toISOString(),
-            contentHash: 'test-hash',
+            contentHash: actualContentHash,
           },
         },
       };
-      
+
       await configService.saveConfiguration(testConfig);
     });
 
     it('should proceed to search when everything is valid', async () => {
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionStatus(true);
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup'); // Reverted to match unit test
-      assert.ok(result.reason.includes('Configuration valid') && result.reason.includes('index exists')); // Reverted to match unit test
+
+      assert.strictEqual(result.action, 'proceedToSearch');
+      assert.ok(result.reason.includes('Configuration valid') && result.reason.includes('index exists'));
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, true);
       assert.strictEqual(result.indexValid, true);
@@ -145,14 +156,14 @@ describe('Startup Flow Integration Tests', () => {
     it('should trigger reindexing when content has changed', async () => {
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionStatus(true);
-      
+
       // Create some files to change content hash
       await fs.writeFile(path.join(tempDir, 'test.ts'), 'console.log("test");');
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup'); // Reverted to match unit test
-      assert.ok(result.reason.includes('Content has changed since last indexing')); // Reverted to match unit test
+
+      assert.strictEqual(result.action, 'triggerReindexing');
+      assert.ok(result.reason.includes('Content has changed since last indexing'));
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, true);
       assert.strictEqual(result.indexValid, true);
@@ -174,11 +185,11 @@ describe('Startup Flow Integration Tests', () => {
     it('should trigger reindexing when collection does not exist', async () => {
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionStatus(false);
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup'); // Reverted to match unit test
-      assert.ok(result.reason.includes('Index collection does not exist')); // Reverted to match unit test
+
+      assert.strictEqual(result.action, 'triggerReindexing');
+      assert.ok(result.reason.includes('Index collection does not exist'));
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, true);
       assert.strictEqual(result.indexValid, false);
@@ -192,10 +203,11 @@ describe('Startup Flow Integration Tests', () => {
       const configPath = path.join(tempDir, '.context', 'config.json');
       await fs.mkdir(path.dirname(configPath), { recursive: true });
       await fs.writeFile(configPath, '{ invalid json');
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup');
+
+      // Service should fall back to defaults and continue, eventually triggering reindexing
+      assert.strictEqual(result.action, 'triggerReindexing');
       assert.strictEqual(result.configurationLoaded, true); // Should fall back to defaults
     });
 
@@ -207,13 +219,12 @@ describe('Startup Flow Integration Tests', () => {
           host: '', // Invalid empty host
         },
       };
-      
-      await configService.saveConfiguration(invalidConfig);
-      
-      const result = await startupService.executeStartupFlow(tempDir);
-      
-      // Should still load but might show setup due to invalid config
-      assert.strictEqual(result.configurationLoaded, true);
+
+      // Should throw error when trying to save invalid configuration
+      await assert.rejects(
+        () => configService.saveConfiguration(invalidConfig),
+        /Invalid configuration: Qdrant host is required/
+      );
     });
   });
 
@@ -221,31 +232,44 @@ describe('Startup Flow Integration Tests', () => {
     it('should handle file system errors gracefully', async () => {
       // Try to run startup in a non-existent directory
       const nonExistentDir = path.join(tempDir, 'non-existent');
-      
+
       const result = await startupService.executeStartupFlow(nonExistentDir);
-      
+
       // Should handle the error and provide meaningful result
-      assert.ok(result.action);
-      assert.ok(result.reason);
+      assert.strictEqual(result.action, 'showSetup');
+      assert.strictEqual(result.reason, 'No configuration found');
+      assert.strictEqual(result.configurationLoaded, true);
     });
 
     it('should handle Qdrant service errors gracefully', async () => {
+      // Create a valid configuration first
+      await configService.saveConfiguration({
+        ...DEFAULT_CONFIGURATION,
+        qdrant: {
+          ...DEFAULT_CONFIGURATION.qdrant,
+          host: 'test-host',
+          port: 6333,
+        },
+      });
+
       // Mock Qdrant service to throw errors
       const errorQdrantService = {
-        testConnection: async () => { throw new Error('Connection failed'); },
+        healthCheck: async () => { throw new Error('Connection failed'); },
         collectionExists: async () => { throw new Error('Query failed'); },
       };
-      
+
       const errorStartupService = new StartupService(
         configService,
         errorQdrantService as any,
         gitIgnoreManager
       );
-      
+
       const result = await errorStartupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.action, 'showSetup');
-      assert.ok(result.reason.includes('failed') || result.reason.includes('error'));
+      assert.strictEqual(result.reason, 'Qdrant connection failed');
+      assert.strictEqual(result.configurationLoaded, true);
+      assert.strictEqual(result.qdrantConnected, false);
     });
   });
 
@@ -274,8 +298,8 @@ describe('Startup Flow Integration Tests', () => {
       
       const result = await startupService.executeStartupFlow(tempDir);
       
-      assert.strictEqual(result.reindexingNeeded, false); // Reverted to match unit test
-      assert.strictEqual(result.action, 'showSetup'); // Reverted to match unit test
+      assert.strictEqual(result.reindexingNeeded, true); // Content changed, should need reindexing
+      assert.strictEqual(result.action, 'triggerReindexing'); // Should trigger reindexing due to content change
     });
 
     it('should not trigger reindexing when content is unchanged', async () => {
@@ -302,7 +326,7 @@ describe('Startup Flow Integration Tests', () => {
       const result = await startupService.executeStartupFlow(tempDir);
       
       assert.strictEqual(result.reindexingNeeded, false);
-      assert.strictEqual(result.action, 'showSetup'); // Reverted to match unit test
+      assert.strictEqual(result.action, 'proceedToSearch'); // Should proceed to search when everything is valid
     });
   });
 

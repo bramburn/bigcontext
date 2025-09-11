@@ -229,6 +229,9 @@ describe('ConfigurationService', () => {
       await fs.writeFile(path.join(tempDir, 'test.ts'), 'console.log("test");');
       const hash1 = await configService.generateContentHash(tempDir);
 
+      // Wait a bit to ensure different modification time
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       // Modify file
       await fs.writeFile(path.join(tempDir, 'test.ts'), 'console.log("modified");');
       const hash2 = await configService.generateContentHash(tempDir);
