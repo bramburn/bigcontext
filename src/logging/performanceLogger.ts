@@ -392,9 +392,12 @@ export function logPerformance(operationName: string, metadata?: Record<string, 
         const result = await originalMethod.apply(this, args);
         const duration = Date.now() - startTime;
         
-        // Get performance logger from this context if available
-        if (this.performanceLogger && typeof this.performanceLogger.logPerformance === 'function') {
-          this.performanceLogger.logPerformance(operationName, duration, correlationId, metadata);
+        // Try to get performance logger from the instance
+        const performanceLogger = (this as any).getPerformanceLogger?.() ||
+                                 (this as any).performanceLogger;
+
+        if (performanceLogger && typeof performanceLogger.logPerformance === 'function') {
+          performanceLogger.logPerformance(operationName, duration, correlationId, metadata);
         }
         
         correlationService.endOperation(correlationId, true);
@@ -402,8 +405,12 @@ export function logPerformance(operationName: string, metadata?: Record<string, 
       } catch (error) {
         const duration = Date.now() - startTime;
         
-        if (this.performanceLogger && typeof this.performanceLogger.logPerformance === 'function') {
-          this.performanceLogger.logPerformance(operationName, duration, correlationId, {
+        // Try to get performance logger from the instance
+        const performanceLogger = (this as any).getPerformanceLogger?.() ||
+                                 (this as any).performanceLogger;
+
+        if (performanceLogger && typeof performanceLogger.logPerformance === 'function') {
+          performanceLogger.logPerformance(operationName, duration, correlationId, {
             ...metadata,
             error: error instanceof Error ? error.message : String(error),
           });

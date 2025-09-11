@@ -408,8 +408,9 @@ export class CentralizedLoggingService implements vscode.Disposable {
 
     // Add to log aggregator
     const aggregatorEntry: AggregatorLogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: entry.timestamp,
-      level: LogLevel[level].toLowerCase() as 'debug' | 'info' | 'warn' | 'error',
+      level: LogLevel[level] ? LogLevel[level].toLowerCase() as 'debug' | 'info' | 'warn' | 'error' : 'info',
       message,
       source: entry.source || 'Unknown',
       correlationId: entry.correlationId,
