@@ -15,9 +15,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:code-context-engine.openMainPanel"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -369,7 +366,7 @@
           "default": "ollama",
           "description": "LLM provider to use for re-ranking",
           "enumDescriptions": [
-            "OpenAI GPT models (requires API key)",
+            "OpenAI GPT models (requires API key)"
           ]
         },
         "code-context-engine.llmReRanking.model": {
@@ -462,7 +459,8 @@
           "id": "code-context-engine-view",
           "name": "Code Context",
           "type": "webview",
-          "contextualTitle": "Code Context Engine"
+          "contextualTitle": "Code Context Engine",
+          "icon": "media/icon.svg"
         }
       ]
     }
