@@ -29,13 +29,24 @@ class ExtensionStateManager {
 const extensionState = ExtensionStateManager.getInstance();
 
 export async function activate(context: vscode.ExtensionContext) {
-    console.log('Congratulations, your extension "code-context-engine" is now active!');
+    const startTime = Date.now();
 
     try {
         const manager = new ExtensionManager(context);
         await manager.initialize();
         extensionState.setExtensionManager(manager);
-        console.log('ExtensionManager initialized successfully');
+
+        // Get logging service from manager for proper logging
+        const loggingService = manager.getLoggingService();
+        const activationDuration = Date.now() - startTime;
+
+        loggingService.info('Code Context Engine extension activated successfully', {
+            activationDuration,
+            extensionVersion: context.extension.packageJSON.version,
+            vscodeVersion: vscode.version,
+            platform: process.platform,
+            nodeVersion: process.version
+        }, 'Extension');
 
         // Register health check command for debugging webview issues
         const healthCheckCommand = vscode.commands.registerCommand('codeContextEngine.healthCheck', async () => {
@@ -50,8 +61,8 @@ export async function activate(context: vscode.ExtensionContext) {
             };
 
             const message = `Health Check Results:\n${JSON.stringify(diagnostics, null, 2)}`;
-            console.log('Code Context Engine Health Check:', diagnostics);
-            vscode.window.showInformationMessage('Health check completed. See console for details.');
+            loggingService.info('Health check executed', diagnostics, 'HealthCheck');
+            vscode.window.showInformationMessage('Health check completed. See output channel for details.');
 
             // Also try to create a test webview to verify webview functionality
             try {
@@ -80,7 +91,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 // Auto-close after 3 seconds
                 setTimeout(() => testPanel.dispose(), 3000);
             } catch (webviewError) {
-                console.error('Webview creation failed:', webviewError);
+                loggingService.error('Webview creation failed during health check', {
+                    error: webviewError instanceof Error ? webviewError.message : String(webviewError)
+                }, 'HealthCheck');
                 vscode.window.showErrorMessage(`Webview creation failed: ${webviewError}`);
             }
         });
@@ -90,15 +103,26 @@ export async function activate(context: vscode.ExtensionContext) {
         // Register URI handler for deep linking
         const uriHandler = {
             handleUri(uri: vscode.Uri) {
-                console.log(`Extension: Received URI: ${uri.toString()}`);
+                loggingService.info('URI handler invoked', {
+                    uri: uri.toString(),
+                    scheme: uri.scheme,
+                    authority: uri.authority,
+                    path: uri.path,
+                    query: uri.query
+                }, 'URIHandler');
+
                 const params = new URLSearchParams(uri.query);
                 const resultId = params.get('resultId');
 
                 if (resultId) {
                     // Focus the webview and tell it to highlight the result
                     manager.focusAndShowResult(resultId);
+                    loggingService.debug('URI handler focusing result', { resultId }, 'URIHandler');
                 } else {
-                    console.warn('Extension: URI received without resultId parameter');
+                    loggingService.warn('URI received without resultId parameter', {
+                        uri: uri.toString(),
+                        availableParams: Array.from(params.keys())
+                    }, 'URIHandler');
                 }
             }
         };
@@ -113,7 +137,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 // Send message to webview to navigate to search
                 webviewManager.sendMessageToWebview('navigateToView', { view: 'search' });
             } catch (error) {
-                console.error('Failed to show search:', error);
+                loggingService.error('Failed to show search view', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to open search view');
             }
         });
@@ -124,7 +150,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
                 webviewManager.sendMessageToWebview('navigateToView', { view: 'indexing' });
             } catch (error) {
-                console.error('Failed to show indexing:', error);
+                loggingService.error('Failed to show indexing view', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to open indexing view');
             }
         });
@@ -135,7 +163,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
                 webviewManager.sendMessageToWebview('navigateToView', { view: 'help' });
             } catch (error) {
-                console.error('Failed to show help:', error);
+                loggingService.error('Failed to show help view', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to open help view');
             }
         });
@@ -144,9 +174,12 @@ export async function activate(context: vscode.ExtensionContext) {
             try {
                 const indexingService = manager.getIndexingService();
                 await indexingService.startIndexing();
+                loggingService.info('Indexing started via command', {}, 'CommandHandler');
                 vscode.window.showInformationMessage('Indexing started');
             } catch (error) {
-                console.error('Failed to start indexing:', error);
+                loggingService.error('Failed to start indexing via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to start indexing');
             }
         });
@@ -155,9 +188,12 @@ export async function activate(context: vscode.ExtensionContext) {
             try {
                 const indexingService = manager.getIndexingService();
                 await indexingService.pause();
+                loggingService.info('Indexing paused via command', {}, 'CommandHandler');
                 vscode.window.showInformationMessage('Indexing paused');
             } catch (error) {
-                console.error('Failed to pause indexing:', error);
+                loggingService.error('Failed to pause indexing via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to pause indexing');
             }
         });
@@ -166,9 +202,12 @@ export async function activate(context: vscode.ExtensionContext) {
             try {
                 const indexingService = manager.getIndexingService();
                 await indexingService.resume();
+                loggingService.info('Indexing resumed via command', {}, 'CommandHandler');
                 vscode.window.showInformationMessage('Indexing resumed');
             } catch (error) {
-                console.error('Failed to resume indexing:', error);
+                loggingService.error('Failed to resume indexing via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to resume indexing');
             }
         });
@@ -186,7 +225,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     vscode.window.showInformationMessage('Index cleared successfully');
                 }
             } catch (error) {
-                console.error('Failed to clear index:', error);
+                loggingService.error('Failed to clear index via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to clear index');
             }
         });
@@ -202,9 +243,12 @@ export async function activate(context: vscode.ExtensionContext) {
                     await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
                     webviewManager.sendMessageToWebview('navigateToView', { view: 'search' });
                     webviewManager.sendMessageToWebview('setQuery', { query });
+                    loggingService.info('Search initiated via command', { query }, 'CommandHandler');
                 }
             } catch (error) {
-                console.error('Failed to search code:', error);
+                loggingService.error('Failed to search code via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to perform search');
             }
         });
@@ -215,8 +259,11 @@ export async function activate(context: vscode.ExtensionContext) {
                 await webviewManager.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders });
                 webviewManager.sendMessageToWebview('navigateToView', { view: 'search' });
                 webviewManager.sendMessageToWebview('setSearchTab', { tab: 'saved' });
+                loggingService.info('Saved searches view opened via command', {}, 'CommandHandler');
             } catch (error) {
-                console.error('Failed to show saved searches:', error);
+                loggingService.error('Failed to show saved searches via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to open saved searches');
             }
         });
@@ -225,9 +272,12 @@ export async function activate(context: vscode.ExtensionContext) {
             try {
                 const webviewManager = manager.getWebviewManager();
                 await webviewManager.diagnoseStyling();
+                loggingService.info('Styling diagnosis completed via command', {}, 'CommandHandler');
                 vscode.window.showInformationMessage('Styling diagnosis completed. Check docs/diagnosis-styling.md');
             } catch (error) {
-                console.error('Failed to run styling diagnosis:', error);
+                loggingService.error('Failed to run styling diagnosis via command', {
+                    error: error instanceof Error ? error.message : String(error)
+                }, 'CommandHandler');
                 vscode.window.showErrorMessage('Failed to run styling diagnosis');
             }
         });
@@ -247,12 +297,21 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
     } catch (error) {
-        console.error('Failed to initialize ExtensionManager:', error);
-        vscode.window.showErrorMessage('Code Context Engine failed to initialize. Please check the logs.');
+        // Create a temporary logging service for error reporting if manager failed to initialize
+        const tempOutputChannel = vscode.window.createOutputChannel("Code Context Engine");
+        tempOutputChannel.appendLine(`[ERROR] Failed to initialize ExtensionManager: ${error instanceof Error ? error.message : String(error)}`);
+        tempOutputChannel.show();
+
+        vscode.window.showErrorMessage('Code Context Engine failed to initialize. Please check the output channel for details.');
         throw error;
     }
 }
 
 export function deactivate() {
-    extensionState.dispose();
+    try {
+        extensionState.dispose();
+        // Note: Logging service will be disposed by ExtensionManager
+    } catch (error) {
+        console.error('Error during extension deactivation:', error);
+    }
 }
