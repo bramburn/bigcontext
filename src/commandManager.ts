@@ -20,9 +20,10 @@
 
 import * as vscode from 'vscode';
 import { IndexingService } from './indexing/indexingService';
-import { IIndexingService } from './services/indexingService';
+import { IIndexingService } from './services/IndexingService';
 import { WebviewManager } from './webviewManager';
 import { NotificationService } from './notifications/notificationService';
+import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 
 /**
  * CommandManager class responsible for registering and managing all VS Code commands
@@ -43,6 +44,7 @@ export class CommandManager {
     private enhancedIndexingService?: IIndexingService;
     private webviewManager: WebviewManager;
     private notificationService: NotificationService;
+    private loggingService: CentralizedLoggingService;
 
     /**
      * Creates a new CommandManager instance
@@ -55,11 +57,18 @@ export class CommandManager {
      * @param webviewManager - The WebviewManager instance for handling webview operations
      *                        and UI panel management
      * @param notificationService - The NotificationService instance for user notifications
+     * @param loggingService - The CentralizedLoggingService instance for logging
      */
-    constructor(indexingService: IndexingService, webviewManager: WebviewManager, notificationService: NotificationService) {
+    constructor(
+        indexingService: IndexingService,
+        webviewManager: WebviewManager,
+        notificationService: NotificationService,
+        loggingService: CentralizedLoggingService
+    ) {
         this.indexingService = indexingService;
         this.webviewManager = webviewManager;
         this.notificationService = notificationService;
+        this.loggingService = loggingService;
     }
 
     /**
@@ -153,7 +162,9 @@ export class CommandManager {
         );
         disposables.push(triggerFullReindexDisposable);
 
-        console.log('CommandManager: All commands registered successfully');
+        this.loggingService.info('All commands registered successfully', {
+            commandCount: disposables.length
+        }, 'CommandManager');
         return disposables;
     }
 
@@ -209,7 +220,7 @@ export class CommandManager {
      */
     private async handleOpenMainPanel(): Promise<void> {
         try {
-            console.log('CommandManager: Opening main panel...');
+            this.loggingService.info('Opening main panel', {}, 'CommandManager');
 
             // Check if workspace folders are available with retry logic for timing issues
             const isWorkspaceOpen = await this.checkWorkspaceWithRetry();
@@ -218,10 +229,14 @@ export class CommandManager {
             // Pass the workspace state to the WebviewManager
             this.webviewManager.showMainPanel({ isWorkspaceOpen });
 
-            console.log(`CommandManager: Main panel opened successfully - workspace open: ${isWorkspaceOpen}`);
+            this.loggingService.info('Main panel opened successfully', {
+                isWorkspaceOpen
+            }, 'CommandManager');
         } catch (error) {
             // Log detailed error for debugging purposes
-            console.error('CommandManager: Failed to open main panel:', error);
+            this.loggingService.error('Failed to open main panel', {
+                error: error instanceof Error ? error.message : String(error)
+            }, 'CommandManager');
             // Show user-friendly error message
             this.notificationService.error('Failed to open Code Context Engine panel');
         }
@@ -250,7 +265,7 @@ export class CommandManager {
      */
     private async handleStartIndexing(): Promise<void> {
         try {
-            console.log('CommandManager: Starting indexing...');
+            this.loggingService.info('Starting indexing via command', {}, 'CommandManager');
 
             // Validate that the indexing service is available
             if (!this.indexingService) {
@@ -309,10 +324,12 @@ export class CommandManager {
                 }
             });
 
-            console.log('CommandManager: Indexing completed successfully');
+            this.loggingService.info('Indexing completed successfully via command', {}, 'CommandManager');
         } catch (error) {
             // Log detailed error for debugging
-            console.error('CommandManager: Failed to start indexing:', error);
+            this.loggingService.error('Failed to start indexing via command', {
+                error: error instanceof Error ? error.message : String(error)
+            }, 'CommandManager');
 
             // Show user-friendly error message with error details
             vscode.window.showErrorMessage(`Failed to start indexing: ${error instanceof Error ? error.message : String(error)}`);

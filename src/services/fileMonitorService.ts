@@ -22,7 +22,7 @@ import {
     FileMonitorStats, 
     FileChangeEvent 
 } from '../types/indexing';
-import { IIndexingService } from './indexingService';
+import { IIndexingService } from './IndexingService';
 
 /**
  * Interface contract that this service implements

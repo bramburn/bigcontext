@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { CentralizedLoggingService } from './logging/centralizedLoggingService';
 import { NotificationService } from './notifications/notificationService';
 import { IndexState } from './types/indexing';
-import { IIndexingService } from './services/indexingService';
+import { IIndexingService } from './services/IndexingService';
 
 /**
  * Status bar item configuration interface
