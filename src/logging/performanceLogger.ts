@@ -48,6 +48,7 @@ export class PerformanceLogger {
   private thresholds = new Map<string, PerformanceThresholds>();
   private maxMetricsHistory = 10000;
   private maxAlertsHistory = 1000;
+  private activeTracking = new Map<string, { operation: string; startTime: number; metadata?: Record<string, any> }>();
 
   constructor(loggingService: CentralizedLoggingService) {
     this.loggingService = loggingService;
@@ -373,6 +374,71 @@ export class PerformanceLogger {
       user: Math.round(cpuUsage.user / 1000), // Convert to milliseconds
       system: Math.round(cpuUsage.system / 1000), // Convert to milliseconds
     };
+  }
+
+  /**
+   * Start tracking performance for an operation
+   */
+  public startTracking(operation: string, metadata?: Record<string, any>): string {
+    const trackingId = `${operation}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    this.activeTracking.set(trackingId, {
+      operation,
+      startTime: Date.now(),
+      metadata,
+    });
+    return trackingId;
+  }
+
+  /**
+   * End tracking performance for an operation
+   */
+  public endTracking(operation: string, trackingId?: string, metadata?: Record<string, any>): void {
+    let tracking;
+
+    if (trackingId) {
+      tracking = this.activeTracking.get(trackingId);
+      this.activeTracking.delete(trackingId);
+    } else {
+      // Find the most recent tracking for this operation
+      for (const [id, track] of this.activeTracking.entries()) {
+        if (track.operation === operation) {
+          tracking = track;
+          this.activeTracking.delete(id);
+          break;
+        }
+      }
+    }
+
+    if (tracking) {
+      const duration = Date.now() - tracking.startTime;
+      // Generate a new correlation ID for this performance log
+      const correlationId = this.correlationService.startOperation(`perf_${tracking.operation}`, undefined, tracking.metadata);
+
+      this.logPerformance(
+        tracking.operation,
+        duration,
+        correlationId,
+        { ...tracking.metadata, ...metadata }
+      );
+
+      // End the correlation tracking
+      this.correlationService.endOperation(correlationId, true);
+    } else {
+      this.loggingService.warn('No active tracking found for operation', {
+        operation,
+        trackingId,
+      }, 'PerformanceLogger');
+    }
+  }
+
+  /**
+   * Dispose of the performance logger
+   */
+  public dispose(): void {
+    this.metrics = [];
+    this.alerts = [];
+    this.activeTracking.clear();
+    this.thresholds.clear();
   }
 }
 

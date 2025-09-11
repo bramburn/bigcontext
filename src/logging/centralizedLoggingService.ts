@@ -17,14 +17,13 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as winston from "winston";
-import { DailyRotateFile } from "winston-daily-rotate-file";
+const DailyRotateFile = require("winston-daily-rotate-file");
 import { v4 as uuidv4 } from "uuid";
 import Transport from "winston-transport";
 import { ConfigService } from "../configService";
 import { LogAggregator, LogEntry as AggregatorLogEntry } from './logAggregator';
 import { PerformanceLogger } from './performanceLogger';
 import { LogExporter } from './logExporter';
-import { CorrelationService } from './correlationService';
 
 /**
  * Custom Winston transport for VSCode Output Channel
@@ -125,15 +124,12 @@ export class CentralizedLoggingService implements vscode.Disposable {
   private configService: ConfigService;
   private outputChannel: vscode.OutputChannel;
   private logDirectory: string;
-  private currentLogFile: string;
-  private logFileStream?: fs.WriteStream;
   private logger?: winston.Logger;
 
   // Enhanced logging components
   private logAggregator: LogAggregator;
   private performanceLogger: PerformanceLogger;
   private logExporter: LogExporter;
-  private correlationService: CorrelationService;
 
   constructor(configService: ConfigService) {
     this.configService = configService;
@@ -142,10 +138,8 @@ export class CentralizedLoggingService implements vscode.Disposable {
       "BigContext Logs",
     );
     this.logDirectory = this.config.logDirectory;
-    this.currentLogFile = this.generateLogFileName();
 
     // Initialize enhanced logging components
-    this.correlationService = CorrelationService.getInstance();
     this.logAggregator = new LogAggregator();
     this.performanceLogger = new PerformanceLogger(this);
     this.logExporter = new LogExporter(this.logAggregator, this.performanceLogger);
@@ -280,80 +274,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
       fs.mkdirSync(this.logDirectory, { recursive: true });
     }
   }
-  /**
-   * Initialize log file stream
-   */
-  private initializeLogFile(): void {
-    const logFilePath = path.join(this.logDirectory, this.currentLogFile);
-    this.logFileStream = fs.createWriteStream(logFilePath, { flags: "a" });
-    this.logFileStream.on("error", (error) => {
-      console.error("Log file stream error:", error);
-    });
-  }
-  /**
-   * Generate log file name with timestamp
-   */
-  private generateLogFileName(): string {
-    const now = new Date();
-    const timestamp = now.toISOString().split("T")[0]; // YYYY-MM-DD
-    return `code-context-engine-${timestamp}.log`;
-  }
-  /**
-   * Clean up old log files
-   */
-  private cleanupOldLogFiles(): void {
-    try {
-      const files = fs
-        .readdirSync(this.logDirectory)
-        .filter(
-          (file) =>
-            file.startsWith("code-context-engine-") && file.endsWith(".log"),
-        )
-        .map((file) => ({
-          name: file,
-          path: path.join(this.logDirectory, file),
-          stats: fs.statSync(path.join(this.logDirectory, file)),
-        }))
-        .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
-      // Keep only the most recent files
-      const filesToDelete = files.slice(this.config.maxFiles);
-      for (const file of filesToDelete) {
-        fs.unlinkSync(file.path);
-      }
-    } catch (error) {
-      console.error("Error cleaning up log files:", error);
-    }
-  }
-  /**
-   * Check if log file needs rotation
-   */
-  private checkLogRotation(): void {
-    if (!this.config.enableFileLogging || !this.logFileStream) return;
-    try {
-      const logFilePath = path.join(this.logDirectory, this.currentLogFile);
-      const stats = fs.statSync(logFilePath);
-      if (stats.size >= this.config.maxFileSize) {
-        this.rotateLogFile();
-      }
-    } catch (error) {
-      console.error("Error checking log rotation:", error);
-    }
-  }
-  /**
-   * Rotate log file
-   */
-  private rotateLogFile(): void {
-    try {
-      if (this.logFileStream) {
-        this.logFileStream.end();
-      }
-      this.currentLogFile = this.generateLogFileName();
-      this.initializeLogFile();
-      this.cleanupOldLogFiles();
-    } catch (error) {
-      console.error("Error rotating log file:", error);
-    }
-  }
+
   /**
    * Log an entry
    */
@@ -378,7 +299,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
 
     // Add to log aggregator
     const aggregatorEntry: AggregatorLogEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       timestamp: entry.timestamp,
       level: LogLevel[level] ? LogLevel[level].toLowerCase() as 'debug' | 'info' | 'warn' | 'error' : 'info',
       message,
@@ -399,32 +320,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
       this.logger.log(LogLevel[level].toLowerCase(), message, logMeta);
     }
   }
-  /**
-   * Format log entry according to configuration
-   */
-  private formatLogEntry(entry: LogEntry): string {
-    let formatted = this.config.logFormat
-      .replace("{timestamp}", entry.timestamp.toISOString())
-      .replace("{level}", LogLevel[entry.level] ? LogLevel[entry.level] : entry.level.toString())
-      .replace("{source}", entry.source || "Unknown")
-      .replace("{message}", entry.message);
-    if (entry.metadata && Object.keys(entry.metadata).length > 0) {
-      formatted += ` | ${JSON.stringify(entry.metadata)}`;
-    }
-    if (entry.correlationId) {
-      formatted += ` [${entry.correlationId}]`;
-    }
-    return formatted;
-  }
-  /**
-   * Log to file
-   */
-  private logToFile(message: string): void {
-    if (this.logFileStream) {
-      this.logFileStream.write(message + "\n");
-      this.checkLogRotation();
-    }
-  }
+
   /**
    * Generate correlation ID for request tracking
    */
@@ -490,14 +386,6 @@ export class CentralizedLoggingService implements vscode.Disposable {
    */
   public updateConfig(newConfig: Partial<LoggingConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    if (newConfig.enableFileLogging !== undefined) {
-      if (newConfig.enableFileLogging && !this.logFileStream) {
-        this.initializeLogFile();
-      } else if (!newConfig.enableFileLogging && this.logFileStream) {
-        this.logFileStream.end();
-        this.logFileStream = undefined;
-      }
-    }
     // Reinitialize logger with new configuration
     this.initializeLogging();
   }
@@ -527,6 +415,34 @@ export class CentralizedLoggingService implements vscode.Disposable {
    */
   public getOutputChannel(): vscode.OutputChannel {
     return this.outputChannel;
+  }
+
+  /**
+   * Show output channel
+   */
+  public showOutputChannel(): void {
+    this.outputChannel.show();
+  }
+
+  /**
+   * Get log aggregator
+   */
+  public getLogAggregator(): LogAggregator {
+    return this.logAggregator;
+  }
+
+  /**
+   * Get performance logger
+   */
+  public getPerformanceLogger(): PerformanceLogger {
+    return this.performanceLogger;
+  }
+
+  /**
+   * Get configuration
+   */
+  public getConfig(): LoggingConfig {
+    return { ...this.config };
   }
   /**
    * Log with correlation ID for request tracking
@@ -562,7 +478,11 @@ export class CentralizedLoggingService implements vscode.Disposable {
     level?: LogLevel;
     source?: string;
   } = {}): Promise<string> {
-    return this.logExporter.exportLogs(options);
+    const exportOptions = {
+      ...options,
+      level: options.level !== undefined ? LogLevel[options.level] : undefined,
+    };
+    return this.logExporter.exportLogs(exportOptions);
   }
   /**
    * Create a diagnostic package with logs and system information
@@ -632,9 +552,6 @@ export class CentralizedLoggingService implements vscode.Disposable {
   public dispose(): void {
     if (this.logger) {
       this.logger.close();
-    }
-    if (this.logFileStream) {
-      this.logFileStream.end();
     }
     if (this.outputChannel) {
       this.outputChannel.dispose();

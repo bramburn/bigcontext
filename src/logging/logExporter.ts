@@ -108,7 +108,7 @@ export class LogExporter {
    */
   public async exportWithPicker(options: ExportOptions): Promise<ExportResult> {
     const defaultFileName = `extension-logs-${new Date().toISOString().split('T')[0]}.${options.format}`;
-    
+
     const uri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(defaultFileName),
       filters: this.getFileFilters(),
@@ -124,6 +124,55 @@ export class LogExporter {
     }
 
     return this.exportToFile(uri.fsPath, options);
+  }
+
+  /**
+   * Export logs and return as string
+   */
+  public async exportLogs(options: {
+    format?: 'json' | 'csv' | 'txt';
+    includeMetadata?: boolean;
+    dateRange?: { start: Date; end: Date };
+    level?: string;
+    source?: string;
+  } = {}): Promise<string> {
+    const filter: LogFilter = {};
+
+    if (options.dateRange) {
+      filter.timeRange = {
+        start: options.dateRange.start,
+        end: options.dateRange.end,
+      };
+    }
+
+    if (options.level) {
+      filter.levels = [options.level as 'debug' | 'info' | 'warn' | 'error'];
+    }
+
+    if (options.source) {
+      filter.sources = [options.source];
+    }
+
+    const logs = this.logAggregator.getLogs(filter);
+
+    const exportOptions: ExportOptions = {
+      format: options.format || 'json',
+      includeMetadata: options.includeMetadata ?? true,
+      includePerformanceData: false,
+      includeCorrelationData: false,
+      filter,
+    };
+
+    switch (exportOptions.format) {
+      case 'json':
+        return this.exportAsJson(logs, exportOptions);
+      case 'csv':
+        return this.exportAsCsv(logs, exportOptions);
+      case 'txt':
+        return this.exportAsText(logs, exportOptions);
+      default:
+        return this.exportAsJson(logs, exportOptions);
+    }
   }
 
   /**
