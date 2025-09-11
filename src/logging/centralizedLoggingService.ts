@@ -68,7 +68,7 @@ export interface LoggingConfig {
 /**
  * Centralized logging service for the extension
  */
-export class CentralizedLoggingService {
+export class CentralizedLoggingService implements vscode.Disposable {
   private config: LoggingConfig;
   private configService: ConfigService;
   private outputChannel: vscode.OutputChannel;
@@ -195,7 +195,7 @@ export class CentralizedLoggingService {
     } catch (error) {
       console.error("Failed to initialize logging service:", error);
     }
-  }</search>
+  }
 
   /**
    * Ensure log directory exists

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { performanceMonitor, generatePerformanceReport, getMemoryUsage } from '../utils/performance';
+import { useState, useEffect } from 'react';
+import { performanceMonitor, generatePerformanceReport } from '../utils/performance';
 import { Button } from '../ui/Button';
 import { Progress } from '../ui/Progress';
 

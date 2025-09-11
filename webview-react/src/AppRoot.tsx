@@ -17,7 +17,7 @@ import PerformanceDashboard, { usePerformanceDashboard } from './components/Perf
 function AppContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [currentView, setCurrentView] = useState<'search' | 'indexing' | 'settings' | 'setup' | 'diagnostics' | 'help'>('search');
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const performanceDashboard = usePerformanceDashboard();
 
   useEffect(() => {
@@ -115,6 +115,4 @@ export default function AppRoot() {
     </ThemeProvider>
   );
 }
-
-export default AppRoot;
 

@@ -185,7 +185,7 @@ export function getNetworkTiming() {
       return {
         domContentLoaded: Number((entry.domContentLoadedEventEnd - entry.domContentLoadedEventStart).toFixed(2)),
         loadComplete: Number((entry.loadEventEnd - entry.loadEventStart).toFixed(2)),
-        domInteractive: Number((entry.domInteractive - entry.navigationStart).toFixed(2)),
+        domInteractive: Number((entry.domInteractive - entry.fetchStart).toFixed(2)),
         firstPaint: Number((entry.responseEnd - entry.requestStart).toFixed(2))
       };
     }
