@@ -12,6 +12,7 @@ import ErrorBoundary from './ui/ErrorBoundary';
 import { ThemeProvider, useTheme } from './providers/ThemeProvider';
 import { TooltipProvider } from './ui/Tooltip';
 import PerformanceDashboard, { usePerformanceDashboard } from './components/PerformanceDashboard';
+import ResizablePanel from './ui/ResizablePanel';
 
 
 function AppContent() {
@@ -48,52 +49,61 @@ function AppContent() {
         <p className="text-sm opacity-80">Retrieval-Augmented context for your code</p>
       </header>
 
-      <main className="w-full max-w-[2560px] mx-auto grid grid-cols-1 gap-4">
-        {message && (
-          <div className={`mb-2 rounded border px-3 py-2 text-sm ${message.type === 'success' ? 'border-green-600/40 bg-green-500/10' : 'border-red-600/40 bg-red-500/10'}`}>
-            <div className="flex items-center justify-between">
-              <span>{message.text}</span>
-              <button className="opacity-70 hover:opacity-100" onClick={() => setMessage(null)}>×</button>
+      <main className="w-full grid grid-cols-[auto_1fr] gap-4 ultrawide:max-w-[2400px] ultrawide:mx-auto">
+        {/* Left Sidebar */}
+        <ResizablePanel storageKey="layout:sidebar" defaultWidth={280} minWidth={200} maxWidth={480} className="border-r border-[var(--vscode-panel-border,#3c3c3c)]">
+          {/* Placeholder: add navigation/filters here in follow-ups */}
+          <div className="text-xs opacity-70">Sidebar</div>
+        </ResizablePanel>
+
+        {/* Main Content */}
+        <div className="min-w-0">
+          {message && (
+            <div className={`mb-2 rounded border px-3 py-2 text-sm ${message.type === 'success' ? 'border-green-600/40 bg-green-500/10' : 'border-red-600/40 bg-red-500/10'}`}>
+              <div className="flex items-center justify-between">
+                <span>{message.text}</span>
+                <button className="opacity-70 hover:opacity-100" onClick={() => setMessage(null)}>×</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <Tabs.Root value={currentView} onValueChange={(v) => setCurrentView(v as any)}>
-          <Tabs.List className="flex gap-1 border-b border-[var(--vscode-panel-border,#3c3c3c)]">
-            <Tabs.Trigger value="search" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Search</Tabs.Trigger>
-            <Tabs.Trigger value="indexing" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Indexing</Tabs.Trigger>
-            <Tabs.Trigger value="settings" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Settings</Tabs.Trigger>
-            <Tabs.Trigger value="setup" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Setup</Tabs.Trigger>
-            <Tabs.Trigger value="diagnostics" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Diagnostics</Tabs.Trigger>
-            <Tabs.Trigger value="help" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Help</Tabs.Trigger>
-          </Tabs.List>
+          <Tabs.Root value={currentView} onValueChange={(v) => setCurrentView(v as any)}>
+            <Tabs.List className="flex gap-1 border-b border-[var(--vscode-panel-border,#3c3c3c)]">
+              <Tabs.Trigger value="search" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Search</Tabs.Trigger>
+              <Tabs.Trigger value="indexing" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Indexing</Tabs.Trigger>
+              <Tabs.Trigger value="settings" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Settings</Tabs.Trigger>
+              <Tabs.Trigger value="setup" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Setup</Tabs.Trigger>
+              <Tabs.Trigger value="diagnostics" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Diagnostics</Tabs.Trigger>
+              <Tabs.Trigger value="help" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Help</Tabs.Trigger>
+            </Tabs.List>
 
-          <Tabs.Content value="search" className="pt-4">
-            <SearchView />
-          </Tabs.Content>
+            <Tabs.Content value="search" className="pt-4">
+              <SearchView />
+            </Tabs.Content>
 
-          <Tabs.Content value="indexing" className="pt-4">
-            <IndexingView />
-          </Tabs.Content>
+            <Tabs.Content value="indexing" className="pt-4">
+              <IndexingView />
+            </Tabs.Content>
 
-          <Tabs.Content value="settings" className="pt-4">
-            <SettingsView />
-          </Tabs.Content>
+            <Tabs.Content value="settings" className="pt-4">
+              <SettingsView />
+            </Tabs.Content>
 
-          <Tabs.Content value="setup" className="pt-4">
-            <SetupView />
-          </Tabs.Content>
+            <Tabs.Content value="setup" className="pt-4">
+              <SetupView />
+            </Tabs.Content>
 
-          <Tabs.Content value="diagnostics" className="pt-4">
-            <DiagnosticsView />
-          </Tabs.Content>
+            <Tabs.Content value="diagnostics" className="pt-4">
+              <DiagnosticsView />
+            </Tabs.Content>
 
-          <Tabs.Content value="help" className="pt-4">
-            <HelpView />
-          </Tabs.Content>
-        </Tabs.Root>
+            <Tabs.Content value="help" className="pt-4">
+              <HelpView />
+            </Tabs.Content>
+          </Tabs.Root>
 
-        <ConnectionStatus />
+          <ConnectionStatus />
+        </div>
       </main>
       </div>
 

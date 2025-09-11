@@ -76,16 +76,16 @@ export default function DiagnosticsView() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="w-full p-4 space-y-4 ultrawide:max-w-[2400px] ultrawide:mx-auto">
       <div className="text-center">
         <h1 className="text-2xl font-bold mb-2">🛡️ System Diagnostics</h1>
         <p className="text-sm opacity-80">Monitor system health and troubleshoot connection issues.</p>
       </div>
 
       {/* System Status */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Database Status */}
-        <div className="rounded border p-4">
+        <div className="rounded border p-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">🗄️</span>
@@ -112,7 +112,7 @@ export default function DiagnosticsView() {
         </div>
 
         {/* AI Provider Status */}
-        <div className="rounded border p-4">
+        <div className="rounded border p-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">🤖</span>
@@ -136,7 +136,7 @@ export default function DiagnosticsView() {
       </div>
 
       {/* System Statistics */}
-      <div className="rounded border p-4">
+      <div className="rounded border p-3">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">📊</span>
           <span className="font-medium">System Statistics</span>
@@ -173,7 +173,7 @@ export default function DiagnosticsView() {
       )}
 
       {/* Health Checks */}
-      <div className="rounded border p-4">
+      <div className="rounded border p-3">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">🔍</span>
           <span className="font-medium">Health Checks</span>
@@ -206,7 +206,7 @@ export default function DiagnosticsView() {
       </div>
 
       {/* Troubleshooting Tools */}
-      <div className="rounded border p-4">
+      <div className="rounded border p-3">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">🔧</span>
           <span className="font-medium">Troubleshooting Tools</span>
