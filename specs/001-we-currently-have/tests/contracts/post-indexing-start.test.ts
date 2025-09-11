@@ -119,7 +119,7 @@ describe('POST /indexing-start Contract Test', () => {
     // Assert
     expect(response.status).toBe(400);
     expect(response.data.success).toBe(false);
-    expect(response.data.message).toContain('settings');
+    expect(response.data.message).toContain('Settings');
   });
 
   it('should return 409 when indexing is already in progress', async () => {

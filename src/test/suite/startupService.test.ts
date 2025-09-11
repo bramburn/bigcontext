@@ -68,6 +68,10 @@ class MockQdrantService {
     return this.connectionStatus;
   }
 
+  async healthCheck(): Promise<boolean> {
+    return this.connectionStatus;
+  }
+
   async collectionExists(collectionName: string): Promise<boolean> {
     return this.collectionExistsStatus;
   }
@@ -157,8 +161,8 @@ describe('StartupService', () => {
       mockQdrantService.setCollectionExists(true);
       
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup');
+
+      assert.strictEqual(result.action, 'proceedToSearch');
       assert.ok(result.reason.includes('Configuration valid') && result.reason.includes('index exists'));
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, true);
@@ -185,8 +189,8 @@ describe('StartupService', () => {
       mockQdrantService.setCollectionExists(true);
       
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup');
+
+      assert.strictEqual(result.action, 'triggerReindexing');
       assert.ok(result.reason.includes('Content has changed') && result.reason.includes('last indexing'));
       assert.strictEqual(result.reindexingNeeded, true);
     });
@@ -234,8 +238,8 @@ describe('StartupService', () => {
       mockQdrantService.setCollectionExists(false);
       
       const result = await startupService.executeStartupFlow(tempDir);
-      
-      assert.strictEqual(result.action, 'showSetup');
+
+      assert.strictEqual(result.action, 'triggerReindexing');
       assert.ok(result.reason.includes('Index collection does not exist'));
       assert.strictEqual(result.indexValid, false);
       assert.strictEqual(result.reindexingNeeded, true);

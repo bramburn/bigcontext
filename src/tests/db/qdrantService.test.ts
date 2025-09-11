@@ -199,7 +199,8 @@ describe('QdrantService', () => {
       const result = await qdrantService.createCollectionIfNotExists('test_collection', 768);
 
       expect(result).toBe(true);
-      expect(mockQdrantClient.getCollections).toHaveBeenCalledTimes(2);
+      // Expect 3 calls: 1 for health check + 1 failed attempt + 1 successful retry
+      expect(mockQdrantClient.getCollections).toHaveBeenCalledTimes(3);
     });
   });
 
