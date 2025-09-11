@@ -67,22 +67,22 @@ export default function SettingsView() {
   const onReset = () => { setSettings(DEFAULT_SETTINGS); setMessage({ type: 'info', text: 'Settings reset to defaults (not saved).' }); };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <header>
         <h2 className="text-lg font-semibold">Extension Settings</h2>
         <p className="text-sm opacity-80">Configure your embedding model and vector database</p>
       </header>
 
       {message && (
-        <div className={`rounded border px-3 py-2 text-sm ${message.type==='success'?'border-green-600/40 bg-green-500/10':message.type==='error'?'border-red-600/40 bg-red-500/10':'border-blue-600/40 bg-blue-500/10'}`}>{message.text}</div>
+        <div className={`rounded border px-2 py-1 text-sm ${message.type==='success'?'border-green-600/40 bg-green-500/10':message.type==='error'?'border-red-600/40 bg-red-500/10':'border-blue-600/40 bg-blue-500/10'}`}>{message.text}</div>
       )}
 
       {loading && <div className="text-sm opacity-80">Loading settings…</div>}
 
-      <section className="space-y-3">
+      <section className="space-y-2">
         <h3 className="font-medium">Embedding Model</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="space-y-1">
             <Label htmlFor="provider-select">Provider</Label>
             <Select
               value={settings.embeddingModel.provider}
@@ -152,10 +152,10 @@ export default function SettingsView() {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-2">
         <h3 className="font-medium">Qdrant Database</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="space-y-1">
             <Label htmlFor="host-input">Host</Label>
             <Input
               id="host-input"
@@ -164,7 +164,7 @@ export default function SettingsView() {
               placeholder="localhost"
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="port-input">Port</Label>
             <Input
               id="port-input"
@@ -174,7 +174,7 @@ export default function SettingsView() {
               placeholder="6333"
             />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-1 md:col-span-2">
             <Label htmlFor="collection-input">Collection Name</Label>
             <Input
               id="collection-input"
@@ -183,7 +183,7 @@ export default function SettingsView() {
               placeholder="code-embeddings"
             />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-1 md:col-span-2">
             <Label htmlFor="db-api-key-input">API Key (Optional)</Label>
             <Input
               id="db-api-key-input"
@@ -196,7 +196,7 @@ export default function SettingsView() {
         </div>
       </section>
 
-      <div className="flex gap-2">
+      <div className="flex gap-1">
         <Button disabled={saving || loading} onClick={onSave}>
           {saving ? 'Saving...' : 'Save Settings'}
         </Button>

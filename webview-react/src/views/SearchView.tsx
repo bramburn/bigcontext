@@ -58,8 +58,8 @@ export default function SearchView() {
   const open = (r: SearchResult) => postMessage('openFile', { filePath: r.filePath, lineNumber: r.lineNumber ?? 0 });
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
+    <div className="space-y-3">
+      <div className="flex gap-1">
         <Input
           className="flex-1"
           placeholder="Search your codebase"
@@ -76,18 +76,18 @@ export default function SearchView() {
 
       <FilterPanel availableFileTypes={availableFileTypes} currentFilters={filters} onFilterChange={setFilters} />
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {visibleResults.length === 0 && !searching && (
-          <div className="rounded border p-4 text-sm opacity-80">No results. Try a different query.</div>
+          <div className="rounded border p-3 text-sm opacity-80">No results. Try a different query.</div>
         )}
         {visibleResults.map((r) => (
-          <div key={r.id} className="rounded border p-3 hover:bg-white/5">
-            <div className="flex items-start justify-between gap-3">
+          <div key={r.id} className="rounded border p-2 hover:bg-white/5">
+            <div className="flex items-start justify-between gap-2">
               <div className="font-mono text-sm text-[var(--vscode-descriptionForeground,#9aa0a6)] break-all">{r.filePath}:{r.lineNumber ?? 0}</div>
               <div className="text-xs opacity-70">score: {typeof r.score==='number'?r.score.toFixed(3):'-'}</div>
             </div>
-            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-black/20 p-2 text-xs">{r.content}</pre>
-            <div className="mt-2">
+            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-black/20 p-2 text-xs">{r.content}</pre>
+            <div className="mt-1">
               <button className="rounded border px-2 py-1 text-xs hover:bg-white/5" onClick={()=>open(r)}>Open</button>
             </div>
           </div>

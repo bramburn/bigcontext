@@ -18,7 +18,67 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as winston from "winston";
+import Transport from "winston-transport";
 import { ConfigService } from "../configService";
+
+/**
+ * Custom Winston transport for VSCode Output Channel
+ */
+class VSCodeOutputTransport extends Transport {
+  private channel: vscode.OutputChannel | undefined;
+
+  constructor(options: any) {
+    super(options);
+    this.channel = options.channel;
+  }
+
+  log(info: any, callback: (err?: any) => void): void {
+    setImmediate(() => {
+      this.emit('logged', info);
+    });
+
+    const timestamp = new Date().toISOString();
+    const level = info.level ? info.level.toUpperCase() : 'UNKNOWN';
+    let formattedMsg = `[${timestamp}] [${level}] ${info.message || ''}`;
+
+    // Add source if present
+    if (info.source) {
+      formattedMsg += ` [${info.source}]`;
+    }
+
+    // Add correlationId if present
+    if (info.correlationId) {
+      formattedMsg += ` [${info.correlationId}]`;
+    }
+
+    // Handle structured metadata readably
+    const meta = { ...info };
+    // Remove standard fields
+    delete meta.level;
+    delete meta.message;
+    delete meta.timestamp;
+    delete meta.source;
+    delete meta.correlationId;
+
+    if (Object.keys(meta).length > 0) {
+      try {
+        const metaStr = JSON.stringify(meta, null, 2);
+        formattedMsg += `\n${metaStr}`;
+      } catch (e) {
+        formattedMsg += `\n[meta: ${JSON.stringify(meta)}]`;
+      }
+    }
+
+    if (this.channel) {
+      this.channel.appendLine(formattedMsg);
+    } else {
+      // Fallback to console if channel undefined
+      console.log(formattedMsg);
+    }
+
+    callback();
+  }
+}
 
 /**
  * Log levels in order of severity
@@ -81,7 +141,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
     this.configService = configService;
     this.config = this.loadConfig();
     this.outputChannel = vscode.window.createOutputChannel(
-      "Code Context Engine",
+      "BigContext Logs",
     );
     this.logDirectory = this.config.logDirectory;
     this.currentLogFile = this.generateLogFileName();
@@ -171,17 +231,34 @@ export class CentralizedLoggingService implements vscode.Disposable {
         this.ensureLogDirectory();
       }
 
-      this.logger = winston.createLogger({
-        level: LogLevel[this.config.level].toLowerCase(),
-        transports: [
+      const transportsArray: winston.transport[] = [];
+
+      if (this.config.enableConsoleLogging) {
+        transportsArray.push(
           new winston.transports.Console({
             format: winston.format.simple()
-          }),
+          })
+        );
+      }
+
+      if (this.config.enableFileLogging) {
+        transportsArray.push(
           new winston.transports.File({
             filename: path.join(this.logDirectory, 'extension.log'),
             format: winston.format.json()
           })
-        ]
+        );
+      }
+
+      if (this.config.enableOutputChannel) {
+        transportsArray.push(
+          new VSCodeOutputTransport({ channel: this.outputChannel })
+        );
+      }
+
+      this.logger = winston.createLogger({
+        level: LogLevel[this.config.level].toLowerCase(),
+        transports: transportsArray
       });
 
       this.info("CentralizedLoggingService initialized", {
@@ -313,16 +390,15 @@ export class CentralizedLoggingService implements vscode.Disposable {
       correlationId: this.generateCorrelationId(),
     };
 
-    // Format the log message
-    const formattedMessage = this.formatLogEntry(entry);
-
-    // Output to different targets
+    // Since Winston handles formatting now, just pass to logger
+    // Remove manual output channel append as transport handles it
     if (this.logger) {
-      this.logger.log(LogLevel[level].toLowerCase(), message, { source, ...metadata });
-    }
-
-    if (this.config.enableOutputChannel) {
-      this.outputChannel.appendLine(formattedMessage);
+      const logMeta = {
+        source,
+        correlationId: entry.correlationId,
+        ...metadata
+      };
+      this.logger.log(LogLevel[level].toLowerCase(), message, logMeta);
     }
   }
 
@@ -346,8 +422,6 @@ export class CentralizedLoggingService implements vscode.Disposable {
 
     return formatted;
   }
-
-  
 
   /**
    * Log to file
@@ -439,6 +513,13 @@ export class CentralizedLoggingService implements vscode.Disposable {
         this.logFileStream.end();
         this.logFileStream = undefined;
       }
+    }
+
+    // Reinitialize logger if transports need to change
+    if (newConfig.enableConsoleLogging !== undefined || 
+        newConfig.enableFileLogging !== undefined || 
+        newConfig.enableOutputChannel !== undefined) {
+      this.initializeLogging();
     }
   }
 

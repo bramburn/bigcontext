@@ -124,6 +124,6 @@ export function useDebounce<T>(value: T, delay: number): T {
 export function withMemo<T extends ComponentType<any>>(
   Component: T,
   areEqual?: (prevProps: React.ComponentProps<T>, nextProps: React.ComponentProps<T>) => boolean
-): T {
-  return React.memo(Component, areEqual) as T;
+): React.MemoExoticComponent<T> {
+  return React.memo(Component as any, areEqual as any) as React.MemoExoticComponent<T>;
 }

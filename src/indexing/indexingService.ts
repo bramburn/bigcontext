@@ -314,7 +314,21 @@ export class IndexingService {
       );
 
       for (let i = 0; i < numWorkers; i++) {
-        const workerPath = path.join(__dirname, "indexingWorker.js");
+        // Determine the correct worker path based on the environment
+        // In production/compiled: __dirname points to out/indexing
+        // In tests: __dirname points to src/indexing, so we need to use out/indexing
+        let workerPath = path.join(__dirname, "indexingWorker.js");
+
+        // If the worker file doesn't exist at the expected location, try the compiled output directory
+        if (!fs.existsSync(workerPath)) {
+          // Try the compiled output directory
+          const compiledWorkerPath = path.join(process.cwd(), "out", "indexing", "indexingWorker.js");
+          if (fs.existsSync(compiledWorkerPath)) {
+            workerPath = compiledWorkerPath;
+          } else {
+            this.loggingService.warn(`Worker file not found at ${workerPath} or ${compiledWorkerPath}`, {}, "IndexingService");
+          }
+        }
 
         // Create embedding configuration for worker
         const providerType = this.configService.getEmbeddingProvider();

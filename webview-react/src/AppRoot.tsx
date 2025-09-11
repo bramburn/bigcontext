@@ -43,14 +43,14 @@ function AppContent() {
   return (
     <ErrorBoundary fallbackMessage="The Code Context Engine encountered an error. Please try refreshing the webview.">
       <div className={`min-h-screen w-full ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-white text-black'} p-4`}>
-      <header className="max-w-5xl mx-auto border-b border-[var(--vscode-panel-border,#3c3c3c)] pb-3 mb-6">
+      <header className="w-full border-b border-[var(--vscode-panel-border,#3c3c3c)] pb-3 mb-6">
         <h1 className="text-2xl font-semibold">Code Context Engine</h1>
         <p className="text-sm opacity-80">Retrieval-Augmented context for your code</p>
       </header>
 
-      <main className="max-w-5xl mx-auto">
+      <main className="w-full max-w-[2560px] mx-auto grid grid-cols-1 gap-4">
         {message && (
-          <div className={`mb-4 rounded border px-3 py-2 text-sm ${message.type === 'success' ? 'border-green-600/40 bg-green-500/10' : 'border-red-600/40 bg-red-500/10'}`}>
+          <div className={`mb-2 rounded border px-3 py-2 text-sm ${message.type === 'success' ? 'border-green-600/40 bg-green-500/10' : 'border-red-600/40 bg-red-500/10'}`}>
             <div className="flex items-center justify-between">
               <span>{message.text}</span>
               <button className="opacity-70 hover:opacity-100" onClick={() => setMessage(null)}>×</button>
@@ -59,7 +59,7 @@ function AppContent() {
         )}
 
         <Tabs.Root value={currentView} onValueChange={(v) => setCurrentView(v as any)}>
-          <Tabs.List className="flex gap-2 border-b border-[var(--vscode-panel-border,#3c3c3c)]">
+          <Tabs.List className="flex gap-1 border-b border-[var(--vscode-panel-border,#3c3c3c)]">
             <Tabs.Trigger value="search" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Search</Tabs.Trigger>
             <Tabs.Trigger value="indexing" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Indexing</Tabs.Trigger>
             <Tabs.Trigger value="settings" className="px-3 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-[var(--vscode-focusBorder,#007acc)]">Settings</Tabs.Trigger>
