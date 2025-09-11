@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react';
+import * as Select from '@radix-ui/react-select';
 import { postMessage, onMessageCommand } from '../utils/vscodeApi';
 import DatabaseConfigForm from '../ui/DatabaseConfigForm';
 import ProviderConfigForm from '../ui/ProviderConfigForm';
@@ -248,18 +249,30 @@ export default function SetupView() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Database Configuration</h2>
         <div className="rounded border p-4 space-y-4">
-          <label className="text-sm">
+          <div className="text-sm">
             <span className="block mb-1">Database Type</span>
-            <select
-              className="w-full rounded border bg-transparent px-2 py-1"
-              value={setupState.selectedDatabase}
-              onChange={(e) => setSelectedDatabase(e.target.value as any)}
-            >
-              {DATABASE_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+            <Select.Root value={setupState.selectedDatabase} onValueChange={(value) => setSelectedDatabase(value as any)}>
+              <Select.Trigger className="w-full rounded border bg-transparent px-2 py-1 flex items-center justify-between">
+                <Select.Value placeholder="Select a database..." />
+                <Select.Icon className="ml-2">▼</Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Content className="bg-[var(--vscode-dropdown-background,#3c3c3c)] border border-[var(--vscode-dropdown-border,#3c3c3c)] rounded shadow-lg">
+                  <Select.Viewport className="p-1">
+                    {DATABASE_OPTIONS.map(option => (
+                      <Select.Item
+                        key={option.value}
+                        value={option.value}
+                        className="px-2 py-1 rounded cursor-pointer hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] focus:bg-[var(--vscode-list-focusBackground,#094771)] outline-none"
+                      >
+                        <Select.ItemText>{option.label}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
+          </div>
 
           <DatabaseConfigForm
             databaseType={setupState.selectedDatabase}
@@ -274,18 +287,30 @@ export default function SetupView() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">AI Provider Configuration</h2>
         <div className="rounded border p-4 space-y-4">
-          <label className="text-sm">
+          <div className="text-sm">
             <span className="block mb-1">AI Provider</span>
-            <select
-              className="w-full rounded border bg-transparent px-2 py-1"
-              value={setupState.selectedProvider}
-              onChange={(e) => setSelectedProvider(e.target.value as any)}
-            >
-              {PROVIDER_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+            <Select.Root value={setupState.selectedProvider} onValueChange={(value) => setSelectedProvider(value as any)}>
+              <Select.Trigger className="w-full rounded border bg-transparent px-2 py-1 flex items-center justify-between">
+                <Select.Value placeholder="Select an AI provider..." />
+                <Select.Icon className="ml-2">▼</Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Content className="bg-[var(--vscode-dropdown-background,#3c3c3c)] border border-[var(--vscode-dropdown-border,#3c3c3c)] rounded shadow-lg">
+                  <Select.Viewport className="p-1">
+                    {PROVIDER_OPTIONS.map(option => (
+                      <Select.Item
+                        key={option.value}
+                        value={option.value}
+                        className="px-2 py-1 rounded cursor-pointer hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] focus:bg-[var(--vscode-list-focusBackground,#094771)] outline-none"
+                      >
+                        <Select.ItemText>{option.label}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
+          </div>
 
           <ProviderConfigForm
             providerType={setupState.selectedProvider}

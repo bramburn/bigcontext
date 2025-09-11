@@ -221,6 +221,17 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         });
 
+        const diagnoseStylingCommand = vscode.commands.registerCommand('codeContextEngine.diagnoseStyling', async () => {
+            try {
+                const webviewManager = manager.getWebviewManager();
+                await webviewManager.diagnoseStyling();
+                vscode.window.showInformationMessage('Styling diagnosis completed. Check docs/diagnosis-styling.md');
+            } catch (error) {
+                console.error('Failed to run styling diagnosis:', error);
+                vscode.window.showErrorMessage('Failed to run styling diagnosis');
+            }
+        });
+
         // Register all new commands
         context.subscriptions.push(
             showSearchCommand,
@@ -231,7 +242,8 @@ export async function activate(context: vscode.ExtensionContext) {
             resumeIndexingCommand,
             clearIndexCommand,
             searchCodeCommand,
-            showSavedSearchesCommand
+            showSavedSearchesCommand,
+            diagnoseStylingCommand
         );
 
     } catch (error) {

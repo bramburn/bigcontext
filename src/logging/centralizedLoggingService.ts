@@ -17,6 +17,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import * as winston from "winston";
 import { ConfigService } from "../configService";
 
 /**
@@ -74,6 +75,7 @@ export class CentralizedLoggingService {
   private logDirectory: string;
   private currentLogFile: string;
   private logFileStream?: fs.WriteStream;
+  private logger?: winston.Logger;
 
   constructor(configService: ConfigService) {
     this.configService = configService;
@@ -157,11 +159,7 @@ export class CentralizedLoggingService {
    * Get default log directory
    */
   private getDefaultLogDirectory(): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (workspaceFolder) {
-      return path.join(workspaceFolder.uri.fsPath, ".vscode", "logs");
-    }
-    return path.join(require("os").homedir(), ".code-context-engine", "logs");
+    return './logs';
   }
 
   /**
@@ -171,9 +169,20 @@ export class CentralizedLoggingService {
     try {
       if (this.config.enableFileLogging) {
         this.ensureLogDirectory();
-        this.initializeLogFile();
-        this.cleanupOldLogFiles();
       }
+
+      this.logger = winston.createLogger({
+        level: LogLevel[this.config.level].toLowerCase(),
+        transports: [
+          new winston.transports.Console({
+            format: winston.format.simple()
+          }),
+          new winston.transports.File({
+            filename: path.join(this.logDirectory, 'extension.log'),
+            format: winston.format.json()
+          })
+        ]
+      });
 
       this.info("CentralizedLoggingService initialized", {
         config: {
@@ -186,7 +195,7 @@ export class CentralizedLoggingService {
     } catch (error) {
       console.error("Failed to initialize logging service:", error);
     }
-  }
+  }</search>
 
   /**
    * Ensure log directory exists
@@ -308,16 +317,12 @@ export class CentralizedLoggingService {
     const formattedMessage = this.formatLogEntry(entry);
 
     // Output to different targets
-    if (this.config.enableConsoleLogging) {
-      this.logToConsole(level, formattedMessage);
+    if (this.logger) {
+      this.logger.log(LogLevel[level].toLowerCase(), message, { source, ...metadata });
     }
 
     if (this.config.enableOutputChannel) {
       this.outputChannel.appendLine(formattedMessage);
-    }
-
-    if (this.config.enableFileLogging) {
-      this.logToFile(formattedMessage);
     }
   }
 
@@ -342,26 +347,7 @@ export class CentralizedLoggingService {
     return formatted;
   }
 
-  /**
-   * Log to console with appropriate method
-   */
-  private logToConsole(level: LogLevel, message: string): void {
-    switch (level) {
-      case LogLevel.ERROR:
-        console.error(message);
-        break;
-      case LogLevel.WARN:
-        console.warn(message);
-        break;
-      case LogLevel.INFO:
-        console.info(message);
-        break;
-      case LogLevel.DEBUG:
-      case LogLevel.TRACE:
-        console.log(message);
-        break;
-    }
-  }
+  
 
   /**
    * Log to file

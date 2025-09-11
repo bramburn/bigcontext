@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { onMessageCommand, postMessage } from '../utils/vscodeApi';
 import FilterPanel, { FilterOptions } from '../ui/FilterPanel';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 
 interface SearchResult { id: string; filePath: string; lineNumber?: number; content: string; score?: number }
 
@@ -58,8 +60,16 @@ export default function SearchView() {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <input className="w-full rounded border bg-transparent px-3 py-2" placeholder="Search your codebase" value={query} onChange={(e)=>setQuery(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter') onSearch(); }} />
-        <button className="rounded bg-[var(--vscode-button-background,#0e639c)] px-3 py-2 text-white disabled:opacity-50" disabled={searching} onClick={onSearch}>Search</button>
+        <Input
+          className="flex-1"
+          placeholder="Search your codebase"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSearch(); }}
+        />
+        <Button disabled={searching} onClick={onSearch}>
+          {searching ? 'Searching...' : 'Search'}
+        </Button>
       </div>
 
       {searching && <div className="text-sm opacity-80">Searching • please wait</div>}

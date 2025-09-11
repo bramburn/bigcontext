@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
+import { Input } from './Input';
+import { Label } from './Label';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -88,32 +90,38 @@ export default function ValidatedInput({
   const isError = validationResult && !validationResult.isValid && hasBlurred;
   const isSuccess = validationResult && validationResult.isValid && value && hasBlurred;
 
+  const inputId = `input-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
   return (
     <div className={`space-y-1 ${className || ''}`}>
-      <label className="block text-sm">
-        <span className="block mb-1">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </span>
-        <input
-          type={type}
-          value={value}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          placeholder={placeholder}
-          className={`w-full rounded border bg-transparent px-2 py-1 ${
-            isError ? 'border-red-500' : isSuccess ? 'border-green-500' : ''
-          }`}
-          aria-invalid={isError ? 'true' : 'false'}
-        />
-      </label>
+      <Label htmlFor={inputId} className="block text-sm">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </Label>
+      <Input
+        id={inputId}
+        type={type}
+        value={value}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        className={`${
+          isError ? 'border-red-500 focus-visible:ring-red-500' :
+          isSuccess ? 'border-green-500 focus-visible:ring-green-500' : ''
+        }`}
+        aria-invalid={isError ? 'true' : 'false'}
+        aria-describedby={validationResult ? `${inputId}-validation` : undefined}
+      />
 
       {helperText && !validationResult && (
         <div className="text-xs opacity-70">{helperText}</div>
       )}
 
       {isError && (
-        <div className="rounded border border-red-600/40 bg-red-500/10 px-2 py-1 text-xs">
+        <div
+          id={`${inputId}-validation`}
+          className="rounded border border-red-600/40 bg-red-500/10 px-2 py-1 text-xs"
+        >
           <div className="text-red-400">{validationResult.message}</div>
           {validationResult.suggestions && (
             <ul className="mt-1 list-disc list-inside">
@@ -126,7 +134,10 @@ export default function ValidatedInput({
       )}
 
       {isSuccess && (
-        <div className="rounded border border-green-600/40 bg-green-500/10 px-2 py-1 text-xs text-green-400">
+        <div
+          id={`${inputId}-validation`}
+          className="rounded border border-green-600/40 bg-green-500/10 px-2 py-1 text-xs text-green-400"
+        >
           Valid
         </div>
       )}

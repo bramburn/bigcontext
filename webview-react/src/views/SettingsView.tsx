@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { onMessageCommand, postMessage } from '../utils/vscodeApi';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Label } from '../ui/Label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 
 export type Provider = 'OpenAI' | 'Mimic Embed';
 
@@ -78,62 +82,72 @@ export default function SettingsView() {
       <section className="space-y-3">
         <h3 className="font-medium">Embedding Model</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label className="text-sm">
-            <span className="block mb-1">Provider</span>
-            <select
-              className="w-full rounded border bg-transparent px-2 py-1"
+          <div className="space-y-2">
+            <Label htmlFor="provider-select">Provider</Label>
+            <Select
               value={settings.embeddingModel.provider}
-              onChange={(e)=>update(s=>{s.embeddingModel.provider = e.target.value as Provider;})}
+              onValueChange={(value) => update(s => { s.embeddingModel.provider = value as Provider; })}
             >
-              <option value="OpenAI">OpenAI</option>
-              <option value="Mimic Embed">Mimic Embed</option>
-            </select>
-          </label>
+              <SelectTrigger id="provider-select">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="OpenAI">OpenAI</SelectItem>
+                <SelectItem value="Mimic Embed">Mimic Embed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <label className="text-sm">
-            <span className="block mb-1">API Key</span>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="api-key-input">API Key</Label>
+            <Input
+              id="api-key-input"
               type="password"
-              className="w-full rounded border bg-transparent px-2 py-1"
               value={settings.embeddingModel.apiKey}
-              onChange={(e)=>update(s=>{s.embeddingModel.apiKey = e.target.value;})}
+              onChange={(e) => update(s => { s.embeddingModel.apiKey = e.target.value; })}
+              placeholder="Enter your API key"
             />
-          </label>
+          </div>
 
           {settings.embeddingModel.provider === 'OpenAI' ? (
-            <label className="text-sm">
-              <span className="block mb-1">Model</span>
-              <select
-                className="w-full rounded border bg-transparent px-2 py-1"
+            <div className="space-y-2">
+              <Label htmlFor="model-select">Model</Label>
+              <Select
                 value={settings.embeddingModel.modelName}
-                onChange={(e)=>update(s=>{s.embeddingModel.modelName = e.target.value;})}
+                onValueChange={(value) => update(s => { s.embeddingModel.modelName = value; })}
               >
-                <option value="text-embedding-ada-002">text-embedding-ada-002</option>
-                <option value="text-embedding-3-small">text-embedding-3-small</option>
-                <option value="text-embedding-3-large">text-embedding-3-large</option>
-              </select>
-            </label>
+                <SelectTrigger id="model-select">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text-embedding-ada-002">text-embedding-ada-002</SelectItem>
+                  <SelectItem value="text-embedding-3-small">text-embedding-3-small</SelectItem>
+                  <SelectItem value="text-embedding-3-large">text-embedding-3-large</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           ) : (
-            <label className="text-sm">
-              <span className="block mb-1">Model Name</span>
-              <input
-                className="w-full rounded border bg-transparent px-2 py-1"
+            <div className="space-y-2">
+              <Label htmlFor="model-name-input">Model Name</Label>
+              <Input
+                id="model-name-input"
                 value={settings.embeddingModel.modelName}
-                onChange={(e)=>update(s=>{s.embeddingModel.modelName = e.target.value;})}
+                onChange={(e) => update(s => { s.embeddingModel.modelName = e.target.value; })}
+                placeholder="Enter model name"
               />
-            </label>
+            </div>
           )}
 
           {settings.embeddingModel.provider === 'Mimic Embed' && (
-            <label className="text-sm md:col-span-2">
-              <span className="block mb-1">Endpoint URL</span>
-              <input
-                className="w-full rounded border bg-transparent px-2 py-1"
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="endpoint-input">Endpoint URL</Label>
+              <Input
+                id="endpoint-input"
                 placeholder="https://your-mimic-embed-endpoint.com"
                 value={settings.embeddingModel.endpoint || ''}
-                onChange={(e)=>update(s=>{s.embeddingModel.endpoint = e.target.value;})}
+                onChange={(e) => update(s => { s.embeddingModel.endpoint = e.target.value; })}
               />
-            </label>
+            </div>
           )}
         </div>
       </section>
@@ -141,47 +155,57 @@ export default function SettingsView() {
       <section className="space-y-3">
         <h3 className="font-medium">Qdrant Database</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label className="text-sm">
-            <span className="block mb-1">Host</span>
-            <input
-              className="w-full rounded border bg-transparent px-2 py-1"
+          <div className="space-y-2">
+            <Label htmlFor="host-input">Host</Label>
+            <Input
+              id="host-input"
               value={settings.qdrantDatabase.host}
-              onChange={(e)=>update(s=>{s.qdrantDatabase.host = e.target.value;})}
+              onChange={(e) => update(s => { s.qdrantDatabase.host = e.target.value; })}
+              placeholder="localhost"
             />
-          </label>
-          <label className="text-sm">
-            <span className="block mb-1">Port</span>
-            <input
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="port-input">Port</Label>
+            <Input
+              id="port-input"
               type="number"
-              className="w-full rounded border bg-transparent px-2 py-1"
               value={settings.qdrantDatabase.port}
-              onChange={(e)=>update(s=>{s.qdrantDatabase.port = parseInt(e.target.value||'6333',10)||6333;})}
+              onChange={(e) => update(s => { s.qdrantDatabase.port = parseInt(e.target.value || '6333', 10) || 6333; })}
+              placeholder="6333"
             />
-          </label>
-          <label className="text-sm md:col-span-2">
-            <span className="block mb-1">Collection Name</span>
-            <input
-              className="w-full rounded border bg-transparent px-2 py-1"
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="collection-input">Collection Name</Label>
+            <Input
+              id="collection-input"
               value={settings.qdrantDatabase.collectionName}
-              onChange={(e)=>update(s=>{s.qdrantDatabase.collectionName = e.target.value;})}
+              onChange={(e) => update(s => { s.qdrantDatabase.collectionName = e.target.value; })}
+              placeholder="code-embeddings"
             />
-          </label>
-          <label className="text-sm md:col-span-2">
-            <span className="block mb-1">API Key (Optional)</span>
-            <input
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="db-api-key-input">API Key (Optional)</Label>
+            <Input
+              id="db-api-key-input"
               type="password"
-              className="w-full rounded border bg-transparent px-2 py-1"
               value={settings.qdrantDatabase.apiKey || ''}
-              onChange={(e)=>update(s=>{s.qdrantDatabase.apiKey = e.target.value;})}
+              onChange={(e) => update(s => { s.qdrantDatabase.apiKey = e.target.value; })}
+              placeholder="Enter API key if required"
             />
-          </label>
+          </div>
         </div>
       </section>
 
       <div className="flex gap-2">
-        <button className="rounded bg-[var(--vscode-button-background,#0e639c)] px-3 py-1.5 text-white hover:opacity-95 disabled:opacity-50" disabled={saving||loading} onClick={onSave}>Save Settings</button>
-        <button className="rounded border px-3 py-1.5 hover:bg-white/5 disabled:opacity-50" disabled={testing||loading} onClick={onTest}>Test Connection</button>
-        <button className="rounded border px-3 py-1.5 hover:bg-white/5" onClick={onReset}>Reset to Defaults</button>
+        <Button disabled={saving || loading} onClick={onSave}>
+          {saving ? 'Saving...' : 'Save Settings'}
+        </Button>
+        <Button variant="outline" disabled={testing || loading} onClick={onTest}>
+          {testing ? 'Testing...' : 'Test Connection'}
+        </Button>
+        <Button variant="outline" onClick={onReset}>
+          Reset to Defaults
+        </Button>
       </div>
     </div>
   );

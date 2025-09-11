@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 
 function App() {
   const [status, setStatus] = useState('Initializing...');
@@ -44,7 +45,34 @@ function App() {
             timestamp: Date.now()
           });
           log('Sent webviewReady message');
-          
+
+          // Tailwind class check - log computed styles
+          setTimeout(() => {
+            const flexElement = document.querySelector('.flex');
+            if (flexElement) {
+              const computedStyle = window.getComputedStyle(flexElement);
+              log(`Tailwind class check: .flex element display = ${computedStyle.display} (expected: flex)`);
+            } else {
+              log('Tailwind class check: .flex element not found');
+            }
+          }, 100);
+
+          // Post asset loading information
+          setTimeout(() => {
+            const cssLink = document.querySelector('link[href*=".css"]') as HTMLLinkElement;
+            if (cssLink) {
+              api.postMessage({
+                command: 'assetLoad',
+                data: {
+                  css: cssLink.href,
+                  status: 'loaded'
+                },
+                timestamp: Date.now()
+              });
+              log(`Posted asset load info: ${cssLink.href}`);
+            }
+          }, 200);
+
           // Listen for messages from extension
           const handleMessage = (event: MessageEvent) => {
             const msg = event.data;
@@ -134,6 +162,32 @@ function App() {
                 </pre>
               </div>
             </div>
+
+            {/* Test Radix component in development mode */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 p-4 border border-yellow-500 rounded">
+                <p className="text-yellow-400 mb-2">Development Mode: Radix Test</p>
+                <Dialog.Root>
+                  <Dialog.Trigger asChild>
+                    <button className="px-3 py-1 bg-blue-600 text-white rounded">
+                      Test Radix Dialog
+                    </button>
+                  </Dialog.Trigger>
+                  <Dialog.Portal>
+                    <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+                    <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded shadow-lg">
+                      <Dialog.Title className="text-lg font-semibold mb-4">Test Dialog</Dialog.Title>
+                      <p>This is a test Radix UI Dialog component.</p>
+                      <Dialog.Close asChild>
+                        <button className="mt-4 px-3 py-1 bg-gray-600 text-white rounded">
+                          Close
+                        </button>
+                      </Dialog.Close>
+                    </Dialog.Content>
+                  </Dialog.Portal>
+                </Dialog.Root>
+              </div>
+            )}
           </div>
         </div>
       </div>

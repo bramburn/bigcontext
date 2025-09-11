@@ -50,6 +50,11 @@ class ErrorBoundary extends Component<Props, State> {
     }
 
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+
+    // Log Radix-specific errors for debugging
+    if (error.message && (error.message.includes('radix') || error.message.includes('CSS var'))) {
+      console.error('Radix UI or CSS variable error detected:', error.message);
+    }
   }
 
   handleReload = () => {

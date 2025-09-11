@@ -31,16 +31,28 @@ export default defineConfig({
         },
         inlineDynamicImports: true,
         manualChunks: undefined
+      },
+      external: ['vscode'], // Exclude VS Code API from bundle
+      treeshake: {
+        moduleSideEffects: false,
+        propertyReadSideEffects: false,
+        unknownGlobalSideEffects: false
       }
     },
     target: ['es2020', 'chrome87', 'safari14', 'firefox78', 'edge88'],
     cssCodeSplit: false, // Inline CSS for faster loading
     sourcemap: false, // Disable sourcemaps for production
-    reportCompressedSize: false // Faster builds
+    reportCompressedSize: false, // Faster builds
+    chunkSizeWarningLimit: 1000, // Increase warning limit for webview context
+    assetsInlineLimit: 4096 // Inline small assets
   },
   esbuild: {
-    drop: ['console', 'debugger'],
-    legalComments: 'none'
+    drop: ['debugger'],
+    legalComments: 'none',
+    treeShaking: true,
+    minifyIdentifiers: true,
+    minifySyntax: true,
+    minifyWhitespace: true
   },
   test: {
     globals: true,

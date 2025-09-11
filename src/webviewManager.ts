@@ -902,6 +902,15 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                     this.handleHeartbeat(message, this.mainPanel!.webview);
                     return;
                 }
+                // Handle asset load logging
+                if (message.command === 'assetLoad') {
+                    this.loggingService.info('Asset load info received', {
+                        url: message.data?.css,
+                        status: message.data?.status,
+                        timestamp: new Date().toISOString()
+                    }, 'WebviewManager');
+                    return;
+                }
                 messageRouter.handleMessage(message, this.mainPanel!.webview);
             },
             undefined,
@@ -988,6 +997,15 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 // Handle heartbeat messages
                 if (message.command === 'heartbeat') {
                     this.handleHeartbeat(message, this.settingsPanel!.webview);
+                    return;
+                }
+                // Handle asset load logging
+                if (message.command === 'assetLoad') {
+                    this.loggingService.info('Asset load info received', {
+                        url: message.data?.css,
+                        status: message.data?.status,
+                        timestamp: new Date().toISOString()
+                    }, 'WebviewManager');
                     return;
                 }
                 messageRouter.handleMessage(message, this.settingsPanel!.webview);
@@ -1409,6 +1427,144 @@ export class WebviewManager implements vscode.WebviewViewProvider {
         if (entry) {
             entry.panel.webview.postMessage(message);
         }
+    }
+
+    /**
+     * Generate a styling diagnosis report
+     */
+    async diagnoseStyling(): Promise<void> {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+
+            // Collect diagnostic information
+            const diagnostics = {
+                timestamp: new Date().toISOString(),
+                buildDirectory: this.getBuildDirectory(),
+                extensionPath: this.context.extensionPath,
+                panels: Array.from(this.panels.keys()),
+                messageQueueSize: this.messageQueue.size
+            };
+
+            // Check if build files exist
+            const buildPath = path.join(this.context.extensionPath, this.getBuildDirectory());
+            const htmlPath = path.join(buildPath, 'index.html');
+            const cssPath = path.join(buildPath, 'app.css');
+            const jsPath = path.join(buildPath, 'app.js');
+
+            const fileChecks = {
+                htmlExists: fs.existsSync(htmlPath),
+                cssExists: fs.existsSync(cssPath),
+                jsExists: fs.existsSync(jsPath)
+            };
+
+            // Generate report content
+            const reportContent = `# Webview Styling Diagnosis Report
+
+Generated: ${diagnostics.timestamp}
+
+## Build Configuration
+- Build Directory: ${diagnostics.buildDirectory}
+- Extension Path: ${diagnostics.extensionPath}
+
+## File Checks
+- HTML File: ${fileChecks.htmlExists ? '✅ Found' : '❌ Missing'} (${htmlPath})
+- CSS File: ${fileChecks.cssExists ? '✅ Found' : '❌ Missing'} (${cssPath})
+- JS File: ${fileChecks.jsExists ? '✅ Found' : '❌ Missing'} (${jsPath})
+
+## Active Panels
+${diagnostics.panels.length > 0 ? diagnostics.panels.map(id => `- ${id}`).join('\n') : 'No active panels'}
+
+## Message Queue
+- Pending messages: ${diagnostics.messageQueueSize}
+
+## CSS Content Analysis
+${fileChecks.cssExists ? this.analyzeCssContent(cssPath) : 'CSS file not found - cannot analyze content'}
+
+## Recommendations
+${this.generateRecommendations(fileChecks)}
+`;
+
+            // Write report to docs directory
+            const docsDir = path.join(this.context.extensionPath, 'docs');
+            if (!fs.existsSync(docsDir)) {
+                fs.mkdirSync(docsDir, { recursive: true });
+            }
+
+            const reportPath = path.join(docsDir, 'diagnosis-styling.md');
+            fs.writeFileSync(reportPath, reportContent, 'utf8');
+
+            this.loggingService.info('Styling diagnosis report generated', { reportPath }, 'WebviewManager');
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.loggingService.error('Failed to generate styling diagnosis', { error: errorMessage }, 'WebviewManager');
+            throw error;
+        }
+    }
+
+    /**
+     * Analyze CSS content for Tailwind classes
+     */
+    private analyzeCssContent(cssPath: string): string {
+        try {
+            const fs = require('fs');
+            const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+            // Check for key Tailwind classes
+            const tailwindChecks = {
+                flex: cssContent.includes('.flex'),
+                minHeightScreen: cssContent.includes('.min-h-screen'),
+                wFull: cssContent.includes('.w-full'),
+                padding: cssContent.includes('.p-4'),
+                background: cssContent.includes('.bg-'),
+                tailwindBase: cssContent.includes('@tailwind') || cssContent.includes('tailwindcss')
+            };
+
+            const fileSize = (cssContent.length / 1024).toFixed(2);
+
+            return `
+### CSS File Analysis
+- File size: ${fileSize} KB
+- Contains .flex: ${tailwindChecks.flex ? '✅' : '❌'}
+- Contains .min-h-screen: ${tailwindChecks.minHeightScreen ? '✅' : '❌'}
+- Contains .w-full: ${tailwindChecks.wFull ? '✅' : '❌'}
+- Contains .p-4: ${tailwindChecks.padding ? '✅' : '❌'}
+- Contains background classes: ${tailwindChecks.background ? '✅' : '❌'}
+- Contains Tailwind directives: ${tailwindChecks.tailwindBase ? '✅' : '❌'}
+`;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return `Error analyzing CSS content: ${errorMessage}`;
+        }
+    }
+
+    /**
+     * Generate recommendations based on file checks
+     */
+    private generateRecommendations(fileChecks: any): string {
+        const recommendations = [];
+
+        if (!fileChecks.htmlExists) {
+            recommendations.push('- Build the React webview: `cd webview-react && npm run build`');
+        }
+
+        if (!fileChecks.cssExists) {
+            recommendations.push('- CSS file missing - check Vite build configuration');
+            recommendations.push('- Verify Tailwind CSS is properly configured in postcss.config.js');
+        }
+
+        if (!fileChecks.jsExists) {
+            recommendations.push('- JavaScript bundle missing - check Vite build output');
+        }
+
+        if (fileChecks.htmlExists && fileChecks.cssExists && fileChecks.jsExists) {
+            recommendations.push('- All build files present - check browser console for runtime errors');
+            recommendations.push('- Verify localResourceRoots includes webview-react/dist');
+            recommendations.push('- Check CSP settings for style-src and script-src');
+        }
+
+        return recommendations.length > 0 ? recommendations.join('\n') : 'All files present - no immediate issues detected';
     }
 
     /**

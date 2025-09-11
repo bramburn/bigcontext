@@ -9,17 +9,18 @@ import DiagnosticsView from './views/DiagnosticsView';
 import HelpView from './views/HelpView';
 import ConnectionStatus from './ui/ConnectionStatus';
 import ErrorBoundary from './ui/ErrorBoundary';
+import { ThemeProvider, useTheme } from './providers/ThemeProvider';
+import { TooltipProvider } from './ui/Tooltip';
+import PerformanceDashboard, { usePerformanceDashboard } from './components/PerformanceDashboard';
 
 
-function AppRoot() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+function AppContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [currentView, setCurrentView] = useState<'search' | 'indexing' | 'settings' | 'setup' | 'diagnostics' | 'help'>('search');
+  const { theme, isDark } = useTheme();
+  const performanceDashboard = usePerformanceDashboard();
 
   useEffect(() => {
-    const isDark = document.body.classList.contains('vscode-dark') ||
-                   document.body.classList.contains('vscode-high-contrast');
-    setTheme(isDark ? 'dark' : 'light');
 
     const onMessage = (event: MessageEvent) => {
       const m = event.data;
@@ -41,7 +42,7 @@ function AppRoot() {
 
   return (
     <ErrorBoundary fallbackMessage="The Code Context Engine encountered an error. Please try refreshing the webview.">
-      <div className={`min-h-screen w-full ${theme === 'dark' ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-white text-black'} p-4`}>
+      <div className={`min-h-screen w-full ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-white text-black'} p-4`}>
       <header className="max-w-5xl mx-auto border-b border-[var(--vscode-panel-border,#3c3c3c)] pb-3 mb-6">
         <h1 className="text-2xl font-semibold">Code Context Engine</h1>
         <p className="text-sm opacity-80">Retrieval-Augmented context for your code</p>
@@ -95,7 +96,23 @@ function AppRoot() {
         <ConnectionStatus />
       </main>
       </div>
+
+      {/* Performance Dashboard (development only) */}
+      <PerformanceDashboard
+        isVisible={performanceDashboard.isVisible}
+        onClose={performanceDashboard.hide}
+      />
     </ErrorBoundary>
+  );
+}
+
+export default function AppRoot() {
+  return (
+    <ThemeProvider>
+      <TooltipProvider>
+        <AppContent />
+      </TooltipProvider>
+    </ThemeProvider>
   );
 }
 

@@ -503,6 +503,14 @@ export class ExtensionManager {
     }
 
     /**
+     * Gets the CentralizedLoggingService instance
+     * @returns The CentralizedLoggingService instance for logging
+     */
+    getLoggingService(): CentralizedLoggingService {
+        return this.loggingService;
+    }</search>
+
+    /**
      * Gets the HistoryManager instance
      * @returns The HistoryManager instance that tracks user history
      */

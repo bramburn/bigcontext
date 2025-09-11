@@ -10,6 +10,119 @@
   --vscode-foreground: #cccccc;
   --vscode-editor-background: #1e1e1e;
   --vscode-panel-border: #3c3c3c;
+
+  /* Enhanced Radix UI customizations */
+  --radix-select-content-background: var(--vscode-dropdown-background, #3c3c3c);
+  --radix-select-content-border: var(--vscode-dropdown-border, #3c3c3c);
+  --radix-select-item-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --radix-select-item-focus: var(--vscode-list-focusBackground, #094771);
+
+  /* Dialog customizations */
+  --radix-dialog-overlay-background: rgba(0, 0, 0, 0.5);
+  --radix-dialog-content-background: var(--vscode-editor-background, #1e1e1e);
+  --radix-dialog-content-border: var(--vscode-panel-border, #3c3c3c);
+
+  /* Toast customizations */
+  --radix-toast-background: var(--vscode-notifications-background, #252526);
+  --radix-toast-border: var(--vscode-notifications-border, #454545);
+  --radix-toast-foreground: var(--vscode-notifications-foreground, #cccccc);
+
+  /* Tooltip customizations */
+  --radix-tooltip-background: var(--vscode-editorHoverWidget-background, #252526);
+  --radix-tooltip-border: var(--vscode-editorHoverWidget-border, #454545);
+  --radix-tooltip-foreground: var(--vscode-editorHoverWidget-foreground, #cccccc);
+
+  /* Progress customizations */
+  --radix-progress-background: var(--vscode-progressBar-background, #0e70c0);
+  --radix-progress-indicator: var(--vscode-progressBar-background, #0e70c0);
+
+  /* Slider customizations */
+  --radix-slider-track: var(--vscode-scrollbarSlider-background, #79797966);
+  --radix-slider-range: var(--vscode-progressBar-background, #0e70c0);
+  --radix-slider-thumb: var(--vscode-scrollbarSlider-activeBackground, #bfbfbf66);
+}
+
+/* Collapsible animations */
+@keyframes collapsible-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+.animate-collapsible-down {
+  animation: collapsible-down 150ms ease-out;
+}
+
+.animate-collapsible-up {
+  animation: collapsible-up 150ms ease-out;
+}
+
+/* Light theme overrides */
+body.vscode-light {
+  --vscode-foreground: #333333;
+  --vscode-editor-background: #ffffff;
+  --vscode-panel-border: #e5e5e5;
+
+  --radix-select-content-background: var(--vscode-dropdown-background, #ffffff);
+  --radix-select-content-border: var(--vscode-dropdown-border, #e5e5e5);
+  --radix-select-item-hover: var(--vscode-list-hoverBackground, #f3f3f3);
+  --radix-select-item-focus: var(--vscode-list-focusBackground, #0078d4);
+
+  --radix-dialog-overlay-background: rgba(0, 0, 0, 0.3);
+  --radix-dialog-content-background: var(--vscode-editor-background, #ffffff);
+  --radix-dialog-content-border: var(--vscode-panel-border, #e5e5e5);
+
+  --radix-toast-background: var(--vscode-notifications-background, #ffffff);
+  --radix-toast-border: var(--vscode-notifications-border, #e5e5e5);
+  --radix-toast-foreground: var(--vscode-notifications-foreground, #333333);
+
+  --radix-tooltip-background: var(--vscode-editorHoverWidget-background, #ffffff);
+  --radix-tooltip-border: var(--vscode-editorHoverWidget-border, #e5e5e5);
+  --radix-tooltip-foreground: var(--vscode-editorHoverWidget-foreground, #333333);
+}
+
+/* High contrast theme overrides */
+body.vscode-high-contrast,
+body.vscode-high-contrast-light,
+body.vscode-high-contrast-dark {
+  --vscode-panel-border: #ffffff;
+
+  --radix-select-content-background: var(--vscode-dropdown-background, #000000);
+  --radix-select-content-border: var(--vscode-dropdown-border, #ffffff);
+  --radix-select-item-hover: var(--vscode-list-hoverBackground, #ffffff);
+  --radix-select-item-focus: var(--vscode-list-focusBackground, #ffffff);
+
+  --radix-dialog-overlay-background: rgba(0, 0, 0, 0.8);
+  --radix-dialog-content-background: var(--vscode-editor-background, #000000);
+  --radix-dialog-content-border: var(--vscode-panel-border, #ffffff);
+
+  --radix-toast-background: var(--vscode-notifications-background, #000000);
+  --radix-toast-border: var(--vscode-notifications-border, #ffffff);
+  --radix-toast-foreground: var(--vscode-notifications-foreground, #ffffff);
+
+  --radix-tooltip-background: var(--vscode-editorHoverWidget-background, #000000);
+  --radix-tooltip-border: var(--vscode-editorHoverWidget-border, #ffffff);
+  --radix-tooltip-foreground: var(--vscode-editorHoverWidget-foreground, #ffffff);
+}
+
+/* High contrast light specific overrides */
+body.vscode-high-contrast-light {
+  --radix-select-content-background: var(--vscode-dropdown-background, #ffffff);
+  --radix-dialog-content-background: var(--vscode-editor-background, #ffffff);
+  --radix-toast-background: var(--vscode-notifications-background, #ffffff);
+  --radix-tooltip-background: var(--vscode-editorHoverWidget-background, #ffffff);
 }
 
 * {
