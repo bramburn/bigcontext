@@ -9,6 +9,8 @@ interface ResizablePanelProps {
   className?: string;
   onWidthChange?: (width: number) => void;
   storageKey?: string; // For persisting width in localStorage
+  collapsed?: boolean; // When true, panel renders at collapsedWidth and disables resize
+  collapsedWidth?: number; // Width when collapsed (defaults to 28)
 }
 
 export default function ResizablePanel({
@@ -19,6 +21,8 @@ export default function ResizablePanel({
   className,
   onWidthChange,
   storageKey,
+  collapsed = false,
+  collapsedWidth = 28,
 }: ResizablePanelProps) {
   // Initialize width from localStorage if available
   const getInitialWidth = () => {
@@ -88,25 +92,28 @@ export default function ResizablePanel({
   return (
     <div
       ref={panelRef}
-      className={cn('relative flex-shrink-0', className)}
-      style={{ width: `${width}px` }}
+      className={cn('relative flex-shrink-0 overflow-hidden', className)}
+      style={{ width: `${collapsed ? collapsedWidth : width}px`, transition: 'width 200ms ease-in-out' }}
+      aria-hidden={false}
     >
       {children}
       
       {/* Resize handle */}
-      <div
-        className={cn(
-          'absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-[var(--vscode-focusBorder,#007acc)]/30 transition-colors',
-          isResizing && 'bg-[var(--vscode-focusBorder,#007acc)]/50'
-        )}
-        onMouseDown={handleMouseDown}
-      >
+      {!collapsed && (
+        <div
+          className={cn(
+            'absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-[var(--vscode-focusBorder,#007acc)]/30 transition-colors',
+            isResizing && 'bg-[var(--vscode-focusBorder,#007acc)]/50'
+          )}
+          onMouseDown={handleMouseDown}
+        >
         {/* Visual indicator for the resize handle */}
         <div className="absolute top-1/2 right-0 w-1 h-8 -translate-y-1/2 bg-[var(--vscode-panel-border,#3c3c3c)] rounded-l" />
-      </div>
-      
+        </div>
+      )}
+
       {/* Overlay during resize to prevent text selection */}
-      {isResizing && (
+      {isResizing && !collapsed && (
         <div className="fixed inset-0 z-50 cursor-col-resize" style={{ userSelect: 'none' }} />
       )}
     </div>

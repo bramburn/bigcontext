@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { onMessageCommand, postMessage } from '../utils/vscodeApi';
-import FilterPanel, { FilterOptions } from '../ui/FilterPanel';
+import type { FilterOptions } from '../ui/FilterPanel';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 interface SearchResult { id: string; filePath: string; lineNumber?: number; content: string; score?: number }
 
-export default function SearchView() {
+interface SearchViewProps {
+  filters: FilterOptions;
+  onAvailableFileTypesChange?: (types: string[]) => void;
+}
+
+export default function SearchView({ filters, onAvailableFileTypesChange }: SearchViewProps) {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [filters, setFilters] = useState<FilterOptions>({});
+
 
   const availableFileTypes = useMemo(() => {
     const set = new Set<string>();
@@ -21,6 +26,10 @@ export default function SearchView() {
     }
     return Array.from(set).sort();
   }, [results]);
+
+  useEffect(() => {
+    onAvailableFileTypesChange?.(availableFileTypes);
+  }, [availableFileTypes, onAvailableFileTypesChange]);
 
   const visibleResults = useMemo(() => {
     return results.filter((r) => {
@@ -74,7 +83,7 @@ export default function SearchView() {
 
       {searching && <div className="text-sm opacity-80">Searching • please wait</div>}
 
-      <FilterPanel availableFileTypes={availableFileTypes} currentFilters={filters} onFilterChange={setFilters} />
+
 
       <div className="space-y-1">
         {visibleResults.length === 0 && !searching && (
