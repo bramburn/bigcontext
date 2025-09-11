@@ -34,7 +34,9 @@ const mockVscode = {
         registerCommand: vi.fn()
     },
     Uri: {
-        file: (path: string) => ({ fsPath: path, toString: () => path })
+        file: (path: string) => ({ fsPath: path, toString: () => path }),
+        parse: (path: string) => ({ fsPath: path, toString: () => path }),
+        joinPath: (...paths: any[]) => ({ fsPath: paths.join('/'), toString: () => paths.join('/') })
     },
     Disposable: class {
         constructor(private callback: () => void) {}
@@ -57,6 +59,18 @@ const mockVscode = {
     },
     ConfigurationChangeEvent: class {
         constructor(public affectsConfiguration: (section: string) => boolean) {}
+    },
+    ProgressLocation: {
+        Notification: 15,
+        SourceControl: 1,
+        Window: 10
+    },
+    ViewColumn: {
+        One: 1,
+        Two: 2,
+        Three: 3,
+        Active: -1,
+        Beside: -2
     }
 };
 

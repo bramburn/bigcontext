@@ -5,6 +5,19 @@ import { vi } from 'vitest';
 vi.mock('vscode', () => ({
     window: {
         createOutputChannel: vi.fn(() => ({ appendLine: vi.fn(), show: vi.fn(), dispose: vi.fn() }))
+    },
+    Uri: {
+        file: (path: string) => ({ fsPath: path, toString: () => path }),
+        parse: (path: string) => ({ fsPath: path, toString: () => path }),
+        joinPath: (...paths: any[]) => ({ fsPath: paths.join('/'), toString: () => paths.join('/') })
+    },
+    workspace: {
+        workspaceFolders: [{ uri: { fsPath: '/mock/workspace' } }],
+        getConfiguration: vi.fn(() => ({
+            get: vi.fn(),
+            update: vi.fn(),
+            has: vi.fn()
+        }))
     }
 }));
 import { MessageRouter } from '../../messageRouter';

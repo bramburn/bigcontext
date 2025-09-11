@@ -14,7 +14,17 @@ import { vi } from 'vitest';
 vi.mock('vscode', () => ({
     workspace: {
         onDidChangeWorkspaceFolders: vi.fn(),
-        workspaceFolders: []
+        workspaceFolders: [],
+        getConfiguration: vi.fn(() => ({
+            get: vi.fn(),
+            update: vi.fn(),
+            has: vi.fn()
+        }))
+    },
+    Uri: {
+        file: (path: string) => ({ fsPath: path, toString: () => path }),
+        parse: (path: string) => ({ fsPath: path, toString: () => path }),
+        joinPath: (...paths: any[]) => ({ fsPath: paths.join('/'), toString: () => paths.join('/') })
     }
 }));
 import * as vscode from 'vscode';

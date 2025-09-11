@@ -55,9 +55,24 @@ describe('IIndexingService Contract Test', () => {
         } as any;
 
         // Mock dependencies
-        const mockFileProcessor = {} as FileProcessor;
-        const mockEmbeddingProvider = {} as EmbeddingProvider;
-        const mockQdrantService = {} as QdrantService;
+        const mockFileProcessor = {
+            discoverFiles: vi.fn().mockResolvedValue([]),
+            processFile: vi.fn().mockResolvedValue([]),
+            readFileContent: vi.fn().mockResolvedValue(''),
+            detectLanguage: vi.fn().mockReturnValue('typescript'),
+            isBinaryFile: vi.fn().mockResolvedValue(false)
+        } as any as FileProcessor;
+        const mockEmbeddingProvider = {
+            generateEmbeddings: vi.fn().mockResolvedValue([]),
+            isReady: vi.fn().mockResolvedValue(true)
+        } as any as EmbeddingProvider;
+        const mockQdrantService = {
+            healthCheck: vi.fn().mockResolvedValue(true),
+            collectionExists: vi.fn().mockResolvedValue(true),
+            createCollection: vi.fn().mockResolvedValue(undefined),
+            upsertPoints: vi.fn().mockResolvedValue(undefined),
+            search: vi.fn().mockResolvedValue([])
+        } as any as QdrantService;
 
         // Create actual IndexingService instance
         indexingService = new IndexingService(
@@ -134,7 +149,7 @@ describe('IIndexingService Contract Test', () => {
             const stateSequence: IndexState[] = ['idle', 'indexing', 'paused', 'indexing', 'idle'];
             
             for (let i = 0; i < stateSequence.length; i++) {
-                (indexingService.getIndexState as any).mockResolvedValueOnce(stateSequence[i]);
+                vi.mocked(indexingService.getIndexState).mockResolvedValueOnce(stateSequence[i]);
                 const state = await indexingService.getIndexState();
                 expect(state).toBe(stateSequence[i]);
             }
@@ -144,12 +159,12 @@ describe('IIndexingService Contract Test', () => {
     describe('Error Handling Contract', () => {
         it('should handle errors gracefully in all methods', async () => {
             const errorMessage = 'Test error';
-            
+
             // Test that methods can throw errors
-            (indexingService.startIndexing as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
-            (indexingService.pauseIndexing as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
-            (indexingService.resumeIndexing as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
-            (indexingService.getIndexState as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
+            vi.mocked(indexingService.startIndexing).mockRejectedValueOnce(new Error(errorMessage));
+            vi.mocked(indexingService.pauseIndexing).mockRejectedValueOnce(new Error(errorMessage));
+            vi.mocked(indexingService.resumeIndexing).mockRejectedValueOnce(new Error(errorMessage));
+            vi.mocked(indexingService.getIndexState).mockRejectedValueOnce(new Error(errorMessage));
 
             await expect(indexingService.startIndexing()).rejects.toThrow(errorMessage);
             await expect(indexingService.pauseIndexing()).rejects.toThrow(errorMessage);
@@ -159,8 +174,8 @@ describe('IIndexingService Contract Test', () => {
 
         it('should transition to error state when operations fail', async () => {
             // When an error occurs, the service should transition to error state
-            (indexingService.getIndexState as any).mockResolvedValueOnce('error');
-            
+            vi.mocked(indexingService.getIndexState).mockResolvedValueOnce('error');
+
             const state = await indexingService.getIndexState();
             expect(state).toBe('error');
         });
