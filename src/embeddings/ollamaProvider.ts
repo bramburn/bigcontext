@@ -1,5 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { IEmbeddingProvider, EmbeddingConfig } from "./embeddingProvider";
+import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import { EmbeddingPerformanceMonitor } from "./embeddingPerformanceMonitor";
 
 /**
  * Ollama embedding provider implementation
@@ -31,17 +33,31 @@ export class OllamaProvider implements IEmbeddingProvider {
   /** Request timeout in milliseconds (default: 30000) */
   private timeout: number;
 
+  /** Logging service for performance and error tracking */
+  private loggingService?: CentralizedLoggingService;
+
+  /** Performance monitor for tracking metrics */
+  private performanceMonitor?: EmbeddingPerformanceMonitor;
+
+  /** Retry configuration for failed requests */
+  private retryConfig: {
+    maxRetries: number;
+    backoffMultiplier: number;
+    initialDelay: number;
+  };
+
   /**
    * Initialize the Ollama embedding provider
    *
    * @param config - Configuration object for the Ollama provider
+   * @param loggingService - Optional logging service for performance tracking
    *
    * The constructor sets up the HTTP client with appropriate configuration
    * and validates that the necessary parameters are provided. It uses
    * sensible defaults for most parameters while allowing customization
    * through the configuration object.
    */
-  constructor(config: EmbeddingConfig) {
+  constructor(config: EmbeddingConfig, loggingService?: CentralizedLoggingService) {
     // Set model with fallback to a popular default
     this.model = config.model || "nomic-embed-text";
 
@@ -62,6 +78,19 @@ export class OllamaProvider implements IEmbeddingProvider {
         "Content-Type": "application/json",
       },
     });
+
+    // Initialize logging service and performance monitor
+    this.loggingService = loggingService;
+    if (this.loggingService) {
+      this.performanceMonitor = new EmbeddingPerformanceMonitor(this, this.loggingService);
+    }
+
+    // Initialize retry configuration
+    this.retryConfig = {
+      maxRetries: config.maxRetries || 3,
+      backoffMultiplier: config.backoffMultiplier || 2,
+      initialDelay: config.initialDelay || 1000,
+    };
   }
 
   /**
@@ -299,5 +328,215 @@ export class OllamaProvider implements IEmbeddingProvider {
       console.error(`Failed to pull model '${modelName}':`, error);
       return false;
     }
+  }
+
+  /**
+   * Execute operation with retry logic and performance monitoring
+   */
+  private async executeWithRetry<T>(operation: () => Promise<T>): Promise<T> {
+    const startTime = Date.now();
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        const result = await operation();
+        const responseTime = Date.now() - startTime;
+
+        // Record success metrics
+        if (this.performanceMonitor) {
+          this.performanceMonitor.recordSuccess(responseTime);
+        }
+
+        if (this.loggingService && attempt > 0) {
+          this.loggingService.info('Ollama request succeeded after retry', {
+            attempt,
+            responseTime,
+            provider: this.getProviderName(),
+          }, 'OllamaProvider');
+        }
+
+        return result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const responseTime = Date.now() - startTime;
+
+        // Check if this is a retryable error
+        const isRetryable = this.isRetryableError(lastError);
+
+        if (attempt === this.retryConfig.maxRetries || !isRetryable) {
+          // Record failure metrics
+          if (this.performanceMonitor) {
+            this.performanceMonitor.recordFailure(responseTime, lastError.message);
+          }
+
+          if (this.loggingService) {
+            this.loggingService.error('Ollama request failed after all retries', {
+              attempts: attempt + 1,
+              error: lastError.message,
+              responseTime,
+              provider: this.getProviderName(),
+            }, 'OllamaProvider');
+          }
+
+          throw lastError;
+        }
+
+        // Calculate delay for next attempt
+        const delay = this.retryConfig.initialDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt);
+
+        if (this.loggingService) {
+          this.loggingService.warn('Ollama request failed, retrying', {
+            attempt: attempt + 1,
+            maxRetries: this.retryConfig.maxRetries,
+            delay,
+            error: lastError.message,
+            provider: this.getProviderName(),
+          }, 'OllamaProvider');
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError || new Error('Unknown error during retry execution');
+  }
+
+  /**
+   * Check if an error is retryable
+   */
+  private isRetryableError(error: Error): boolean {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+
+      // Retry on server errors and timeouts
+      if ((status && status >= 500) || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
+        return true;
+      }
+
+      // Don't retry on client errors (except for connection refused which might be temporary)
+      if (status && status >= 400 && status < 500) {
+        return false;
+      }
+    }
+
+    // Retry on network errors and connection issues
+    if (error.message.includes('network') || error.message.includes('timeout') || error.message.includes('connect')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get performance monitor instance
+   */
+  getPerformanceMonitor(): EmbeddingPerformanceMonitor | undefined {
+    return this.performanceMonitor;
+  }
+
+  /**
+   * Execute operation with retry logic and performance monitoring
+   */
+  private async executeWithRetry<T>(operation: () => Promise<T>): Promise<T> {
+    const startTime = Date.now();
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        const result = await operation();
+        const responseTime = Date.now() - startTime;
+
+        // Record success metrics
+        if (this.performanceMonitor) {
+          this.performanceMonitor.recordSuccess(responseTime);
+        }
+
+        if (this.loggingService && attempt > 0) {
+          this.loggingService.info('Ollama request succeeded after retry', {
+            attempt,
+            responseTime,
+            provider: this.getProviderName(),
+          }, 'OllamaProvider');
+        }
+
+        return result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const responseTime = Date.now() - startTime;
+
+        // Check if this is a retryable error
+        const isRetryable = this.isRetryableError(lastError);
+
+        if (attempt === this.retryConfig.maxRetries || !isRetryable) {
+          // Record failure metrics
+          if (this.performanceMonitor) {
+            this.performanceMonitor.recordFailure(responseTime, lastError.message);
+          }
+
+          if (this.loggingService) {
+            this.loggingService.error('Ollama request failed after all retries', {
+              attempts: attempt + 1,
+              error: lastError.message,
+              responseTime,
+              provider: this.getProviderName(),
+            }, 'OllamaProvider');
+          }
+
+          throw lastError;
+        }
+
+        // Calculate delay for next attempt
+        const delay = this.retryConfig.initialDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt);
+
+        if (this.loggingService) {
+          this.loggingService.warn('Ollama request failed, retrying', {
+            attempt: attempt + 1,
+            maxRetries: this.retryConfig.maxRetries,
+            delay,
+            error: lastError.message,
+            provider: this.getProviderName(),
+          }, 'OllamaProvider');
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError || new Error('Unknown error during retry execution');
+  }
+
+  /**
+   * Check if an error is retryable
+   */
+  private isRetryableError(error: Error): boolean {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+
+      // Retry on server errors and timeouts
+      if ((status && status >= 500) || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
+        return true;
+      }
+
+      // Don't retry on client errors (except for connection refused which might be temporary)
+      if (status && status >= 400 && status < 500) {
+        return false;
+      }
+    }
+
+    // Retry on network errors and connection issues
+    if (error.message.includes('network') || error.message.includes('timeout') || error.message.includes('connect')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get performance monitor instance
+   */
+  getPerformanceMonitor(): EmbeddingPerformanceMonitor | undefined {
+    return this.performanceMonitor;
   }
 }

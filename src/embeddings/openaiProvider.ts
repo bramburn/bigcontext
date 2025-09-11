@@ -1,5 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { IEmbeddingProvider, EmbeddingConfig } from "./embeddingProvider";
+import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import { EmbeddingPerformanceMonitor } from "./embeddingPerformanceMonitor";
 
 /**
  * OpenAI embedding provider implementation
@@ -31,10 +33,24 @@ export class OpenAIProvider implements IEmbeddingProvider {
   /** Request timeout in milliseconds (default: 60000) */
   private timeout: number;
 
+  /** Logging service for performance and error tracking */
+  private loggingService?: CentralizedLoggingService;
+
+  /** Performance monitor for tracking metrics */
+  private performanceMonitor?: EmbeddingPerformanceMonitor;
+
+  /** Retry configuration for failed requests */
+  private retryConfig: {
+    maxRetries: number;
+    backoffMultiplier: number;
+    initialDelay: number;
+  };
+
   /**
    * Initialize the OpenAI embedding provider
    *
    * @param config - Configuration object for the OpenAI provider
+   * @param loggingService - Optional logging service for performance tracking
    *
    * The constructor validates that an API key is provided and sets up the
    * HTTP client with appropriate authentication headers. It uses sensible
@@ -43,7 +59,7 @@ export class OpenAIProvider implements IEmbeddingProvider {
    *
    * @throws Error if API key is not provided
    */
-  constructor(config: EmbeddingConfig) {
+  constructor(config: EmbeddingConfig, loggingService?: CentralizedLoggingService) {
     // Set model with fallback to a popular default
     this.model = config.model || "text-embedding-ada-002";
 
@@ -72,6 +88,19 @@ export class OpenAIProvider implements IEmbeddingProvider {
         Authorization: `Bearer ${this.apiKey}`,
       },
     });
+
+    // Initialize logging service and performance monitor
+    this.loggingService = loggingService;
+    if (this.loggingService) {
+      this.performanceMonitor = new EmbeddingPerformanceMonitor(this, this.loggingService);
+    }
+
+    // Initialize retry configuration
+    this.retryConfig = {
+      maxRetries: config.maxRetries || 3,
+      backoffMultiplier: config.backoffMultiplier || 2,
+      initialDelay: config.initialDelay || 1000,
+    };
   }
 
   /**
@@ -129,7 +158,7 @@ export class OpenAIProvider implements IEmbeddingProvider {
   }
 
   /**
-   * Process a batch of text chunks for embedding generation
+   * Process a batch of text chunks for embedding generation with retry logic
    *
    * This private method handles the actual API communication with OpenAI.
    * Unlike Ollama, OpenAI's embedding API can process multiple inputs
@@ -141,9 +170,18 @@ export class OpenAIProvider implements IEmbeddingProvider {
    *
    * The method includes comprehensive error handling for common issues
    * like authentication problems, rate limits, invalid requests, and
-   * model availability.
+   * model availability. It also includes retry logic with exponential backoff.
    */
   private async processBatch(chunks: string[]): Promise<number[][]> {
+    return this.executeWithRetry(async () => {
+      return this.processBatchInternal(chunks);
+    });
+  }
+
+  /**
+   * Internal method for processing a batch without retry logic
+   */
+  private async processBatchInternal(chunks: string[]): Promise<number[][]> {
     try {
       const response = await this.client.post("/embeddings", {
         model: this.model,
@@ -339,5 +377,110 @@ export class OpenAIProvider implements IEmbeddingProvider {
     // This is a simplification - proper truncation would use actual tokenization
     const maxChars = maxTokens * 4;
     return text.substring(0, maxChars - 3) + "...";
+  }
+
+  /**
+   * Execute operation with retry logic and performance monitoring
+   */
+  private async executeWithRetry<T>(operation: () => Promise<T>): Promise<T> {
+    const startTime = Date.now();
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        const result = await operation();
+        const responseTime = Date.now() - startTime;
+
+        // Record success metrics
+        if (this.performanceMonitor) {
+          this.performanceMonitor.recordSuccess(responseTime);
+        }
+
+        if (this.loggingService && attempt > 0) {
+          this.loggingService.info('OpenAI request succeeded after retry', {
+            attempt,
+            responseTime,
+            provider: this.getProviderName(),
+          }, 'OpenAIProvider');
+        }
+
+        return result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const responseTime = Date.now() - startTime;
+
+        // Check if this is a retryable error
+        const isRetryable = this.isRetryableError(lastError);
+
+        if (attempt === this.retryConfig.maxRetries || !isRetryable) {
+          // Record failure metrics
+          if (this.performanceMonitor) {
+            this.performanceMonitor.recordFailure(responseTime, lastError.message);
+          }
+
+          if (this.loggingService) {
+            this.loggingService.error('OpenAI request failed after all retries', {
+              attempts: attempt + 1,
+              error: lastError.message,
+              responseTime,
+              provider: this.getProviderName(),
+            }, 'OpenAIProvider');
+          }
+
+          throw lastError;
+        }
+
+        // Calculate delay for next attempt
+        const delay = this.retryConfig.initialDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt);
+
+        if (this.loggingService) {
+          this.loggingService.warn('OpenAI request failed, retrying', {
+            attempt: attempt + 1,
+            maxRetries: this.retryConfig.maxRetries,
+            delay,
+            error: lastError.message,
+            provider: this.getProviderName(),
+          }, 'OpenAIProvider');
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError || new Error('Unknown error during retry execution');
+  }
+
+  /**
+   * Check if an error is retryable
+   */
+  private isRetryableError(error: Error): boolean {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+
+      // Retry on rate limits, server errors, and timeouts
+      if (status === 429 || (status && status >= 500) || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        return true;
+      }
+
+      // Don't retry on authentication or client errors
+      if (status === 401 || status === 403 || (status && status >= 400 && status < 500)) {
+        return false;
+      }
+    }
+
+    // Retry on network errors
+    if (error.message.includes('network') || error.message.includes('timeout')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get performance monitor instance
+   */
+  getPerformanceMonitor(): EmbeddingPerformanceMonitor | undefined {
+    return this.performanceMonitor;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
@@ -7,7 +7,7 @@ import { Checkbox } from '../ui/Checkbox';
 import { Switch } from '../ui/Switch';
 import { Progress } from '../ui/Progress';
 import { Toast, ToastProvider, ToastViewport } from '../ui/Toast';
-import { Tooltip } from '../ui/Tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/Tooltip';
 import { useTheme } from '../providers/ThemeProvider';
 
 /**
@@ -134,7 +134,7 @@ export default function ComponentTestView() {
               <Checkbox
                 id="test-checkbox"
                 checked={checkboxChecked}
-                onCheckedChange={setCheckboxChecked}
+                onCheckedChange={(checked) => setCheckboxChecked(checked === true)}
               />
               <Label htmlFor="test-checkbox">Checkbox</Label>
             </div>
@@ -212,9 +212,16 @@ export default function ComponentTestView() {
             Tooltips
           </h2>
           <div className="flex gap-4">
-            <Tooltip content="This is a tooltip">
-              <Button variant="outline">Hover for tooltip</Button>
-            </Tooltip>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline">Hover for tooltip</Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>This is a tooltip</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </section>
 

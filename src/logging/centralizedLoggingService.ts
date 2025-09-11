@@ -20,6 +20,10 @@ import * as path from "path";
 import * as winston from "winston";
 import Transport from "winston-transport";
 import { ConfigService } from "../configService";
+import { LogAggregator, LogEntry as AggregatorLogEntry } from './logAggregator';
+import { PerformanceLogger } from './performanceLogger';
+import { LogExporter } from './logExporter';
+import { CorrelationService } from './correlationService';
 
 /**
  * Custom Winston transport for VSCode Output Channel
@@ -137,6 +141,12 @@ export class CentralizedLoggingService implements vscode.Disposable {
   private logFileStream?: fs.WriteStream;
   private logger?: winston.Logger;
 
+  // Enhanced logging components
+  private logAggregator: LogAggregator;
+  private performanceLogger: PerformanceLogger;
+  private logExporter: LogExporter;
+  private correlationService: CorrelationService;
+
   constructor(configService: ConfigService) {
     this.configService = configService;
     this.config = this.loadConfig();
@@ -145,6 +155,12 @@ export class CentralizedLoggingService implements vscode.Disposable {
     );
     this.logDirectory = this.config.logDirectory;
     this.currentLogFile = this.generateLogFileName();
+
+    // Initialize enhanced logging components
+    this.correlationService = CorrelationService.getInstance();
+    this.logAggregator = new LogAggregator();
+    this.performanceLogger = new PerformanceLogger(this);
+    this.logExporter = new LogExporter(this.logAggregator, this.performanceLogger);
 
     this.initializeLogging();
 
@@ -390,6 +406,17 @@ export class CentralizedLoggingService implements vscode.Disposable {
       correlationId: this.generateCorrelationId(),
     };
 
+    // Add to log aggregator
+    const aggregatorEntry: AggregatorLogEntry = {
+      timestamp: entry.timestamp,
+      level: LogLevel[level].toLowerCase() as 'debug' | 'info' | 'warn' | 'error',
+      message,
+      source: entry.source || 'Unknown',
+      correlationId: entry.correlationId,
+      metadata,
+    };
+    this.logAggregator.addLog(aggregatorEntry);
+
     // Since Winston handles formatting now, just pass to logger
     // Remove manual output channel append as transport handles it
     if (this.logger) {
@@ -408,7 +435,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
   private formatLogEntry(entry: LogEntry): string {
     let formatted = this.config.logFormat
       .replace("{timestamp}", entry.timestamp.toISOString())
-      .replace("{level}", LogLevel[entry.level])
+      .replace("{level}", LogLevel[entry.level] ? LogLevel[entry.level] : entry.level.toString())
       .replace("{source}", entry.source || "Unknown")
       .replace("{message}", entry.message);
 
@@ -538,6 +565,155 @@ export class CentralizedLoggingService implements vscode.Disposable {
   }
 
   /**
+   * Get log aggregator instance
+   */
+  public getLogAggregator(): LogAggregator {
+    return this.logAggregator;
+  }
+
+  /**
+   * Get performance logger instance
+   */
+  public getPerformanceLogger(): PerformanceLogger {
+    return this.performanceLogger;
+  }
+
+  /**
+   * Get log exporter instance
+   */
+  public getLogExporter(): LogExporter {
+    return this.logExporter;
+  }
+
+  /**
+   * Get correlation service instance
+   */
+  public getCorrelationService(): CorrelationService {
+    return this.correlationService;
+  }
+
+  /**
+   * Log with correlation tracking
+   */
+  public logWithCorrelation(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    metadata: Record<string, any> = {},
+    source: string = 'Extension',
+    correlationId?: string
+  ): void {
+    // Add to aggregator
+    this.logAggregator.addLog({
+      timestamp: new Date(),
+      level,
+      message,
+      source,
+      correlationId,
+      metadata,
+    });
+
+    // Log normally - convert string level to LogLevel enum
+    const logLevel = level === 'debug' ? LogLevel.DEBUG :
+                    level === 'info' ? LogLevel.INFO :
+                    level === 'warn' ? LogLevel.WARN :
+                    level === 'error' ? LogLevel.ERROR : LogLevel.INFO;
+    this.log(logLevel, message, metadata, source);
+  }
+
+  /**
+   * Start performance tracking for an operation
+   */
+  public startPerformanceTracking(
+    operationName: string,
+    metadata?: Record<string, any>
+  ): string {
+    return this.correlationService.startOperation(operationName, undefined, metadata);
+  }
+
+  /**
+   * End performance tracking for an operation
+   */
+  public endPerformanceTracking(
+    correlationId: string,
+    success: boolean = true,
+    error?: string,
+    additionalMetadata?: Record<string, any>
+  ): void {
+    const metrics = this.correlationService.endOperation(correlationId, success, error, additionalMetadata);
+
+    if (metrics) {
+      this.performanceLogger.logPerformance(
+        metrics.operationName,
+        metrics.duration,
+        correlationId,
+        metrics.metadata
+      );
+    }
+  }
+
+  /**
+   * Export logs with options
+   */
+  public async exportLogs(options: {
+    format?: 'json' | 'csv' | 'txt' | 'html';
+    includePerformanceData?: boolean;
+    maxEntries?: number;
+  } = {}): Promise<void> {
+    const exportOptions = {
+      format: options.format || 'json' as const,
+      includeMetadata: true,
+      includePerformanceData: options.includePerformanceData || true,
+      includeCorrelationData: true,
+      maxEntries: options.maxEntries,
+    };
+
+    const result = await this.logExporter.exportWithPicker(exportOptions);
+
+    if (result.success) {
+      vscode.window.showInformationMessage(
+        `Logs exported successfully to ${result.filePath}. ${result.entriesExported} entries exported.`
+      );
+    } else {
+      vscode.window.showErrorMessage(`Failed to export logs: ${result.error}`);
+    }
+  }
+
+  /**
+   * Create diagnostic package
+   */
+  public async createDiagnosticPackage(): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const defaultPath = workspaceFolder ? workspaceFolder.uri.fsPath : require('os').homedir();
+
+    const uri = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      defaultUri: vscode.Uri.file(defaultPath),
+      openLabel: 'Select Output Directory',
+    });
+
+    if (!uri || uri.length === 0) {
+      return;
+    }
+
+    const result = await this.logExporter.createDiagnosticPackage(uri[0].fsPath);
+
+    if (result.success) {
+      vscode.window.showInformationMessage(
+        `Diagnostic package created at ${result.filePath}`,
+        'Open Folder'
+      ).then(selection => {
+        if (selection === 'Open Folder') {
+          vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(result.filePath!));
+        }
+      });
+    } else {
+      vscode.window.showErrorMessage(`Failed to create diagnostic package: ${result.error}`);
+    }
+  }
+
+  /**
    * Dispose of resources
    */
   public dispose(): void {
@@ -545,5 +721,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
       this.logFileStream.end();
     }
     this.outputChannel.dispose();
+    this.logAggregator.clear();
+    this.performanceLogger.clear();
   }
 }

@@ -207,6 +207,16 @@ export class ConfigService {
     }
 
     /**
+     * Generic get method for configuration values
+     *
+     * @param key - The configuration key to retrieve
+     * @returns The configuration value or undefined if not found
+     */
+    public get<T>(key: string): T | undefined {
+        return this.config.get<T>(key);
+    }
+
+    /**
      * Get the Qdrant database connection string
      *
      * @returns The connection string for the Qdrant database, defaulting to 'http://localhost:6333'

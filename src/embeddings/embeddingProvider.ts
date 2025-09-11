@@ -76,6 +76,15 @@ export interface EmbeddingConfig {
 
   /** Timeout for API requests in milliseconds (optional, uses provider defaults) */
   timeout?: number;
+
+  /** Maximum number of retry attempts for failed requests (optional, default: 3) */
+  maxRetries?: number;
+
+  /** Backoff multiplier for retry delays (optional, default: 2) */
+  backoffMultiplier?: number;
+
+  /** Initial delay in milliseconds for first retry (optional, default: 1000) */
+  initialDelay?: number;
 }
 
 /**
@@ -115,21 +124,23 @@ export class EmbeddingProviderFactory {
    * that only the necessary provider code is loaded, improving startup performance.
    *
    * @param config - Configuration object specifying the provider type and its settings
+   * @param loggingService - Optional logging service for performance monitoring
    * @returns Promise resolving to a configured embedding provider instance
    * @throws Error if the specified provider type is not supported
    */
   static async createProvider(
     config: EmbeddingConfig,
+    loggingService?: any,
   ): Promise<IEmbeddingProvider> {
     switch (config.provider) {
       case "ollama":
         // Dynamically import Ollama provider to avoid loading it when not needed
         const { OllamaProvider } = await import("./ollamaProvider");
-        return new OllamaProvider(config);
+        return new OllamaProvider(config, loggingService);
       case "openai":
         // Dynamically import OpenAI provider to avoid loading it when not needed
         const { OpenAIProvider } = await import("./openaiProvider");
-        return new OpenAIProvider(config);
+        return new OpenAIProvider(config, loggingService);
       default:
         throw new Error(
           `Unsupported embedding provider: ${config.provider}. Supported providers: ${this.getSupportedProviders().join(", ")}`,

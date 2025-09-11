@@ -408,7 +408,7 @@ export class QdrantConnectionPool {
     for (const waiter of this.waitingQueue) {
       waiter.reject(new Error('Connection pool is closing'));
     }
-    this.waitingQueue.clear();
+    this.waitingQueue.length = 0;
 
     // Close all connections
     this.connections.clear();

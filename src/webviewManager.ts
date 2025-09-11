@@ -196,6 +196,93 @@ export class WebviewManager implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Send diagnostic data to webview
+     */
+    private async sendDiagnosticData(webview: vscode.Webview): Promise<void> {
+        try {
+            // Get system status from various services
+            const systemStatus: {
+                database: 'unknown' | 'connected' | 'error';
+                provider: 'unknown' | 'connected' | 'error';
+                sidecar: 'unknown' | 'connected' | 'error';
+                lastIndexed: Date | null;
+                totalChunks: number;
+                lastError: string | null;
+                uptime: number;
+                memoryUsage: number;
+                errorCount: number;
+                performanceMetrics: any[];
+                logs: any[];
+            } = {
+                database: 'unknown',
+                provider: 'unknown',
+                sidecar: 'unknown',
+                lastIndexed: null,
+                totalChunks: 0,
+                lastError: null,
+                uptime: Date.now() - (performance.timeOrigin || 0),
+                memoryUsage: (performance as any).memory?.usedJSHeapSize || 0,
+                errorCount: 0,
+                performanceMetrics: [],
+                logs: [],
+            };
+
+            // Get data from logging service
+            const logAggregator = this.loggingService.getLogAggregator();
+            const performanceLogger = this.loggingService.getPerformanceLogger();
+
+            systemStatus.logs = logAggregator.getLogs();
+            systemStatus.performanceMetrics = performanceLogger.getMetrics();
+            systemStatus.errorCount = systemStatus.logs.filter(log => log.level === 'error').length;
+
+            // Test database connection if available
+            try {
+                if (this.extensionManager.getIndexingService()) {
+                    // Assume connected if indexing service is available
+                    systemStatus.database = 'connected';
+                }
+            } catch (error) {
+                systemStatus.database = 'error';
+                systemStatus.lastError = error instanceof Error ? error.message : String(error);
+            }
+
+            // Test provider connection if available
+            try {
+                if (this.extensionManager.getContextService()) {
+                    // Assume connected if context service is available
+                    systemStatus.provider = 'connected';
+                }
+            } catch (error) {
+                systemStatus.provider = 'error';
+                if (!systemStatus.lastError) {
+                    systemStatus.lastError = error instanceof Error ? error.message : String(error);
+                }
+            }
+
+            // Test sidecar connection if available
+            try {
+                const sidecarManager = this.extensionManager.getSidecarManager?.();
+                if (sidecarManager) {
+                    const isHealthy = await sidecarManager.isHealthy();
+                    systemStatus.sidecar = isHealthy ? 'connected' : 'error';
+                }
+            } catch (error) {
+                systemStatus.sidecar = 'error';
+                if (!systemStatus.lastError) {
+                    systemStatus.lastError = error instanceof Error ? error.message : String(error);
+                }
+            }
+
+            webview.postMessage({
+                command: 'serviceStatusResponse',
+                data: systemStatus,
+            });
+        } catch (error) {
+            this.loggingService.error('Failed to send diagnostic data', { error: error instanceof Error ? error.message : String(error) }, 'WebviewManager');
+        }
+    }
+
+    /**
      * Handles messages from the sidebar webview
      *
      * @param message - The message received from the sidebar webview
@@ -215,6 +302,54 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             if (message.type === 'openMainPanel') {
                 // Open the main panel when requested from sidebar
                 this.showMainPanel({ isWorkspaceOpen: !!vscode.workspace.workspaceFolders?.length });
+                return;
+            }
+
+            // Handle diagnostic messages
+            if (message.command === 'log' && webview) {
+                // Forward log messages to centralized logging
+                const logData = message.data;
+                if (logData) {
+                    this.loggingService.logWithCorrelation(
+                        logData.level,
+                        logData.message,
+                        logData.metadata,
+                        logData.source,
+                        logData.correlationId
+                    );
+                }
+                return;
+            }
+
+            if (message.command === 'performance' && webview) {
+                // Handle performance metrics from webview
+                const perfData = message.data;
+                if (perfData) {
+                    this.loggingService.getPerformanceLogger().logPerformance(
+                        perfData.operationName,
+                        perfData.duration,
+                        perfData.correlationId,
+                        perfData.metadata
+                    );
+                }
+                return;
+            }
+
+            if (message.command === 'getDiagnosticData' && webview) {
+                // Send diagnostic data to webview
+                this.sendDiagnosticData(webview);
+                return;
+            }
+
+            if (message.command === 'exportDiagnostics' && webview) {
+                // Export diagnostics
+                this.loggingService.exportLogs();
+                return;
+            }
+
+            if (message.command === 'createDiagnosticPackage' && webview) {
+                // Create diagnostic package
+                this.loggingService.createDiagnosticPackage();
                 return;
             }
 

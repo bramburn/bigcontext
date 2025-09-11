@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { logger } from './utils/logger';
 
 function App() {
   const [status, setStatus] = useState('Initializing...');
@@ -11,15 +12,22 @@ function App() {
   const log = (msg: string) => {
     const timestamp = new Date().toISOString();
     setLogs(prev => [...prev, `${timestamp} - ${msg}`]);
+    // Also log to the centralized logger
+    logger.info(msg, {}, 'App');
   };
 
   const sendMessage = () => {
     if (vscode && message.trim()) {
+      const operationId = logger.startPerformanceTracking('sendMessage', { messageLength: message.trim().length });
+
       vscode.postMessage({
         command: 'testMessage',
         data: message.trim(),
         timestamp: Date.now()
       });
+
+      logger.endPerformanceTracking(operationId);
+      logger.logUserInteraction('sendMessage', 'button', { messageLength: message.trim().length });
       log(`Sent: ${message.trim()}`);
       setMessage('');
     }

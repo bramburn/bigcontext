@@ -114,7 +114,7 @@ export class SidecarManager implements vscode.Disposable {
       }
 
       // Start the process
-      this.process = spawn(this.config.pythonPath, [
+      this.process = spawn(this.config.pythonPath || 'python', [
         mainPyPath,
         '--port-start', this.config.portRange.start.toString(),
         '--port-end', this.config.portRange.end.toString(),
@@ -225,6 +225,34 @@ export class SidecarManager implements vscode.Disposable {
    */
   public getStatus(): SidecarStatus {
     return { ...this.status };
+  }
+
+  /**
+   * Check if sidecar is healthy
+   */
+  public async isHealthy(): Promise<boolean> {
+    const baseUrl = this.getBaseUrl();
+    if (!baseUrl) {
+      return false;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      this.loggingService.debug('Sidecar health check failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }, 'SidecarManager');
+      return false;
+    }
   }
 
   /**
