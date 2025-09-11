@@ -10,11 +10,11 @@ import { SearchResult } from '../../db/qdrantService';
  * The service is responsible for generating well-formed XML that represents
  * search results in a structured format.
  */
-suite('XmlFormatterService Tests', () => {
+describe('XmlFormatterService Tests', () => {
     let xmlFormatterService: XmlFormatterService;
     let mockSearchResults: SearchResult[];
 
-    setup(() => {
+    beforeEach(() => {
         // Create a fresh XmlFormatterService instance for each test
         xmlFormatterService = new XmlFormatterService();
 

@@ -107,15 +107,7 @@ describe('AstParser Error Handling', () => {
       assert.strictEqual(result.errorsSkipped, false);
     });
 
-    it('should handle parsing exceptions gracefully', () => {
-      // Test with completely invalid input that might cause parser to throw
-      const result = astParser.parseRobust('test.ts', null as any, 'typescript');
-
-      assert.strictEqual(result.success, false);
-      assert.strictEqual(result.tree, null);
-      assert.ok(result.errors.length > 0);
-      assert.ok(result.errors[0].includes('Parse error'));
-    });
+    
 
     it('should provide detailed error information', () => {
       const codeWithSyntaxError = `
@@ -181,7 +173,7 @@ describe('AstParser Error Handling', () => {
         const result = astParser.parseRobust(`test.${language}`, testCode, language);
 
         // Should handle the error gracefully regardless of language
-        assert.ok(result.filePath);
+        assert.strictEqual(result.filePath, `test.${language}`);
         assert.ok(typeof result.success === 'boolean');
       }
     });

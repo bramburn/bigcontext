@@ -14,12 +14,12 @@ import { LLMReRankingService, ReRankingResult } from '../../search/llmReRankingS
 import { ConfigService } from '../../configService';
 import { CodeChunk, ChunkType } from '../../parsing/chunker';
 
-suite('Query Expansion and Re-ranking Tests', () => {
+describe('Query Expansion and Re-ranking Tests', () => {
     let configService: ConfigService;
     let queryExpansionService: QueryExpansionService;
     let llmReRankingService: LLMReRankingService;
 
-    suiteSetup(() => {
+    beforeAll(() => {
         // Initialize services for testing
         // This creates real instances with configuration for comprehensive testing
         configService = new ConfigService();
@@ -27,7 +27,7 @@ suite('Query Expansion and Re-ranking Tests', () => {
         llmReRankingService = new LLMReRankingService(configService);
     });
 
-    suite('QueryExpansionService', () => {
+    describe('QueryExpansionService', () => {
         test('should initialize with correct default configuration', () => {
             // Test that the QueryExpansionService initializes with proper configuration
             // This verifies that all required configuration properties are present and valid
@@ -47,7 +47,6 @@ suite('Query Expansion and Re-ranking Tests', () => {
         test('should return original query when expansion is disabled', async function() {
             // Test that the service returns the original query when expansion is disabled
             // This verifies the basic functionality when the feature is turned off
-            this.timeout(5000);
             
             // Temporarily disable expansion to test disabled behavior
             queryExpansionService.updateConfig({ enabled: false });
@@ -67,7 +66,6 @@ suite('Query Expansion and Re-ranking Tests', () => {
         test('should handle expansion gracefully when enabled but LLM unavailable', async function() {
             // Test that the service handles LLM unavailability gracefully
             // This verifies error handling when the LLM service is not accessible
-            this.timeout(10000);
             
             // Enable expansion but use invalid configuration to simulate LLM unavailability
             queryExpansionService.updateConfig({
@@ -110,7 +108,7 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
     });
 
-    suite('LLMReRankingService', () => {
+    describe('LLMReRankingService', () => {
         test('should initialize with correct default configuration', () => {
             // Test that the LLMReRankingService initializes with proper configuration
             // This verifies that all required configuration properties are present and valid
@@ -132,7 +130,6 @@ suite('Query Expansion and Re-ranking Tests', () => {
         test('should return original results when re-ranking is disabled', async function() {
             // Test that the service returns original results when re-ranking is disabled
             // This verifies the basic functionality when the feature is turned off
-            this.timeout(5000);
             
             // Temporarily disable re-ranking to test disabled behavior
             llmReRankingService.updateConfig({ enabled: false });
@@ -158,10 +155,9 @@ suite('Query Expansion and Re-ranking Tests', () => {
             console.log('Disabled re-ranking result:', result);
         });
 
-        test('should handle re-ranking gracefully when enabled but LLM unavailable', async function() {
+        test('should handle re-ranking gracefully when enabled but LLM unavailable', async () => {
             // Test that the service handles LLM unavailability gracefully
             // This verifies error handling when the LLM service is not accessible
-            this.timeout(10000);
             
             // Enable re-ranking but use invalid configuration to simulate LLM unavailability
             llmReRankingService.updateConfig({
@@ -201,11 +197,10 @@ suite('Query Expansion and Re-ranking Tests', () => {
         });
     });
 
-    suite('Integration Tests', () => {
-        test('should work together in search pipeline', async function() {
+    describe('Integration Tests', () => {
+        test('should work together in search pipeline', async () => {
             // Test that both services work together in a complete search pipeline
             // This verifies the integration between query expansion and re-ranking
-            this.timeout(15000);
             
             // Test the complete pipeline with both services disabled
             // This establishes a baseline for the integration test

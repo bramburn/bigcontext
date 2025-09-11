@@ -11,7 +11,7 @@
  * This test MUST FAIL until the implementation is complete (TDD approach).
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, MockInstance } from 'vitest';
 import { IndexState } from '../../types/indexing';
 import { IndexingService, IIndexingService } from '../../services/indexingService';
 import { FileProcessor } from '../../services/FileProcessor';
@@ -66,6 +66,12 @@ describe('IIndexingService Contract Test', () => {
             mockEmbeddingProvider,
             mockQdrantService
         );
+
+        // Create spies for the methods
+        vi.spyOn(indexingService, 'startIndexing');
+        vi.spyOn(indexingService, 'pauseIndexing');
+        vi.spyOn(indexingService, 'resumeIndexing');
+        vi.spyOn(indexingService, 'getIndexState');
     });
 
     describe('API Contract Validation', () => {
@@ -115,8 +121,8 @@ describe('IIndexingService Contract Test', () => {
             const validStates: IndexState[] = ['idle', 'indexing', 'paused', 'error'];
             
             for (const state of validStates) {
-                // Mock different states
-                (indexingService.getIndexState as any).mockResolvedValueOnce(state);
+                // Use the spy to mock the return value
+                (indexingService.getIndexState as MockInstance).mockResolvedValueOnce(state);
                 
                 const currentState = await indexingService.getIndexState();
                 expect(validStates).toContain(currentState);
@@ -140,10 +146,10 @@ describe('IIndexingService Contract Test', () => {
             const errorMessage = 'Test error';
             
             // Test that methods can throw errors
-            (indexingService.startIndexing as any).mockRejectedValueOnce(new Error(errorMessage));
-            (indexingService.pauseIndexing as any).mockRejectedValueOnce(new Error(errorMessage));
-            (indexingService.resumeIndexing as any).mockRejectedValueOnce(new Error(errorMessage));
-            (indexingService.getIndexState as any).mockRejectedValueOnce(new Error(errorMessage));
+            (indexingService.startIndexing as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
+            (indexingService.pauseIndexing as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
+            (indexingService.resumeIndexing as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
+            (indexingService.getIndexState as MockInstance).mockRejectedValueOnce(new Error(errorMessage));
 
             await expect(indexingService.startIndexing()).rejects.toThrow(errorMessage);
             await expect(indexingService.pauseIndexing()).rejects.toThrow(errorMessage);

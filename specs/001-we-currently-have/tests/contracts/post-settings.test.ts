@@ -154,15 +154,21 @@ describe('POST /settings Contract Test', () => {
       }
     };
 
+    // Mock the saveSettings method of mockSettingsService to simulate validation failure
+    mockSettingsService.saveSettings = vi.fn().mockResolvedValue({
+      success: false,
+      message: 'Invalid embedding provider',
+      errors: ['Invalid embedding provider: InvalidProvider']
+    });
+
     // Act
-    // const response = await settingsApi.saveSettings(settingsWithInvalidProvider);
+    await settingsApi.handlePostSettings({ settings: settingsWithInvalidProvider as any, requestId: 't3' }, webview);
 
     // Assert
-    // expect(response.status).toBe(400);
-    // expect(response.data.success).toBe(false);
-    // expect(response.data.message).toContain('provider');
-
-    // This test MUST FAIL until implementation is complete
-    expect(true).toBe(false); // Intentional failure for TDD
+    expect(messages.length).toBe(1);
+    const msg = messages[0];
+    expect(msg.command).toBe('postSettingsResponse');
+    expect(msg.success).toBe(false);
+    expect(msg.message).toContain('provider');
   });
 });

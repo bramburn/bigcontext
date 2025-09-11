@@ -1,15 +1,11 @@
 /**
  * Test Setup for Vitest
- * 
+ *
  * This file sets up mocks and global configurations for running tests
  * in the Node.js environment without VS Code dependencies.
  */
 
-// Mock setup for tests - vitest import will be available during test runs
-const vi = (global as any).vi || {
-    fn: () => () => {},
-    mock: () => {}
-};
+import { vi } from 'vitest';
 
 // Mock VS Code API
 const mockVscode = {

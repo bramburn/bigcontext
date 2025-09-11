@@ -14,14 +14,14 @@ import { MockQdrantService, MockEmbeddingProvider, MockConfigService } from '../
  * The ContextService is responsible for querying the vector database and processing
  * results to provide relevant code context to users.
  */
-suite('ContextService Tests', () => {
+describe('ContextService Tests', () => {
     let contextService: ContextService;
     let mockQdrantService: MockQdrantService;
     let mockEmbeddingProvider: MockEmbeddingProvider;
     let mockIndexingService: any;
     let mockConfigService: MockConfigService;
 
-    setup(() => {
+    beforeEach(() => {
         // Create mock services using proper mock classes
         // This isolates tests from external dependencies and ensures consistent behavior
         mockQdrantService = new MockQdrantService();

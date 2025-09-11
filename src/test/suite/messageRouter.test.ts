@@ -1,5 +1,12 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { vi } from 'vitest';
+
+vi.mock('vscode', () => ({
+    window: {
+        createOutputChannel: vi.fn(() => ({ appendLine: vi.fn(), show: vi.fn(), dispose: vi.fn() }))
+    }
+}));
 import { MessageRouter } from '../../messageRouter';
 import { StateManager } from '../../stateManager';
 
@@ -11,7 +18,7 @@ import { StateManager } from '../../stateManager';
  * responsible for processing messages from the UI, routing them to the
  * appropriate services, and returning responses to the UI.
  */
-suite('MessageRouter Tests', () => {
+describe('MessageRouter Tests', () => {
     let messageRouter: MessageRouter;
     let mockContext: vscode.ExtensionContext;
     let mockStateManager: StateManager;
@@ -20,7 +27,7 @@ suite('MessageRouter Tests', () => {
     let mockWebview: any;
     let receivedMessages: any[];
 
-    setup(() => {
+    beforeEach(() => {
         // Create mock services for testing
         // This isolates tests from real dependencies and ensures consistent behavior
         mockContext = {
@@ -74,7 +81,7 @@ suite('MessageRouter Tests', () => {
         );
     });
 
-    teardown(() => {
+    afterEach(() => {
         // Clean up resources after each test
         if (mockStateManager) {
             mockStateManager.dispose();

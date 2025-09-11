@@ -10,10 +10,10 @@ import { ConfigService } from '../../configService';
  * centralized configuration management system for the extension, providing
  * typed access to all configuration options with appropriate defaults.
  */
-suite('ConfigService Tests', () => {
+describe('ConfigService Tests', () => {
     let configService: ConfigService;
 
-    setup(() => {
+    beforeEach(() => {
         // Create a fresh ConfigService instance for each test
         // This ensures tests are isolated and don't affect each other
         configService = new ConfigService();

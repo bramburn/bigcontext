@@ -33,17 +33,6 @@ body {
   overflow: auto;
 }
 
-/* Enhanced FluentUI integration */
-.fui-FluentProvider {
-  height: 100%;
-}
-
-/* Smooth transitions for interactive elements */
-.fui-Button,
-.fui-Card {
-  transition: all 0.2s ease-in-out;
-}
-
 /* Custom scrollbar styling for better VS Code integration */
 ::-webkit-scrollbar {
   width: 14px;
@@ -63,9 +52,9 @@ body {
 }
 
 /* Focus outline consistency with VS Code */
-.fui-Button:focus-visible,
-.fui-Input:focus-visible,
-.fui-Dropdown:focus-visible {
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
   outline: 1px solid var(--vscode-focusBorder, #007acc);
   outline-offset: 2px;
 }
@@ -85,22 +74,26 @@ body {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-  .fui-Button,
-  .fui-Card,
-  .fui-Input {
+  button,
+  [role="button"],
+  .card,
+  input,
+  select {
     border: 2px solid var(--vscode-contrastBorder, transparent);
   }
 
-  .fui-Button:hover,
-  .fui-Card:hover {
+  button:hover,
+  [role="button"]:hover,
+  .card:hover {
     border-color: var(--vscode-contrastActiveBorder, #f38518);
   }
 }
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  .fui-Button,
-  .fui-Card {
+  button,
+  [role="button"],
+  .card {
     transition: none;
   }
 }

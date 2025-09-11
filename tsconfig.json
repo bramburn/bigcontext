@@ -12,7 +12,8 @@
 		"strict": true,
 		"esModuleInterop": true,
 		"allowSyntheticDefaultImports": true,
-		"skipLibCheck": true
+		"skipLibCheck": true,
+		"types": ["vitest/globals", "vitest/jsdom"]
 	},
 	"exclude": [
 		"webview/**/*",
