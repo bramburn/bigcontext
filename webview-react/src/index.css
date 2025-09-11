@@ -3,13 +3,24 @@
 @tailwind utilities;
 
 
-/* VS Code theme variables */
+/* Font loading diagnostics and fallbacks */
+@font-face {
+  font-family: 'Segoe UI Fallback';
+  src: local('Segoe UI'), local('system-ui'), local('-apple-system'), local('BlinkMacSystemFont');
+  font-display: swap; /* Ensure text remains visible during font load */
+}
+
+/* VS Code theme variables with enhanced font fallbacks */
 :root {
-  --vscode-font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --vscode-font-family: 'Segoe UI', 'Segoe UI Fallback', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   --vscode-font-size: 13px;
   --vscode-foreground: #cccccc;
   --vscode-editor-background: #1e1e1e;
   --vscode-panel-border: #3c3c3c;
+
+  /* Font loading status indicators */
+  --font-loading-status: 'loading';
+  --font-fallback-active: 'false';
 
   /* Enhanced Radix UI customizations */
   --radix-select-content-background: var(--vscode-dropdown-background, #3c3c3c);
@@ -138,6 +149,34 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Font loading optimization */
+  font-display: swap;
+  text-rendering: optimizeLegibility;
+
+  /* Prevent font loading flash */
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.1s ease-in-out;
+}
+
+/* Font loading states */
+body.fonts-loading {
+  --font-loading-status: 'loading';
+}
+
+body.fonts-loaded {
+  --font-loading-status: 'loaded';
+}
+
+body.fonts-failed {
+  --font-loading-status: 'failed';
+  --font-fallback-active: 'true';
+}
+
+/* Ensure text is visible during font load */
+.font-loading-fallback {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 
 #root {

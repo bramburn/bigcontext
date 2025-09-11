@@ -1271,6 +1271,28 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 return this.getFallbackHtmlContent();
             }
 
+            // Verify CSS assets exist
+            const cssPath = path.join(extensionUri.fsPath, buildDir, 'app.css');
+            const jsPath = path.join(extensionUri.fsPath, buildDir, 'app.js');
+
+            const assetStatus = {
+                html: fs.existsSync(htmlPath),
+                css: fs.existsSync(cssPath),
+                js: fs.existsSync(jsPath),
+                buildDir: buildDir,
+                timestamp: new Date().toISOString()
+            };
+
+            this.loggingService.info('Webview asset verification', assetStatus, 'WebviewManager');
+
+            if (!assetStatus.css) {
+                this.loggingService.warn('CSS file not found, styles may not load correctly', { cssPath }, 'WebviewManager');
+            }
+
+            if (!assetStatus.js) {
+                this.loggingService.warn('JavaScript file not found, webview may not function', { jsPath }, 'WebviewManager');
+            }
+
             let html = fs.readFileSync(htmlPath, 'utf8');
 
             // Insert CSP after the charset meta tag
@@ -1302,9 +1324,68 @@ export class WebviewManager implements vscode.WebviewViewProvider {
             // Add nonce to inline scripts
             html = html.replace(/<script>/g, `<script nonce="${nonce}">`);
 
-            // Inject fetch interceptor for SvelteKit runtime requests
-            const fetchInterceptor = `
+            // Inject CSS loading diagnostics and fetch interceptor
+            const diagnosticsScript = `
                 <script nonce="${nonce}">
+                    // CSS Loading Diagnostics
+                    window.cssLoadingDiagnostics = {
+                        startTime: Date.now(),
+                        cssLoaded: false,
+                        errors: [],
+                        log: function(message, data) {
+                            console.log('[CSS Diagnostics]', message, data || '');
+                            if (window.acquireVsCodeApi) {
+                                try {
+                                    const vscode = window.acquireVsCodeApi();
+                                    vscode.postMessage({
+                                        command: 'cssLoadingDiagnostic',
+                                        data: { message, data, timestamp: Date.now() }
+                                    });
+                                } catch (e) {
+                                    console.warn('Failed to send diagnostic to extension:', e);
+                                }
+                            }
+                        }
+                    };
+
+                    // Monitor CSS loading
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const cssLinks = document.querySelectorAll('link[rel="stylesheet"]');
+                        window.cssLoadingDiagnostics.log('CSS links found', cssLinks.length);
+
+                        cssLinks.forEach((link, index) => {
+                            link.addEventListener('load', function() {
+                                window.cssLoadingDiagnostics.log('CSS loaded', { index, href: link.href });
+                                window.cssLoadingDiagnostics.cssLoaded = true;
+                            });
+
+                            link.addEventListener('error', function() {
+                                const error = 'CSS failed to load: ' + link.href;
+                                window.cssLoadingDiagnostics.errors.push(error);
+                                window.cssLoadingDiagnostics.log('CSS load error', error);
+                            });
+                        });
+
+                        // Check if styles are applied after a delay
+                        setTimeout(function() {
+                            const testDiv = document.createElement('div');
+                            testDiv.className = 'flex p-4';
+                            testDiv.style.position = 'absolute';
+                            testDiv.style.top = '-9999px';
+                            document.body.appendChild(testDiv);
+
+                            const styles = window.getComputedStyle(testDiv);
+                            const diagnostics = {
+                                display: styles.display,
+                                padding: styles.padding,
+                                tailwindWorking: styles.display === 'flex' && styles.padding !== '0px'
+                            };
+
+                            window.cssLoadingDiagnostics.log('Style application test', diagnostics);
+                            document.body.removeChild(testDiv);
+                        }, 500);
+                    });
+
                     // Intercept fetch requests for SvelteKit assets
                     const originalFetch = window.fetch;
                     window.fetch = function(url, options) {
@@ -1324,8 +1405,8 @@ export class WebviewManager implements vscode.WebviewViewProvider {
                 </script>
             `;
 
-            // Insert fetch interceptor before the first script tag
-            html = html.replace(/<script/, fetchInterceptor + '<script');
+            // Insert diagnostics script before the first script tag
+            html = html.replace(/<script/, diagnosticsScript + '<script');
 
             return html;
         } catch (error) {
