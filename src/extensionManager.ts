@@ -98,28 +98,36 @@ export class ExtensionManager {
      */
     async initialize(): Promise<void> {
         try {
-            console.log('ExtensionManager: Starting service initialization...');
-
             // Step 1: Initialize StateManager first (no dependencies)
             // StateManager must be initialized first as it manages the extension's state
             // and may be needed by other services during their initialization
             this.stateManager = new StateManager();
-            console.log('ExtensionManager: StateManager initialized');
 
-            // Provide extension context to StateManager for persistence support
-            this.stateManager.setContext(this.context);
-            this.stateManager.setExtensionManager(this);
-            this.loggingService?.info('ExtensionManager: StateManager context set for persistence', {}, 'ExtensionManager');
             // Step 2: Initialize ConfigService (no dependencies)
             // ConfigService provides configuration settings needed by other services
             this.configService = new ConfigService();
-            console.log('ExtensionManager: ConfigService initialized');
 
             // Step 2.1: Initialize CentralizedLoggingService (depends on ConfigService)
             // CentralizedLoggingService provides unified logging for all other services
             this.loggingService = new CentralizedLoggingService(this.configService);
             this.disposables.push(this.loggingService);
+
+            // Now we can use proper logging for all subsequent initialization
+            this.loggingService.info('ExtensionManager initialization started', {
+                vscodeVersion: vscode.version,
+                extensionVersion: this.context.extension.packageJSON.version,
+                platform: process.platform,
+                nodeVersion: process.version
+            }, 'ExtensionManager');
+
+            this.loggingService.info('StateManager initialized', {}, 'ExtensionManager');
+            this.loggingService.info('ConfigService initialized', {}, 'ExtensionManager');
             this.loggingService.info('CentralizedLoggingService initialized', {}, 'ExtensionManager');
+
+            // Provide extension context to StateManager for persistence support
+            this.stateManager.setContext(this.context);
+            this.stateManager.setExtensionManager(this);
+            this.loggingService.info('StateManager context set for persistence', {}, 'ExtensionManager');
 
             // Step 2.2: Initialize WorkspaceManager (depends on CentralizedLoggingService)
             // WorkspaceManager handles multi-workspace support and workspace switching
@@ -127,7 +135,11 @@ export class ExtensionManager {
 
             // Set up workspace change listener to handle workspace switching
             const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged((workspace) => {
-                console.log(`ExtensionManager: Workspace changed to: ${workspace?.name || 'none'}`);
+                this.loggingService.info('Workspace changed', {
+                    workspaceName: workspace?.name || 'none',
+                    workspacePath: workspace?.path || 'none'
+                }, 'ExtensionManager');
+
                 // Notify other services about workspace change if needed
                 // The IndexingService will automatically use the new workspace for collection naming
 
@@ -138,7 +150,7 @@ export class ExtensionManager {
             });
             this.disposables.push(workspaceChangeDisposable);
 
-            console.log('ExtensionManager: WorkspaceManager initialized');
+            this.loggingService.info('WorkspaceManager initialized', {}, 'ExtensionManager');
 
             // Step 2.3: Initialize NotificationService (depends on CentralizedLoggingService)
             // NotificationService provides standardized user notifications with logging integration
@@ -250,17 +262,17 @@ export class ExtensionManager {
             // Step 6: Initialize PerformanceManager
             // PerformanceManager tracks and monitors extension performance metrics
             this.performanceManager = new PerformanceManager();
-            console.log('ExtensionManager: PerformanceManager initialized');
+            this.loggingService.info('PerformanceManager initialized', {}, 'ExtensionManager');
 
             // Step 7: Initialize ConfigurationManager
             // ConfigurationManager handles dynamic configuration changes and updates
             this.configurationManager = new ConfigurationManager(this.configService);
-            console.log('ExtensionManager: ConfigurationManager initialized');
+            this.loggingService.info('ConfigurationManager initialized', {}, 'ExtensionManager');
 
             // Step 8: Initialize XmlFormatterService
             // XmlFormatterService provides XML formatting capabilities for search results
             this.xmlFormatterService = new XmlFormatterService();
-            console.log('ExtensionManager: XmlFormatterService initialized');
+            this.loggingService.info('XmlFormatterService initialized', {}, 'ExtensionManager');
 
             // Step 9: Initialize SearchManager
             // SearchManager coordinates search operations across the codebase
@@ -285,8 +297,8 @@ export class ExtensionManager {
 
             // Step 11: Initialize CommandManager and register commands
             // CommandManager handles all extension commands and their execution
-            // Depends on IndexingService, WebviewManager, and NotificationService for command functionality
-            this.commandManager = new CommandManager(this.indexingService, this.webviewManager, this.notificationService);
+            // Depends on IndexingService, WebviewManager, NotificationService, and LoggingService for command functionality
+            this.commandManager = new CommandManager(this.indexingService, this.webviewManager, this.notificationService, this.loggingService);
             const commandDisposables = this.commandManager.registerCommands();
             this.disposables.push(...commandDisposables);
             this.loggingService.info('CommandManager initialized and commands registered', {}, 'ExtensionManager');
@@ -327,7 +339,9 @@ export class ExtensionManager {
                 });
                 this.disposables.push({ dispose: unsubscribe });
             } catch (e) {
-                console.warn('ExtensionManager: Unable to subscribe to state changes for status bar updates', e);
+                this.loggingService.warn('Unable to subscribe to state changes for status bar updates', {
+                    error: e instanceof Error ? e.message : String(e)
+                }, 'ExtensionManager');
             }
 
             // Step 13: Initialize HistoryManager
@@ -335,13 +349,20 @@ export class ExtensionManager {
             // Requires the extension context for persistent storage
             this.historyManager = new HistoryManager(this.context);
             this.disposables.push(this.historyManager);
-            console.log('ExtensionManager: HistoryManager initialized');
+            this.loggingService.info('HistoryManager initialized', {}, 'ExtensionManager');
 
             this.loggingService.info('All services initialized successfully', {}, 'ExtensionManager');
 
         } catch (error) {
-            // Use console.error here since logging service might not be available if initialization failed
-            console.error('ExtensionManager: Failed to initialize services:', error);
+            // Use logging service if available, otherwise fall back to console
+            if (this.loggingService) {
+                this.loggingService.error('Failed to initialize services', {
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined
+                }, 'ExtensionManager');
+            } else {
+                console.error('ExtensionManager: Failed to initialize services:', error);
+            }
             throw error;
         }
     }
@@ -356,7 +377,9 @@ export class ExtensionManager {
      * where initialization may have failed partially.
      */
     dispose(): void {
-        console.log('ExtensionManager: Starting disposal...');
+        if (this.loggingService) {
+            this.loggingService.info('ExtensionManager disposal started', {}, 'ExtensionManager');
+        }
 
         // Dispose of managers in reverse order of initialization
         // This ensures that services with dependencies are disposed first
@@ -384,7 +407,13 @@ export class ExtensionManager {
         // Cleanup IndexingService worker threads before disposing StateManager
         if (this.indexingService) {
             this.indexingService.cleanup().catch(error => {
-                console.error('ExtensionManager: Error cleaning up IndexingService:', error);
+                if (this.loggingService) {
+                    this.loggingService.error('Error cleaning up IndexingService', {
+                        error: error instanceof Error ? error.message : String(error)
+                    }, 'ExtensionManager');
+                } else {
+                    console.error('ExtensionManager: Error cleaning up IndexingService:', error);
+                }
             });
         }
 
@@ -398,12 +427,21 @@ export class ExtensionManager {
             try {
                 disposable.dispose();
             } catch (error) {
-                console.error('ExtensionManager: Error disposing resource:', error);
+                if (this.loggingService) {
+                    this.loggingService.error('Error disposing resource', {
+                        error: error instanceof Error ? error.message : String(error)
+                    }, 'ExtensionManager');
+                } else {
+                    console.error('ExtensionManager: Error disposing resource:', error);
+                }
             }
         });
 
         this.disposables = [];
-        console.log('ExtensionManager: Disposal completed');
+
+        if (this.loggingService) {
+            this.loggingService.info('ExtensionManager disposal completed', {}, 'ExtensionManager');
+        }
     }
 
     /**
@@ -500,14 +538,6 @@ export class ExtensionManager {
      */
     getXmlFormatterService(): XmlFormatterService {
         return this.xmlFormatterService;
-    }
-
-    /**
-     * Gets the CentralizedLoggingService instance
-     * @returns The CentralizedLoggingService instance for logging
-     */
-    getLoggingService(): CentralizedLoggingService {
-        return this.loggingService;
     }
 
     /**

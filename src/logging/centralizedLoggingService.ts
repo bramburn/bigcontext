@@ -18,6 +18,8 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as winston from "winston";
+const DailyRotateFile = require("winston-daily-rotate-file");
+import { v4 as uuidv4 } from "uuid";
 import { ConfigService } from "../configService";
 
 /**
@@ -171,17 +173,39 @@ export class CentralizedLoggingService implements vscode.Disposable {
         this.ensureLogDirectory();
       }
 
+      const transports: winston.transport[] = [];
+
+      // Console transport
+      if (this.config.enableConsoleLogging) {
+        transports.push(new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.colorize(),
+            winston.format.printf(({ timestamp, level, message, source, ...meta }) => {
+              const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+              return `${timestamp} [${level}] ${source || 'Unknown'}: ${message}${metaStr}`;
+            })
+          )
+        }));
+      }
+
+      // File transport with daily rotation
+      if (this.config.enableFileLogging) {
+        transports.push(new DailyRotateFile({
+          filename: path.join(this.logDirectory, 'extension-%DATE%.log'),
+          datePattern: 'YYYY-MM-DD',
+          maxSize: this.config.maxFileSize,
+          maxFiles: this.config.maxFiles,
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.json()
+          )
+        }));
+      }
+
       this.logger = winston.createLogger({
         level: LogLevel[this.config.level].toLowerCase(),
-        transports: [
-          new winston.transports.Console({
-            format: winston.format.simple()
-          }),
-          new winston.transports.File({
-            filename: path.join(this.logDirectory, 'extension.log'),
-            format: winston.format.json()
-          })
-        ]
+        transports
       });
 
       this.info("CentralizedLoggingService initialized", {
@@ -363,7 +387,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
    * Generate correlation ID for request tracking
    */
   private generateCorrelationId(): string {
-    return Math.random().toString(36).substring(2, 15);
+    return uuidv4().substring(0, 8); // Use first 8 characters of UUID for readability
   }
 
   // Public logging methods

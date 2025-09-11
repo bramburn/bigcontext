@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import { IIndexingService } from './indexingService';
+import { IIndexingService } from './IndexingService';
 import { FileMonitorService, IFileMonitorService } from './fileMonitorService';
 import { ConfigurationChangeDetector } from './configurationChangeDetector';
 import { FileChangeEvent, ConfigurationChangeEvent, IndexState } from '../types/indexing';
