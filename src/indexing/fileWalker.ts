@@ -8,10 +8,10 @@
  * It supports multiple programming languages and file types, making it
  * suitable for diverse codebases.
  */
-import * as fs from "fs";
-import * as path from "path";
-import * as glob from "glob";
-import ignore from "ignore";
+import * as fs from 'fs';
+import * as path from 'path';
+import * as glob from 'glob';
+import ignore from 'ignore';
 
 /**
  * FileWalker class for traversing and filtering files in a workspace.
@@ -44,18 +44,18 @@ export class FileWalker {
     // Add common patterns to ignore by default
     // These patterns exclude build artifacts, dependencies, and IDE configurations
     this.ignoreInstance.add([
-      "node_modules/**", // Node.js dependencies
-      ".git/**", // Git version control directory
-      "dist/**", // Distribution/build directories
-      "build/**", // Build output directories
-      "out/**", // Output directories
-      "*.min.js", // Minified JavaScript files
-      "*.map", // Source map files
-      ".vscode/**", // VS Code workspace configuration
-      ".idea/**", // IntelliJ IDEA workspace configuration
-      "*.log", // Log files
-      "coverage/**", // Code coverage reports
-      ".nyc_output/**", // NYC test coverage output
+      'node_modules/**', // Node.js dependencies
+      '.git/**', // Git version control directory
+      'dist/**', // Distribution/build directories
+      'build/**', // Build output directories
+      'out/**', // Output directories
+      '*.min.js', // Minified JavaScript files
+      '*.map', // Source map files
+      '.vscode/**', // VS Code workspace configuration
+      '.idea/**', // IntelliJ IDEA workspace configuration
+      '*.log', // Log files
+      'coverage/**', // Code coverage reports
+      '.nyc_output/**', // NYC test coverage output
     ]);
   }
 
@@ -71,28 +71,23 @@ export class FileWalker {
    * @returns Promise that resolves when gitignore is loaded
    */
   private async loadGitignore(): Promise<void> {
-    const gitignorePath = path.join(this.workspaceRoot, ".gitignore");
+    const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
 
     try {
       // Read the gitignore file content
-      const gitignoreContent = await fs.promises.readFile(
-        gitignorePath,
-        "utf8",
-      );
+      const gitignoreContent = await fs.promises.readFile(gitignorePath, 'utf8');
       // Process the content: split by lines, trim whitespace, and filter out comments and empty lines
       const lines = gitignoreContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#"));
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
 
       // Add the processed patterns to our ignore instance
       this.ignoreInstance.add(lines);
     } catch (error) {
       // .gitignore file not found or not readable, continue with default patterns
       // This is not an error - we just use the default ignore patterns
-      console.log(
-        "No .gitignore file found or not readable, using default ignore patterns",
-      );
+      console.log('No .gitignore file found or not readable, using default ignore patterns');
     }
   }
 
@@ -115,37 +110,37 @@ export class FileWalker {
     // Define patterns for code files we want to index
     // Includes most common programming languages and config file types
     const patterns = [
-      "**/*.ts", // TypeScript
-      "**/*.tsx", // TypeScript React
-      "**/*.js", // JavaScript
-      "**/*.jsx", // JavaScript React
-      "**/*.py", // Python
-      "**/*.cs", // C#
-      "**/*.java", // Java
-      "**/*.cpp", // C++
-      "**/*.c", // C
-      "**/*.h", // C/C++ header
-      "**/*.hpp", // C++ header
-      "**/*.go", // Go
-      "**/*.rs", // Rust
-      "**/*.php", // PHP
-      "**/*.rb", // Ruby
-      "**/*.swift", // Swift
-      "**/*.kt", // Kotlin
-      "**/*.scala", // Scala
-      "**/*.clj", // Clojure
-      "**/*.sh", // Shell script
-      "**/*.ps1", // PowerShell
-      "**/*.sql", // SQL
-      "**/*.md", // Markdown
-      "**/*.json", // JSON
-      "**/*.yaml", // YAML
-      "**/*.yml", // YAML alternative
-      "**/*.xml", // XML
-      "**/*.html", // HTML
-      "**/*.css", // CSS
-      "**/*.scss", // SCSS
-      "**/*.less", // LESS
+      '**/*.ts', // TypeScript
+      '**/*.tsx', // TypeScript React
+      '**/*.js', // JavaScript
+      '**/*.jsx', // JavaScript React
+      '**/*.py', // Python
+      '**/*.cs', // C#
+      '**/*.java', // Java
+      '**/*.cpp', // C++
+      '**/*.c', // C
+      '**/*.h', // C/C++ header
+      '**/*.hpp', // C++ header
+      '**/*.go', // Go
+      '**/*.rs', // Rust
+      '**/*.php', // PHP
+      '**/*.rb', // Ruby
+      '**/*.swift', // Swift
+      '**/*.kt', // Kotlin
+      '**/*.scala', // Scala
+      '**/*.clj', // Clojure
+      '**/*.sh', // Shell script
+      '**/*.ps1', // PowerShell
+      '**/*.sql', // SQL
+      '**/*.md', // Markdown
+      '**/*.json', // JSON
+      '**/*.yaml', // YAML
+      '**/*.yml', // YAML alternative
+      '**/*.xml', // XML
+      '**/*.html', // HTML
+      '**/*.css', // CSS
+      '**/*.scss', // SCSS
+      '**/*.less', // LESS
     ];
 
     const allFiles: string[] = [];
@@ -165,9 +160,12 @@ export class FileWalker {
               dot: false, // Ignore dot files by default
             },
             (err, matches) => {
-              if (err) reject(err);
-              else resolve(matches);
-            },
+              if (err) {
+                reject(err);
+              } else {
+                resolve(matches);
+              }
+            }
           );
         });
         // Add found files to our collection
@@ -183,7 +181,7 @@ export class FileWalker {
 
     // Apply ignore patterns to filter out excluded files
     // This respects both .gitignore patterns and our default ignore patterns
-    const filteredFiles = uniqueFiles.filter((filePath) => {
+    const filteredFiles = uniqueFiles.filter(filePath => {
       // Convert to relative path for ignore pattern matching
       const relativePath = path.relative(this.workspaceRoot, filePath);
       return !this.ignoreInstance.ignores(relativePath);
@@ -213,7 +211,7 @@ export class FileWalker {
 
     // Count files by extension
     // This helps understand the distribution of file types in the workspace
-    files.forEach((filePath) => {
+    files.forEach(filePath => {
       const ext = path.extname(filePath).toLowerCase();
       filesByExtension[ext] = (filesByExtension[ext] || 0) + 1;
     });
@@ -238,25 +236,25 @@ export class FileWalker {
     // List of extensions considered as code files
     // This includes most common programming language source files
     const codeExtensions = [
-      ".ts",
-      ".tsx",
-      ".js",
-      ".jsx",
-      ".py",
-      ".cs",
-      ".java",
-      ".cpp",
-      ".c",
-      ".h",
-      ".hpp",
-      ".go",
-      ".rs",
-      ".php",
-      ".rb",
-      ".swift",
-      ".kt",
-      ".scala",
-      ".clj",
+      '.ts',
+      '.tsx',
+      '.js',
+      '.jsx',
+      '.py',
+      '.cs',
+      '.java',
+      '.cpp',
+      '.c',
+      '.h',
+      '.hpp',
+      '.go',
+      '.rs',
+      '.php',
+      '.rb',
+      '.swift',
+      '.kt',
+      '.scala',
+      '.clj',
     ];
 
     // Extract and check the file extension

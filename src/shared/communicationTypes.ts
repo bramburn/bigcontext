@@ -78,34 +78,34 @@ export interface ErrorInfo {
  */
 export enum ExtensionToWebviewMessageType {
   // Configuration messages
-  CONFIG_UPDATE = "config_update",
-  CONFIG_VALIDATION_RESULT = "config_validation_result",
+  CONFIG_UPDATE = 'config_update',
+  CONFIG_VALIDATION_RESULT = 'config_validation_result',
 
   // Search messages
-  SEARCH_RESULTS = "search_results",
-  SEARCH_ERROR = "search_error",
-  SEARCH_PROGRESS = "search_progress",
+  SEARCH_RESULTS = 'search_results',
+  SEARCH_ERROR = 'search_error',
+  SEARCH_PROGRESS = 'search_progress',
 
   // Indexing messages
-  INDEXING_STATUS = "indexing_status",
-  INDEXING_PROGRESS = "indexing_progress",
-  INDEXING_COMPLETE = "indexing_complete",
-  INDEXING_ERROR = "indexing_error",
+  INDEXING_STATUS = 'indexing_status',
+  INDEXING_PROGRESS = 'indexing_progress',
+  INDEXING_COMPLETE = 'indexing_complete',
+  INDEXING_ERROR = 'indexing_error',
 
   // File scanning progress messages
-  SCAN_START = "scanStart",
-  SCAN_PROGRESS = "scanProgress",
-  SCAN_COMPLETE = "scanComplete",
+  SCAN_START = 'scanStart',
+  SCAN_PROGRESS = 'scanProgress',
+  SCAN_COMPLETE = 'scanComplete',
 
   // State messages
-  STATE_UPDATE = "state_update",
-  THEME_UPDATE = "theme_update",
+  STATE_UPDATE = 'state_update',
+  THEME_UPDATE = 'theme_update',
 
   // Notification messages
-  NOTIFICATION = "notification",
+  NOTIFICATION = 'notification',
 
   // Error messages
-  ERROR = "error",
+  ERROR = 'error',
 }
 
 /**
@@ -113,33 +113,33 @@ export enum ExtensionToWebviewMessageType {
  */
 export enum WebviewToExtensionMessageType {
   // Configuration requests
-  GET_CONFIG = "get_config",
-  UPDATE_CONFIG = "update_config",
-  VALIDATE_CONFIG = "validate_config",
+  GET_CONFIG = 'get_config',
+  UPDATE_CONFIG = 'update_config',
+  VALIDATE_CONFIG = 'validate_config',
 
   // Search requests
-  SEARCH = "search",
-  CANCEL_SEARCH = "cancel_search",
-  GET_SEARCH_HISTORY = "get_search_history",
+  SEARCH = 'search',
+  CANCEL_SEARCH = 'cancel_search',
+  GET_SEARCH_HISTORY = 'get_search_history',
 
   // Indexing requests
-  START_INDEXING = "start_indexing",
-  STOP_INDEXING = "stop_indexing",
-  GET_INDEXING_STATUS = "get_indexing_status",
+  START_INDEXING = 'start_indexing',
+  STOP_INDEXING = 'stop_indexing',
+  GET_INDEXING_STATUS = 'get_indexing_status',
 
   // File scanning requests
-  START_FILE_SCAN = "start_file_scan",
+  START_FILE_SCAN = 'start_file_scan',
 
   // File operations
-  OPEN_FILE = "open_file",
-  SHOW_FILE_IN_EXPLORER = "show_file_in_explorer",
-  REQUEST_OPEN_FOLDER = "request_open_folder",
+  OPEN_FILE = 'open_file',
+  SHOW_FILE_IN_EXPLORER = 'show_file_in_explorer',
+  REQUEST_OPEN_FOLDER = 'request_open_folder',
 
   // State requests
-  GET_STATE = "get_state",
+  GET_STATE = 'get_state',
 
   // Ready signal
-  WEBVIEW_READY = "webview_ready",
+  WEBVIEW_READY = 'webview_ready',
 }
 
 /**
@@ -311,7 +311,7 @@ export interface ExtensionStatePayload {
   /** Extension version */
   version: string;
   /** Current theme */
-  theme: "light" | "dark" | "high-contrast";
+  theme: 'light' | 'dark' | 'high-contrast';
   /** Available providers */
   availableProviders: {
     embedding: string[];
@@ -324,7 +324,7 @@ export interface ExtensionStatePayload {
  */
 export interface NotificationPayload {
   /** Notification type */
-  type: "info" | "warning" | "error" | "success";
+  type: 'info' | 'warning' | 'error' | 'success';
   /** Notification message */
   message: string;
   /** Optional title */
@@ -365,42 +365,42 @@ export class MessageTypeGuards {
   static isRequestMessage(message: any): message is RequestMessage {
     return (
       message &&
-      typeof message.id === "string" &&
-      typeof message.timestamp === "number" &&
-      typeof message.type === "string" &&
+      typeof message.id === 'string' &&
+      typeof message.timestamp === 'number' &&
+      typeof message.type === 'string' &&
       message.payload !== undefined &&
-      typeof message.expectsResponse === "boolean"
+      typeof message.expectsResponse === 'boolean'
     );
   }
 
   static isResponseMessage(message: any): message is ResponseMessage {
     return (
       message &&
-      typeof message.id === "string" &&
-      typeof message.timestamp === "number" &&
-      typeof message.type === "string" &&
-      typeof message.requestId === "string" &&
-      typeof message.success === "boolean"
+      typeof message.id === 'string' &&
+      typeof message.timestamp === 'number' &&
+      typeof message.type === 'string' &&
+      typeof message.requestId === 'string' &&
+      typeof message.success === 'boolean'
     );
   }
 
   static isEventMessage(message: any): message is EventMessage {
     return (
       message &&
-      typeof message.id === "string" &&
-      typeof message.timestamp === "number" &&
-      typeof message.type === "string" &&
-      typeof message.event === "string" &&
+      typeof message.id === 'string' &&
+      typeof message.timestamp === 'number' &&
+      typeof message.type === 'string' &&
+      typeof message.event === 'string' &&
       message.payload !== undefined
     );
   }
 
   static isSearchRequestPayload(payload: any): payload is SearchRequestPayload {
-    return payload && typeof payload.query === "string";
+    return payload && typeof payload.query === 'string';
   }
 
   static isFileOperationPayload(payload: any): payload is FileOperationPayload {
-    return payload && typeof payload.filePath === "string";
+    return payload && typeof payload.filePath === 'string';
   }
 }
 
@@ -412,11 +412,7 @@ export class MessageFactory {
     return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
   }
 
-  static createRequest<T>(
-    type: string,
-    payload: T,
-    expectsResponse: boolean = true,
-  ): RequestMessage<T> {
+  static createRequest<T>(type: string, payload: T, expectsResponse = true): RequestMessage<T> {
     return {
       id: this.generateId(),
       timestamp: Date.now(),
@@ -431,7 +427,7 @@ export class MessageFactory {
     type: string,
     success: boolean,
     payload?: T,
-    error?: ErrorInfo,
+    error?: ErrorInfo
   ): ResponseMessage<T> {
     return {
       id: this.generateId(),
@@ -444,11 +440,7 @@ export class MessageFactory {
     };
   }
 
-  static createEvent<T>(
-    type: string,
-    event: string,
-    payload: T,
-  ): EventMessage<T> {
+  static createEvent<T>(type: string, event: string, payload: T): EventMessage<T> {
     return {
       id: this.generateId(),
       timestamp: Date.now(),

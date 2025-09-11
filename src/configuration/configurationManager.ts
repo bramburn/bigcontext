@@ -10,14 +10,14 @@
  * easy configuration sharing and restoration.
  */
 
-import * as vscode from "vscode";
-import * as fs from "fs";
-import * as path from "path";
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   ConfigurationSchema,
   ConfigurationValidator,
   ValidationResult,
-} from "./configurationSchema";
+} from './configurationSchema';
 
 /**
  * Configuration Template Interface
@@ -30,7 +30,7 @@ export interface ConfigurationTemplate {
   id: string; // Unique identifier for the template
   name: string; // Human-readable name
   description: string; // Detailed description of the template
-  category: "development" | "production" | "team" | "custom"; // Environment category
+  category: 'development' | 'production' | 'team' | 'custom'; // Environment category
   configuration: ConfigurationSchema; // The actual configuration data
   tags: string[]; // Searchable tags for the template
   author?: string; // Optional author information
@@ -50,7 +50,7 @@ export interface ConfigurationBackup {
   timestamp: string; // ISO timestamp when backup was created
   configuration: ConfigurationSchema; // The backed up configuration
   metadata: {
-    reason: "manual" | "auto" | "migration"; // Why the backup was created
+    reason: 'manual' | 'auto' | 'migration'; // Why the backup was created
     description?: string; // Optional description
     previousVersion?: string; // Version before backup
   };
@@ -95,15 +95,9 @@ export class ConfigurationManager {
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     // Set up paths for storing configuration data
-    this.configurationPath = path.join(
-      context.globalStorageUri.fsPath,
-      "configurations",
-    );
-    this.backupPath = path.join(context.globalStorageUri.fsPath, "backups");
-    this.templatesPath = path.join(
-      context.globalStorageUri.fsPath,
-      "templates",
-    );
+    this.configurationPath = path.join(context.globalStorageUri.fsPath, 'configurations');
+    this.backupPath = path.join(context.globalStorageUri.fsPath, 'backups');
+    this.templatesPath = path.join(context.globalStorageUri.fsPath, 'templates');
 
     // Initialize required directories and migrations
     this.initializeDirectories();
@@ -123,7 +117,7 @@ export class ConfigurationManager {
       await fs.promises.mkdir(this.backupPath, { recursive: true });
       await fs.promises.mkdir(this.templatesPath, { recursive: true });
     } catch (error) {
-      console.error("Failed to initialize configuration directories:", error);
+      console.error('Failed to initialize configuration directories:', error);
     }
   }
 
@@ -162,7 +156,7 @@ export class ConfigurationManager {
       includeSecrets?: boolean; // Whether to include sensitive data (default: false)
       minify?: boolean; // Whether to minify JSON output (default: false)
       validate?: boolean; // Whether to validate before export (default: true)
-    },
+    }
   ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     try {
       // Set default options
@@ -179,7 +173,7 @@ export class ConfigurationManager {
         if (!validation.isValid) {
           return {
             success: false,
-            error: `Configuration validation failed: ${validation.errors.map((e) => e.message).join(", ")}`,
+            error: `Configuration validation failed: ${validation.errors.map(e => e.message).join(', ')}`,
           };
         }
       }
@@ -196,15 +190,14 @@ export class ConfigurationManager {
       exportConfig.metadata.updatedAt = new Date().toISOString();
 
       // Determine file path (use provided path or prompt user)
-      const exportPath =
-        filePath || (await this.getExportPath(configuration.metadata.name));
+      const exportPath = filePath || (await this.getExportPath(configuration.metadata.name));
 
       // Write configuration to file with appropriate formatting
       const jsonContent = opts.minify
         ? JSON.stringify(exportConfig)
         : JSON.stringify(exportConfig, null, 2);
 
-      await fs.promises.writeFile(exportPath, jsonContent, "utf8");
+      await fs.promises.writeFile(exportPath, jsonContent, 'utf8');
 
       return { success: true, filePath: exportPath };
     } catch (error) {
@@ -231,7 +224,7 @@ export class ConfigurationManager {
       validate?: boolean; // Whether to validate imported config (default: true)
       backup?: boolean; // Whether to backup current config (default: true)
       merge?: boolean; // Whether to merge with existing config (default: false)
-    },
+    }
   ): Promise<{
     success: boolean;
     configuration?: ConfigurationSchema;
@@ -248,7 +241,7 @@ export class ConfigurationManager {
       };
 
       // Read and parse configuration file
-      const fileContent = await fs.promises.readFile(filePath, "utf8");
+      const fileContent = await fs.promises.readFile(filePath, 'utf8');
       const importedConfig = JSON.parse(fileContent) as ConfigurationSchema;
 
       // Validate imported configuration
@@ -257,8 +250,8 @@ export class ConfigurationManager {
         if (!validation.isValid) {
           return {
             success: false,
-            error: `Invalid configuration: ${validation.errors.map((e) => e.message).join(", ")}`,
-            warnings: validation.warnings.map((w) => w.message),
+            error: `Invalid configuration: ${validation.errors.map(e => e.message).join(', ')}`,
+            warnings: validation.warnings.map(w => w.message),
           };
         }
       }
@@ -267,7 +260,7 @@ export class ConfigurationManager {
       if (opts.backup) {
         const currentConfig = await this.getCurrentConfiguration();
         if (currentConfig) {
-          await this.createBackup(currentConfig, "manual", "Pre-import backup");
+          await this.createBackup(currentConfig, 'manual', 'Pre-import backup');
         }
       }
 
@@ -281,9 +274,7 @@ export class ConfigurationManager {
         success: true,
         configuration: migratedConfig,
         warnings: opts.validate
-          ? ConfigurationValidator.validate(migratedConfig).warnings.map(
-              (w) => w.message,
-            )
+          ? ConfigurationValidator.validate(migratedConfig).warnings.map(w => w.message)
           : [],
       };
     } catch (error) {
@@ -307,8 +298,8 @@ export class ConfigurationManager {
    */
   async createBackup(
     configuration: ConfigurationSchema,
-    reason: "manual" | "auto" | "migration",
-    description?: string,
+    reason: 'manual' | 'auto' | 'migration',
+    description?: string
   ): Promise<{ success: boolean; backupId?: string; error?: string }> {
     try {
       // Generate unique backup ID
@@ -329,11 +320,7 @@ export class ConfigurationManager {
 
       // Write backup to file
       const backupFilePath = path.join(this.backupPath, `${backupId}.json`);
-      await fs.promises.writeFile(
-        backupFilePath,
-        JSON.stringify(backup, null, 2),
-        "utf8",
-      );
+      await fs.promises.writeFile(backupFilePath, JSON.stringify(backup, null, 2), 'utf8');
 
       // Clean up old backups (keep last 10)
       await this.cleanupOldBackups();
@@ -355,9 +342,7 @@ export class ConfigurationManager {
    * @param backupId - ID of the backup to restore
    * @returns Promise resolving to restore result with configuration or error
    */
-  async restoreBackup(
-    backupId: string,
-  ): Promise<{
+  async restoreBackup(backupId: string): Promise<{
     success: boolean;
     configuration?: ConfigurationSchema;
     error?: string;
@@ -365,7 +350,7 @@ export class ConfigurationManager {
     try {
       // Read backup file
       const backupFilePath = path.join(this.backupPath, `${backupId}.json`);
-      const backupContent = await fs.promises.readFile(backupFilePath, "utf8");
+      const backupContent = await fs.promises.readFile(backupFilePath, 'utf8');
       const backup = JSON.parse(backupContent) as ConfigurationBackup;
 
       // Validate restored configuration
@@ -373,7 +358,7 @@ export class ConfigurationManager {
       if (!validation.isValid) {
         return {
           success: false,
-          error: `Backup contains invalid configuration: ${validation.errors.map((e) => e.message).join(", ")}`,
+          error: `Backup contains invalid configuration: ${validation.errors.map(e => e.message).join(', ')}`,
         };
       }
 
@@ -405,10 +390,10 @@ export class ConfigurationManager {
 
       // Read and parse each backup file
       for (const file of backupFiles) {
-        if (file.endsWith(".json")) {
+        if (file.endsWith('.json')) {
           try {
             const filePath = path.join(this.backupPath, file);
-            const content = await fs.promises.readFile(filePath, "utf8");
+            const content = await fs.promises.readFile(filePath, 'utf8');
             const backup = JSON.parse(content) as ConfigurationBackup;
             backups.push(backup);
           } catch (error) {
@@ -420,11 +405,10 @@ export class ConfigurationManager {
 
       // Sort by timestamp (newest first)
       return backups.sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
     } catch (error) {
-      console.error("Failed to list backups:", error);
+      console.error('Failed to list backups:', error);
       return [];
     }
   }
@@ -444,10 +428,10 @@ export class ConfigurationManager {
     templateInfo: {
       name: string;
       description: string;
-      category: "development" | "production" | "team" | "custom";
+      category: 'development' | 'production' | 'team' | 'custom';
       tags?: string[];
       author?: string;
-    },
+    }
   ): Promise<{ success: boolean; templateId?: string; error?: string }> {
     try {
       // Generate unique template ID
@@ -470,15 +454,8 @@ export class ConfigurationManager {
       };
 
       // Write template to file
-      const templateFilePath = path.join(
-        this.templatesPath,
-        `${templateId}.json`,
-      );
-      await fs.promises.writeFile(
-        templateFilePath,
-        JSON.stringify(template, null, 2),
-        "utf8",
-      );
+      const templateFilePath = path.join(this.templatesPath, `${templateId}.json`);
+      await fs.promises.writeFile(templateFilePath, JSON.stringify(template, null, 2), 'utf8');
 
       return { success: true, templateId };
     } catch (error) {
@@ -505,10 +482,10 @@ export class ConfigurationManager {
 
       // Read and parse each template file
       for (const file of templateFiles) {
-        if (file.endsWith(".json")) {
+        if (file.endsWith('.json')) {
           try {
             const filePath = path.join(this.templatesPath, file);
-            const content = await fs.promises.readFile(filePath, "utf8");
+            const content = await fs.promises.readFile(filePath, 'utf8');
             const template = JSON.parse(content) as ConfigurationTemplate;
             templates.push(template);
           } catch (error) {
@@ -521,7 +498,7 @@ export class ConfigurationManager {
       // Sort by name alphabetically
       return templates.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
-      console.error("Failed to list templates:", error);
+      console.error('Failed to list templates:', error);
       return [];
     }
   }
@@ -534,20 +511,15 @@ export class ConfigurationManager {
    * @param templateId - ID of the template to load
    * @returns Promise resolving to template load result with template or error
    */
-  async loadTemplate(
-    templateId: string,
-  ): Promise<{
+  async loadTemplate(templateId: string): Promise<{
     success: boolean;
     template?: ConfigurationTemplate;
     error?: string;
   }> {
     try {
       // Read template file
-      const templateFilePath = path.join(
-        this.templatesPath,
-        `${templateId}.json`,
-      );
-      const content = await fs.promises.readFile(templateFilePath, "utf8");
+      const templateFilePath = path.join(this.templatesPath, `${templateId}.json`);
+      const content = await fs.promises.readFile(templateFilePath, 'utf8');
       const template = JSON.parse(content) as ConfigurationTemplate;
 
       return { success: true, template };
@@ -568,9 +540,7 @@ export class ConfigurationManager {
    * @param configuration - Configuration to validate (can be partial)
    * @returns ValidationResult with validation status and any errors/warnings
    */
-  validateConfiguration(
-    configuration: Partial<ConfigurationSchema>,
-  ): ValidationResult {
+  validateConfiguration(configuration: Partial<ConfigurationSchema>): ValidationResult {
     return ConfigurationValidator.validate(configuration);
   }
 
@@ -618,15 +588,15 @@ export class ConfigurationManager {
    */
   private async getExportPath(configName: string): Promise<string> {
     // Sanitize configuration name for use in filename
-    const sanitizedName = configName.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const sanitizedName = configName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `${sanitizedName}_${timestamp}.json`;
 
     // Use VS Code's file dialog if available
     const uri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(path.join(this.configurationPath, fileName)),
       filters: {
-        "JSON Configuration": ["json"],
+        'JSON Configuration': ['json'],
       },
     });
 
@@ -658,9 +628,7 @@ export class ConfigurationManager {
    * @param config - Configuration to potentially migrate
    * @returns Promise resolving to migrated configuration
    */
-  private async migrateConfiguration(
-    config: ConfigurationSchema,
-  ): Promise<ConfigurationSchema> {
+  private async migrateConfiguration(config: ConfigurationSchema): Promise<ConfigurationSchema> {
     // Check if migration is needed
     const currentVersion = ConfigurationValidator.createDefault().version;
     if (config.version === currentVersion) {
@@ -672,9 +640,7 @@ export class ConfigurationManager {
     const migration = this.migrations.get(migrationKey);
 
     if (migration) {
-      console.log(
-        `Migrating configuration from ${config.version} to ${currentVersion}`,
-      );
+      console.log(`Migrating configuration from ${config.version} to ${currentVersion}`);
       return migration.migrate(config);
     }
 
@@ -696,15 +662,12 @@ export class ConfigurationManager {
         // Remove oldest backups beyond the 10 most recent
         const oldBackups = backups.slice(10);
         for (const backup of oldBackups) {
-          const backupFilePath = path.join(
-            this.backupPath,
-            `${backup.id}.json`,
-          );
+          const backupFilePath = path.join(this.backupPath, `${backup.id}.json`);
           await fs.promises.unlink(backupFilePath);
         }
       }
     } catch (error) {
-      console.warn("Failed to cleanup old backups:", error);
+      console.warn('Failed to cleanup old backups:', error);
       // Non-critical error, don't fail the operation
     }
   }
@@ -722,53 +685,53 @@ export class ConfigurationManager {
   getConfigurationPresets(): ConfigurationTemplate[] {
     return [
       {
-        id: "development-local",
-        name: "Development (Local)",
-        description: "Local development setup with Qdrant and Ollama",
-        category: "development",
-        tags: ["local", "development", "qdrant", "ollama"],
-        version: "1.0.0",
+        id: 'development-local',
+        name: 'Development (Local)',
+        description: 'Local development setup with Qdrant and Ollama',
+        category: 'development',
+        tags: ['local', 'development', 'qdrant', 'ollama'],
+        version: '1.0.0',
         configuration: {
           ...ConfigurationValidator.createDefault(),
           metadata: {
-            name: "Development Configuration",
-            description: "Local development setup",
-            environment: "development",
+            name: 'Development Configuration',
+            description: 'Local development setup',
+            environment: 'development',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
         },
       },
       {
-        id: "production-cloud",
-        name: "Production (Cloud)",
-        description: "Production setup with Pinecone and OpenAI",
-        category: "production",
-        tags: ["cloud", "production", "pinecone", "openai"],
-        version: "1.0.0",
+        id: 'production-cloud',
+        name: 'Production (Cloud)',
+        description: 'Production setup with Pinecone and OpenAI',
+        category: 'production',
+        tags: ['cloud', 'production', 'pinecone', 'openai'],
+        version: '1.0.0',
         configuration: {
           ...ConfigurationValidator.createDefault(),
           metadata: {
-            name: "Production Configuration",
-            description: "Cloud production setup",
-            environment: "production",
+            name: 'Production Configuration',
+            description: 'Cloud production setup',
+            environment: 'production',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
           database: {
-            provider: "pinecone",
+            provider: 'pinecone',
             connection: {
-              apiKey: "", // To be filled by user
-              environment: "", // To be filled by user
+              apiKey: '', // To be filled by user
+              environment: '', // To be filled by user
               timeout: 30000,
             },
             collections: {
-              defaultCollection: "code_context_prod",
+              defaultCollection: 'code_context_prod',
               collections: [
                 {
-                  name: "code_context_prod",
+                  name: 'code_context_prod',
                   vectorSize: 1536,
-                  distance: "cosine",
+                  distance: 'cosine',
                 },
               ],
             },
@@ -779,13 +742,13 @@ export class ConfigurationManager {
             },
           },
           embedding: {
-            provider: "openai",
+            provider: 'openai',
             connection: {
-              apiKey: "", // To be filled by user
+              apiKey: '', // To be filled by user
               timeout: 30000,
             },
             model: {
-              name: "text-embedding-3-small",
+              name: 'text-embedding-3-small',
               dimensions: 1536,
             },
             advanced: {
@@ -799,34 +762,34 @@ export class ConfigurationManager {
         },
       },
       {
-        id: "team-hybrid",
-        name: "Team (Hybrid)",
-        description: "Team setup with ChromaDB and flexible embedding",
-        category: "team",
-        tags: ["team", "hybrid", "chromadb", "flexible"],
-        version: "1.0.0",
+        id: 'team-hybrid',
+        name: 'Team (Hybrid)',
+        description: 'Team setup with ChromaDB and flexible embedding',
+        category: 'team',
+        tags: ['team', 'hybrid', 'chromadb', 'flexible'],
+        version: '1.0.0',
         configuration: {
           ...ConfigurationValidator.createDefault(),
           metadata: {
-            name: "Team Configuration",
-            description: "Team collaboration setup",
-            environment: "staging",
+            name: 'Team Configuration',
+            description: 'Team collaboration setup',
+            environment: 'staging',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
           database: {
-            provider: "chromadb",
+            provider: 'chromadb',
             connection: {
-              url: "http://localhost:8000",
+              url: 'http://localhost:8000',
               timeout: 30000,
             },
             collections: {
-              defaultCollection: "team_context",
+              defaultCollection: 'team_context',
               collections: [
                 {
-                  name: "team_context",
+                  name: 'team_context',
                   vectorSize: 384,
-                  distance: "cosine",
+                  distance: 'cosine',
                 },
               ],
             },
@@ -838,26 +801,9 @@ export class ConfigurationManager {
           },
           indexing: {
             patterns: {
-              include: [
-                "**/*.ts",
-                "**/*.js",
-                "**/*.py",
-                "**/*.java",
-                "**/*.md",
-              ],
-              exclude: [
-                "**/node_modules/**",
-                "**/dist/**",
-                "**/build/**",
-                "**/.git/**",
-              ],
-              fileTypes: [
-                "typescript",
-                "javascript",
-                "python",
-                "java",
-                "markdown",
-              ],
+              include: ['**/*.ts', '**/*.js', '**/*.py', '**/*.java', '**/*.md'],
+              exclude: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
+              fileTypes: ['typescript', 'javascript', 'python', 'java', 'markdown'],
               maxFileSize: 2097152, // 2MB
             },
             processing: {
@@ -875,13 +821,7 @@ export class ConfigurationManager {
               languageDetection: true,
               codeAnalysis: true,
               semanticChunking: true,
-              metadataExtraction: [
-                "language",
-                "functions",
-                "classes",
-                "imports",
-                "comments",
-              ],
+              metadataExtraction: ['language', 'functions', 'classes', 'imports', 'comments'],
             },
           },
         },
@@ -898,9 +838,7 @@ export class ConfigurationManager {
    * @param presetId - ID of the preset to apply
    * @returns Promise resolving to preset application result with configuration or error
    */
-  async applyPreset(
-    presetId: string,
-  ): Promise<{
+  async applyPreset(presetId: string): Promise<{
     success: boolean;
     configuration?: ConfigurationSchema;
     error?: string;
@@ -908,7 +846,7 @@ export class ConfigurationManager {
     try {
       // Find the requested preset
       const presets = this.getConfigurationPresets();
-      const preset = presets.find((p) => p.id === presetId);
+      const preset = presets.find(p => p.id === presetId);
 
       if (!preset) {
         return {
@@ -920,11 +858,7 @@ export class ConfigurationManager {
       // Create backup before applying preset
       const currentConfig = await this.getCurrentConfiguration();
       if (currentConfig) {
-        await this.createBackup(
-          currentConfig,
-          "auto",
-          `Pre-preset application: ${preset.name}`,
-        );
+        await this.createBackup(currentConfig, 'auto', `Pre-preset application: ${preset.name}`);
       }
 
       // Update metadata with application timestamp

@@ -2,14 +2,14 @@
 
 /**
  * Comprehensive Test Script for All BigContext Improvements
- * 
+ *
  * This script validates all the major improvements implemented:
  * 1. Global Configuration Persistence
  * 2. Enhanced Qdrant Robustness
  * 3. Indexing Stop/Cancel Functionality
  * 4. Type-Safe Communication
  * 5. Health Monitoring
- * 
+ *
  * Usage:
  * npm run test:all-improvements
  * or
@@ -30,7 +30,8 @@ class ComprehensiveTestSuite {
   private qdrantService: QdrantService;
   private healthMonitor: QdrantHealthMonitor;
   private communicationService: TypeSafeCommunicationService;
-  private testResults: Map<string, { passed: boolean; message: string; duration: number }> = new Map();
+  private testResults: Map<string, { passed: boolean; message: string; duration: number }> =
+    new Map();
 
   constructor() {
     // Create a mock ConfigService for testing
@@ -41,12 +42,12 @@ class ComprehensiveTestSuite {
           enableFileLogging: true,
           enableConsoleLogging: true,
           enableOutputChannel: true,
-        }
-      })
+        },
+      }),
     } as any;
 
     this.loggingService = new CentralizedLoggingService(mockConfigService);
-    
+
     // Mock VS Code context for testing
     const mockContext = {
       globalState: {
@@ -56,7 +57,7 @@ class ComprehensiveTestSuite {
     } as any;
 
     this.globalConfigManager = new GlobalConfigurationManager(mockContext, this.loggingService);
-    
+
     const qdrantConfig: QdrantServiceConfig = {
       connectionString: process.env.QDRANT_URL || 'http://localhost:6333',
       retryConfig: {
@@ -71,12 +72,15 @@ class ComprehensiveTestSuite {
 
     this.qdrantService = new QdrantService(qdrantConfig, this.loggingService);
     this.healthMonitor = new QdrantHealthMonitor(this.qdrantService, this.loggingService);
-    this.communicationService = new TypeSafeCommunicationService({
-      defaultTimeout: 10000,
-      maxRetries: 2,
-      retryDelay: 1000,
-      enableMetrics: true,
-    }, this.loggingService);
+    this.communicationService = new TypeSafeCommunicationService(
+      {
+        defaultTimeout: 10000,
+        maxRetries: 2,
+        retryDelay: 1000,
+        enableMetrics: true,
+      },
+      this.loggingService
+    );
   }
 
   async runAllTests(): Promise<void> {
@@ -88,7 +92,7 @@ class ComprehensiveTestSuite {
       await this.testHealthMonitoring();
       await this.testCommunicationService();
       await this.testIndexingControls();
-      
+
       this.printResults();
     } catch (error) {
       console.error('❌ Test suite failed with error:', error);
@@ -180,7 +184,11 @@ class ComprehensiveTestSuite {
       }
 
       // Test search in non-existent collection (should return empty results)
-      const emptyResults = await this.qdrantService.search('nonexistent_collection', [0.1, 0.2, 0.3], 5);
+      const emptyResults = await this.qdrantService.search(
+        'nonexistent_collection',
+        [0.1, 0.2, 0.3],
+        5
+      );
       if (emptyResults.length !== 0) {
         throw new Error('Search in non-existent collection should return empty results');
       }
@@ -205,7 +213,7 @@ class ComprehensiveTestSuite {
 
       // Test health change listener
       let listenerCalled = false;
-      const unsubscribe = this.healthMonitor.onHealthChange((newStatus) => {
+      const unsubscribe = this.healthMonitor.onHealthChange(newStatus => {
         listenerCalled = true;
       });
 
@@ -305,7 +313,7 @@ class ComprehensiveTestSuite {
 
       // Test pause/resume/stop/cancel methods (they should handle non-indexing state gracefully)
       indexingService.pause(); // Should warn but not throw
-      indexingService.stop();  // Should warn but not throw
+      indexingService.stop(); // Should warn but not throw
       indexingService.cancel(); // Should warn but not throw
 
       // Test status after operations
@@ -327,7 +335,7 @@ class ComprehensiveTestSuite {
     this.testResults.forEach((result, testName) => {
       totalTests++;
       totalDuration += result.duration;
-      
+
       if (result.passed) {
         passedTests++;
         console.log(`✅ ${testName} - ${result.duration}ms`);

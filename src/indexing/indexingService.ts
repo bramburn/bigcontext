@@ -16,27 +16,27 @@
  * processing as a fallback. It also provides progress tracking, pause/resume functionality,
  * and comprehensive error handling throughout the pipeline.
  */
-import * as vscode from "vscode";
-import * as fs from "fs";
-import * as fsPromises from "fs/promises";
-import * as os from "os";
-import * as path from "path";
-import { Worker, isMainThread } from "worker_threads";
-import { FileWalker } from "./fileWalker";
-import { AstParser, SupportedLanguage } from "../parsing/astParser";
-import { Chunker, CodeChunk, ChunkType } from "../parsing/chunker";
-import { QdrantService } from "../db/qdrantService";
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+import { Worker, isMainThread } from 'worker_threads';
+import { FileWalker } from './fileWalker';
+import { AstParser, SupportedLanguage } from '../parsing/astParser';
+import { Chunker, CodeChunk, ChunkType } from '../parsing/chunker';
+import { QdrantService } from '../db/qdrantService';
 import {
   IEmbeddingProvider,
   EmbeddingProviderFactory,
   EmbeddingConfig,
-} from "../embeddings/embeddingProvider";
-import { LSPService } from "../lsp/lspService";
-import { StateManager } from "../stateManager";
-import { WorkspaceManager } from "../workspaceManager";
-import { ConfigService } from "../configService";
-import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
-import { TelemetryService } from "../telemetry/telemetryService";
+} from '../embeddings/embeddingProvider';
+import { LSPService } from '../lsp/lspService';
+import { StateManager } from '../stateManager';
+import { WorkspaceManager } from '../workspaceManager';
+import { ConfigService } from '../configService';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
+import { TelemetryService } from '../telemetry/telemetryService';
 
 /**
  * Progress tracking interface for the indexing process.
@@ -52,13 +52,7 @@ export interface IndexingProgress {
   /** Total number of files to be processed */
   totalFiles: number;
   /** Current phase of the indexing process */
-  currentPhase:
-    | "discovering"
-    | "parsing"
-    | "chunking"
-    | "embedding"
-    | "storing"
-    | "complete";
+  currentPhase: 'discovering' | 'parsing' | 'chunking' | 'embedding' | 'storing' | 'complete';
   /** Array of chunks generated so far */
   chunks: CodeChunk[];
   /** Array of error messages encountered during indexing */
@@ -119,7 +113,7 @@ export enum IndexingStatus {
   IDLE = 'idle',
   INDEXING = 'indexing',
   PAUSED = 'paused',
-  ERROR = 'error'
+  ERROR = 'error',
 }
 
 /**
@@ -183,11 +177,11 @@ export class IndexingService {
   /** Telemetry service for anonymous usage analytics */
   private telemetryService?: TelemetryService;
   /** Flag to track if indexing is currently paused */
-  private isPaused: boolean = false;
+  private isPaused = false;
   /** Flag to track if indexing should be cancelled */
-  private isCancelled: boolean = false;
+  private isCancelled = false;
   /** Flag to track if indexing should be stopped */
-  private isStopped: boolean = false;
+  private isStopped = false;
   /** Queue of remaining files to process (used for pause/resume functionality) */
   private remainingFiles: string[] = [];
   /** Current indexing progress callback */
@@ -199,10 +193,9 @@ export class IndexingService {
   /** Queue of files waiting to be processed */
   private fileQueue: string[] = [];
   /** Number of currently active workers */
-  private activeWorkers: number = 0;
+  private activeWorkers = 0;
   /** Map to track worker states and assignments */
-  private workerStates: Map<Worker, { busy: boolean; currentFile?: string }> =
-    new Map();
+  private workerStates: Map<Worker, { busy: boolean; currentFile?: string }> = new Map();
 
   // State management properties for pause/resume functionality
   /** Current indexing status */
@@ -214,7 +207,7 @@ export class IndexingService {
     status: IndexingStatus.IDLE,
     processedFiles: 0,
     totalFiles: 0,
-    errors: []
+    errors: [],
   };
   /** Aggregated results from workers */
   private aggregatedResults: {
@@ -239,7 +232,7 @@ export class IndexingService {
     errors: [],
   };
   /** Flag to track if parallel processing is enabled */
-  private useParallelProcessing: boolean = true;
+  private useParallelProcessing = true;
 
   /**
    * Creates a new IndexingService instance using dependency injection
@@ -268,7 +261,7 @@ export class IndexingService {
     workspaceManager: WorkspaceManager,
     configService: ConfigService,
     loggingService: CentralizedLoggingService,
-    telemetryService?: TelemetryService,
+    telemetryService?: TelemetryService
   ) {
     this.workspaceRoot = workspaceRoot;
     this.fileWalker = fileWalker;
@@ -310,28 +303,24 @@ export class IndexingService {
       this.loggingService.info(
         `Initializing worker pool with ${numWorkers} workers (${numCpus} CPUs available)`,
         {},
-        "IndexingService",
+        'IndexingService'
       );
 
       for (let i = 0; i < numWorkers; i++) {
-        const workerPath = path.join(__dirname, "indexingWorker.js");
+        const workerPath = path.join(__dirname, 'indexingWorker.js');
 
         // Create embedding configuration for worker
         const providerType = this.configService.getEmbeddingProvider();
         const embeddingConfig = {
           provider: providerType,
           model:
-            providerType === "ollama"
+            providerType === 'ollama'
               ? this.configService.getOllamaConfig().model
               : this.configService.getOpenAIConfig().model,
           apiKey:
-            providerType === "openai"
-              ? this.configService.getOpenAIConfig().apiKey
-              : undefined,
+            providerType === 'openai' ? this.configService.getOpenAIConfig().apiKey : undefined,
           apiUrl:
-            providerType === "ollama"
-              ? this.configService.getOllamaConfig().apiUrl
-              : undefined,
+            providerType === 'ollama' ? this.configService.getOllamaConfig().apiUrl : undefined,
         };
 
         const worker = new Worker(workerPath, {
@@ -352,20 +341,16 @@ export class IndexingService {
       this.loggingService.info(
         `Worker pool initialized with ${this.workerPool.length} workers`,
         {},
-        "IndexingService",
+        'IndexingService'
       );
     } catch (error) {
       this.loggingService.error(
-        "Failed to initialize worker pool",
+        'Failed to initialize worker pool',
         { error: error instanceof Error ? error.message : String(error) },
-        "IndexingService",
+        'IndexingService'
       );
       this.useParallelProcessing = false;
-      this.loggingService.info(
-        "Falling back to sequential processing",
-        {},
-        "IndexingService",
-      );
+      this.loggingService.info('Falling back to sequential processing', {}, 'IndexingService');
     }
   }
 
@@ -380,25 +365,21 @@ export class IndexingService {
    * @param worker - The worker thread instance to configure
    */
   private setupWorkerEventHandlers(worker: Worker): void {
-    worker.on("message", (message) => {
+    worker.on('message', message => {
       this.handleWorkerMessage(worker, message);
     });
 
-    worker.on("error", (error) => {
-      this.loggingService.error(
-        "Worker error",
-        { error: error.message },
-        "IndexingService",
-      );
+    worker.on('error', error => {
+      this.loggingService.error('Worker error', { error: error.message }, 'IndexingService');
       this.handleWorkerError(worker, error);
     });
 
-    worker.on("exit", (code) => {
+    worker.on('exit', code => {
       if (code !== 0) {
         this.loggingService.error(
           `Worker exited with code ${code}`,
           { exitCode: code },
-          "IndexingService",
+          'IndexingService'
         );
       }
       this.handleWorkerExit(worker, code);
@@ -421,22 +402,24 @@ export class IndexingService {
    */
   private handleWorkerMessage(worker: Worker, message: any): void {
     const workerState = this.workerStates.get(worker);
-    if (!workerState) return;
+    if (!workerState) {
+      return;
+    }
 
     switch (message.type) {
-      case "ready":
-        this.loggingService.debug("Worker ready", {}, "IndexingService");
+      case 'ready':
+        this.loggingService.debug('Worker ready', {}, 'IndexingService');
         break;
 
-      case "processed":
+      case 'processed':
         this.handleProcessedFile(worker, message.data);
         break;
 
-      case "error":
+      case 'error':
         this.loggingService.error(
-          "Worker processing error",
+          'Worker processing error',
           { error: message.error },
-          "IndexingService",
+          'IndexingService'
         );
         this.aggregatedResults.errors.push(message.error);
         this.markWorkerIdle(worker);
@@ -445,9 +428,9 @@ export class IndexingService {
 
       default:
         this.loggingService.warn(
-          "Unknown worker message type",
+          'Unknown worker message type',
           { messageType: message.type },
-          "IndexingService",
+          'IndexingService'
         );
     }
   }
@@ -477,8 +460,7 @@ export class IndexingService {
       // Update statistics
       if (data.language) {
         this.aggregatedResults.stats.filesByLanguage[data.language] =
-          (this.aggregatedResults.stats.filesByLanguage[data.language] || 0) +
-          1;
+          (this.aggregatedResults.stats.filesByLanguage[data.language] || 0) + 1;
       }
 
       this.aggregatedResults.stats.totalLines += data.lineCount;
@@ -497,16 +479,16 @@ export class IndexingService {
       }
 
       console.log(
-        `IndexingService: Processed ${data.filePath} - ${data.chunks.length} chunks, ${data.embeddings.length} embeddings`,
+        `IndexingService: Processed ${data.filePath} - ${data.chunks.length} chunks, ${data.embeddings.length} embeddings`
       );
 
       // Mark worker as idle and process next file
       this.markWorkerIdle(worker);
       this.processNextFile();
     } catch (error) {
-      console.error("IndexingService: Error handling processed file:", error);
+      console.error('IndexingService: Error handling processed file:', error);
       this.aggregatedResults.errors.push(
-        `Error handling processed file: ${error instanceof Error ? error.message : String(error)}`,
+        `Error handling processed file: ${error instanceof Error ? error.message : String(error)}`
       );
       this.markWorkerIdle(worker);
       this.processNextFile();
@@ -529,7 +511,7 @@ export class IndexingService {
    * @param error - The error object from the worker
    */
   private handleWorkerError(worker: Worker, error: Error): void {
-    console.error("IndexingService: Worker error:", error);
+    console.error('IndexingService: Worker error:', error);
     this.aggregatedResults.errors.push(`Worker error: ${error.message}`);
     this.markWorkerIdle(worker);
     this.processNextFile();
@@ -604,21 +586,21 @@ export class IndexingService {
   private processNextFile(): void {
     // Do not dispatch new work when paused
     if (this.isPaused) {
-      console.log("IndexingService: Paused - not dispatching new files");
+      console.log('IndexingService: Paused - not dispatching new files');
       return;
     }
 
     if (this.fileQueue.length === 0) {
       // Check if all workers are idle
       if (this.activeWorkers === 0) {
-        console.log("IndexingService: All files processed, workers idle");
+        console.log('IndexingService: All files processed, workers idle');
         this.onAllFilesProcessed();
       }
       return;
     }
 
     // Find an idle worker
-    const idleWorker = this.workerPool.find((worker) => {
+    const idleWorker = this.workerPool.find(worker => {
       const state = this.workerStates.get(worker);
       return state && !state.busy;
     });
@@ -647,7 +629,9 @@ export class IndexingService {
    */
   private assignFileToWorker(worker: Worker, filePath: string): void {
     const workerState = this.workerStates.get(worker);
-    if (!workerState) return;
+    if (!workerState) {
+      return;
+    }
 
     workerState.busy = true;
     workerState.currentFile = filePath;
@@ -655,13 +639,13 @@ export class IndexingService {
 
     // Send file to worker for processing
     worker.postMessage({
-      type: "processFile",
+      type: 'processFile',
       filePath,
       workspaceRoot: this.workspaceRoot,
     });
 
     console.log(
-      `IndexingService: Assigned ${filePath} to worker (${this.activeWorkers} active workers)`,
+      `IndexingService: Assigned ${filePath} to worker (${this.activeWorkers} active workers)`
     );
   }
 
@@ -676,7 +660,7 @@ export class IndexingService {
    * that all files have been processed.
    */
   private onAllFilesProcessed(): void {
-    console.log("IndexingService: All files processed by workers");
+    console.log('IndexingService: All files processed by workers');
     // This will be called by the modified startIndexing method
   }
 
@@ -697,16 +681,16 @@ export class IndexingService {
    * @returns Promise resolving to an IndexingResult with comprehensive statistics
    */
   public async startIndexing(
-    progressCallback?: (progress: IndexingProgress) => void,
+    progressCallback?: (progress: IndexingProgress) => void
   ): Promise<IndexingResult> {
     // Check if indexing is already in progress
     if (this.stateManager.isIndexing()) {
       this.loggingService.warn(
-        "Indexing already in progress, skipping new request",
+        'Indexing already in progress, skipping new request',
         {},
-        "IndexingService",
+        'IndexingService'
       );
-      throw new Error("Indexing is already in progress");
+      throw new Error('Indexing is already in progress');
     }
 
     const startTime = Date.now();
@@ -720,12 +704,12 @@ export class IndexingService {
       processedFiles: 0,
       totalFiles: 0,
       errors: [],
-      startTime: new Date()
+      startTime: new Date(),
     };
 
     // Track indexing start
     this.telemetryService?.trackEvent('indexing_started', {
-      timestamp: startTime
+      timestamp: startTime,
     });
     const result: IndexingResult = {
       success: false,
@@ -749,16 +733,16 @@ export class IndexingService {
     this.isStopped = false;
     this.isPaused = false;
     this.abortController = new AbortController();
-    this.stateManager.setIndexing(true, "Starting indexing process");
+    this.stateManager.setIndexing(true, 'Starting indexing process');
 
     try {
       // Phase 1: Initialize embedding provider
       // This must be done first as it's required for the rest of the pipeline
       progressCallback?.({
-        currentFile: "",
+        currentFile: '',
         processedFiles: 0,
         totalFiles: 0,
-        currentPhase: "discovering",
+        currentPhase: 'discovering',
         chunks: [],
         errors: [],
       });
@@ -766,18 +750,16 @@ export class IndexingService {
       // Phase 2: Discover files
       // Find all relevant files in the workspace that match our patterns
       progressCallback?.({
-        currentFile: "",
+        currentFile: '',
         processedFiles: 0,
         totalFiles: 0,
-        currentPhase: "discovering",
+        currentPhase: 'discovering',
         chunks: [],
         errors: [],
       });
 
       const files = await this.fileWalker.findAllFiles();
-      const codeFiles = files.filter((file) =>
-        this.fileWalker.isCodeFile(file),
-      );
+      const codeFiles = files.filter(file => this.fileWalker.isCodeFile(file));
 
       result.totalFiles = codeFiles.length;
 
@@ -794,14 +776,13 @@ export class IndexingService {
 
       if (this.useParallelProcessing && this.workerPool.length > 0) {
         console.log(
-          `IndexingService: Starting parallel processing with ${this.workerPool.length} workers`,
+          `IndexingService: Starting parallel processing with ${this.workerPool.length} workers`
         );
         await this.processFilesInParallel(codeFiles, progressCallback);
 
         // Copy aggregated results to main result object
         result.chunks = this.aggregatedResults.chunks;
-        result.stats.filesByLanguage =
-          this.aggregatedResults.stats.filesByLanguage;
+        result.stats.filesByLanguage = this.aggregatedResults.stats.filesByLanguage;
         result.stats.chunksByType = this.aggregatedResults.stats.chunksByType;
         result.stats.totalLines = this.aggregatedResults.stats.totalLines;
         result.stats.totalBytes = this.aggregatedResults.stats.totalBytes;
@@ -809,18 +790,14 @@ export class IndexingService {
         result.processedFiles = codeFiles.length;
       } else {
         console.log(
-          "IndexingService: Using sequential processing (parallel processing disabled or unavailable)",
+          'IndexingService: Using sequential processing (parallel processing disabled or unavailable)'
         );
-        await this.processFilesSequentially(
-          codeFiles,
-          result,
-          progressCallback,
-        );
+        await this.processFilesSequentially(codeFiles, result, progressCallback);
 
         // If paused during sequential processing, wait for resume and continue
         if (this.isPaused) {
-          console.log("IndexingService: Sequential processing paused, waiting to resume...");
-          await new Promise<void>((resolve) => {
+          console.log('IndexingService: Sequential processing paused, waiting to resume...');
+          await new Promise<void>(resolve => {
             const check = () => {
               if (!this.isPaused) {
                 resolve();
@@ -834,7 +811,9 @@ export class IndexingService {
           if (this.remainingFiles.length > 0) {
             const remaining = [...this.remainingFiles];
             this.remainingFiles = [];
-            console.log(`IndexingService: Resuming sequential processing of ${remaining.length} files`);
+            console.log(
+              `IndexingService: Resuming sequential processing of ${remaining.length} files`
+            );
             await this.processFilesSequentially(remaining, result, progressCallback);
           }
         }
@@ -846,22 +825,19 @@ export class IndexingService {
       let embeddings: number[][] = [];
 
       if (result.chunks.length > 0 && this.embeddingProvider) {
-        if (
-          this.useParallelProcessing &&
-          this.aggregatedResults.embeddings.length > 0
-        ) {
+        if (this.useParallelProcessing && this.aggregatedResults.embeddings.length > 0) {
           // Use embeddings from parallel processing
           embeddings = this.aggregatedResults.embeddings;
           console.log(
-            `IndexingService: Using ${embeddings.length} embeddings from parallel processing`,
+            `IndexingService: Using ${embeddings.length} embeddings from parallel processing`
           );
         } else {
           // Generate embeddings for sequential processing
           progressCallback?.({
-            currentFile: "",
+            currentFile: '',
             processedFiles: result.processedFiles,
             totalFiles: result.totalFiles,
-            currentPhase: "embedding",
+            currentPhase: 'embedding',
             chunks: result.chunks,
             errors: result.errors,
             embeddingProgress: {
@@ -870,10 +846,15 @@ export class IndexingService {
             },
           });
 
-          const chunkContents = result.chunks.map((chunk) => chunk.content);
+          const chunkContents = result.chunks.map(chunk => chunk.content);
 
           // Retry wrapper with logging for robustness
-          const withRetry = async <T>(label: string, fn: () => Promise<T>, attempts = 2, backoffMs = 250): Promise<T> => {
+          const withRetry = async <T>(
+            label: string,
+            fn: () => Promise<T>,
+            attempts = 2,
+            backoffMs = 250
+          ): Promise<T> => {
             let lastErr: any;
             for (let i = 0; i < attempts; i++) {
               try {
@@ -886,7 +867,7 @@ export class IndexingService {
                   'IndexingService'
                 );
                 if (i < attempts - 1) {
-                  await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+                  await new Promise(r => setTimeout(r, backoffMs * (i + 1)));
                 }
               }
             }
@@ -898,7 +879,9 @@ export class IndexingService {
             throw lastErr;
           };
 
-          embeddings = await withRetry('generateEmbeddings(batch)', () => this.embeddingProvider.generateEmbeddings(chunkContents));
+          embeddings = await withRetry('generateEmbeddings(batch)', () =>
+            this.embeddingProvider.generateEmbeddings(chunkContents)
+          );
         }
 
         result.stats.totalEmbeddings = embeddings.length;
@@ -908,10 +891,10 @@ export class IndexingService {
         // Phase 5: Store in Qdrant
         // Store the chunks and their embeddings in the vector database
         progressCallback?.({
-          currentFile: "",
+          currentFile: '',
           processedFiles: result.processedFiles,
           totalFiles: result.totalFiles,
-          currentPhase: "storing",
+          currentPhase: 'storing',
           chunks: result.chunks,
           errors: result.errors,
         });
@@ -920,24 +903,23 @@ export class IndexingService {
         result.collectionName = collectionName;
 
         // Create collection if it doesn't exist
-        const collectionCreated =
-          await this.qdrantService.createCollectionIfNotExists(
-            collectionName,
-            this.embeddingProvider.getDimensions(),
-          );
+        const collectionCreated = await this.qdrantService.createCollectionIfNotExists(
+          collectionName,
+          this.embeddingProvider.getDimensions()
+        );
 
         if (!collectionCreated) {
-          result.errors.push("Failed to create Qdrant collection");
+          result.errors.push('Failed to create Qdrant collection');
         } else {
           // Store chunks with embeddings
           const stored = await this.qdrantService.upsertChunks(
             collectionName,
             result.chunks,
-            embeddings,
+            embeddings
           );
 
           if (!stored) {
-            result.errors.push("Failed to store chunks in Qdrant");
+            result.errors.push('Failed to store chunks in Qdrant');
           }
         }
       }
@@ -945,10 +927,10 @@ export class IndexingService {
       // Phase 6: Complete
       // Mark the indexing process as complete
       progressCallback?.({
-        currentFile: "",
+        currentFile: '',
         processedFiles: result.processedFiles,
         totalFiles: result.totalFiles,
-        currentPhase: "complete",
+        currentPhase: 'complete',
         chunks: result.chunks,
         errors: result.errors,
       });
@@ -962,9 +944,8 @@ export class IndexingService {
         fileCount: result.processedFiles,
         chunkCount: result.chunks.length,
         errorCount: result.errors.length,
-        success: true
+        success: true,
       });
-
     } catch (error) {
       const errorMessage = `Indexing failed: ${error instanceof Error ? error.message : String(error)}`;
       result.errors.push(errorMessage);
@@ -978,9 +959,8 @@ export class IndexingService {
         fileCount: result.processedFiles,
         chunkCount: result.chunks.length,
         errorCount: result.errors.length,
-        success: false
+        success: false,
       });
-
     } finally {
       // Only clear indexing flag if not paused
       if (!this.isPaused) {
@@ -1013,7 +993,7 @@ export class IndexingService {
    */
   private async processFilesInParallel(
     codeFiles: string[],
-    progressCallback?: (progress: IndexingProgress) => void,
+    progressCallback?: (progress: IndexingProgress) => void
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       // Reset aggregated results
@@ -1038,7 +1018,7 @@ export class IndexingService {
       const originalOnAllFilesProcessed = this.onAllFilesProcessed;
       this.onAllFilesProcessed = () => {
         console.log(
-          `IndexingService: Parallel processing complete. Processed ${processedFiles} files.`,
+          `IndexingService: Parallel processing complete. Processed ${processedFiles} files.`
         );
         this.onAllFilesProcessed = originalOnAllFilesProcessed; // Restore original handler
         resolve();
@@ -1047,10 +1027,10 @@ export class IndexingService {
       // Set up progress tracking
       const updateProgress = () => {
         progressCallback?.({
-          currentFile: "",
+          currentFile: '',
           processedFiles,
           totalFiles: codeFiles.length,
-          currentPhase: "parsing",
+          currentPhase: 'parsing',
           chunks: this.aggregatedResults.chunks,
           errors: this.aggregatedResults.errors,
         });
@@ -1065,10 +1045,7 @@ export class IndexingService {
       };
 
       // Start processing by filling the worker pool
-      const initialBatch = Math.min(
-        this.workerPool.length,
-        this.fileQueue.length,
-      );
+      const initialBatch = Math.min(this.workerPool.length, this.fileQueue.length);
       for (let i = 0; i < initialBatch; i++) {
         this.processNextFile();
       }
@@ -1078,8 +1055,8 @@ export class IndexingService {
 
       // Set timeout as safety net
       const timeout = setTimeout(() => {
-        console.error("IndexingService: Parallel processing timeout");
-        reject(new Error("Parallel processing timeout"));
+        console.error('IndexingService: Parallel processing timeout');
+        reject(new Error('Parallel processing timeout'));
       }, 300000); // 5 minutes timeout
 
       // Clear timeout when processing completes
@@ -1113,18 +1090,16 @@ export class IndexingService {
   private async processFilesSequentially(
     codeFiles: string[],
     result: IndexingResult,
-    progressCallback?: (progress: IndexingProgress) => void,
+    progressCallback?: (progress: IndexingProgress) => void
   ): Promise<void> {
     for (let i = 0; i < codeFiles.length; i++) {
       // Check for pause, cancel, or stop flags before processing each file
       if (this.isPaused || this.status === IndexingStatus.PAUSED) {
-        console.log(
-          "IndexingService: Indexing paused, saving remaining files...",
-        );
+        console.log('IndexingService: Indexing paused, saving remaining files...');
         this.remainingFiles = codeFiles.slice(i); // Save remaining files for later resumption
         this.updateProgress({
           status: IndexingStatus.PAUSED,
-          currentFile: undefined
+          currentFile: undefined,
         });
         result.success = false; // Mark as incomplete due to pause
         return;
@@ -1132,7 +1107,7 @@ export class IndexingService {
 
       if (this.isCancelled || this.isStopped) {
         console.log(
-          `IndexingService: Indexing ${this.isCancelled ? 'cancelled' : 'stopped'}, aborting...`,
+          `IndexingService: Indexing ${this.isCancelled ? 'cancelled' : 'stopped'}, aborting...`
         );
         result.success = false;
         result.errors.push(`Indexing ${this.isCancelled ? 'cancelled' : 'stopped'} by user`);
@@ -1146,7 +1121,7 @@ export class IndexingService {
           currentFile: filePath,
           processedFiles: i,
           totalFiles: codeFiles.length,
-          currentPhase: "parsing",
+          currentPhase: 'parsing',
           chunks: result.chunks,
           errors: result.errors,
         });
@@ -1222,9 +1197,9 @@ export class IndexingService {
       // Read file content
       // This is the first step in processing any file - we need the raw content
       // before we can do any parsing or analysis
-      const content = await fs.promises.readFile(filePath, "utf8");
-      const lineCount = content.split("\n").length; // Count lines for statistics
-      const byteCount = Buffer.byteLength(content, "utf8"); // Get file size for statistics
+      const content = await fs.promises.readFile(filePath, 'utf8');
+      const lineCount = content.split('\n').length; // Count lines for statistics
+      const byteCount = Buffer.byteLength(content, 'utf8'); // Get file size for statistics
 
       // Determine language based on file extension
       // We need to know the language to use the correct parser implementation
@@ -1246,13 +1221,10 @@ export class IndexingService {
       // This creates a structured representation of the code that captures
       // its semantic structure (functions, classes, variables, etc.)
       // We use error recovery to handle partial parsing even when there are syntax errors
-      const parseResult = this.astParser.parseWithErrorRecovery(
-        language,
-        content,
-      );
+      const parseResult = this.astParser.parseWithErrorRecovery(language, content);
       if (parseResult.errors.length > 0) {
         // Collect parsing errors but continue if possible
-        errors.push(...parseResult.errors.map((err) => `${filePath}: ${err}`));
+        errors.push(...parseResult.errors.map(err => `${filePath}: ${err}`));
       }
 
       if (!parseResult.tree) {
@@ -1271,22 +1243,12 @@ export class IndexingService {
       // Create chunks from the AST
       // Break down the code into manageable semantic pieces (functions, classes, methods)
       // that will be used for embedding generation and semantic search
-      const chunks = this.chunker.chunk(
-        filePath,
-        parseResult.tree,
-        content,
-        language,
-      );
+      const chunks = this.chunker.chunk(filePath, parseResult.tree, content, language);
 
       // Enhance chunks with LSP (Language Server Protocol) metadata
       // This adds rich semantic information like symbols, definitions, references, and hover info
       // which improves the quality of embeddings and search results
-      const enhancedChunks = await this.enhanceChunksWithLSP(
-        chunks,
-        filePath,
-        content,
-        language,
-      );
+      const enhancedChunks = await this.enhanceChunksWithLSP(chunks, filePath, content, language);
 
       return {
         success: true,
@@ -1325,15 +1287,13 @@ export class IndexingService {
     chunks: CodeChunk[],
     filePath: string,
     content: string,
-    language: SupportedLanguage,
+    language: SupportedLanguage
   ): Promise<CodeChunk[]> {
     try {
       // Check if LSP is available for this language
       const isLSPAvailable = await this.lspService.isLSPAvailable(language);
       if (!isLSPAvailable) {
-        console.log(
-          `LSP not available for ${language}, skipping LSP enhancement`,
-        );
+        console.log(`LSP not available for ${language}, skipping LSP enhancement`);
         return chunks;
       }
 
@@ -1346,7 +1306,7 @@ export class IndexingService {
             chunk.content,
             chunk.startLine,
             chunk.endLine,
-            language,
+            language
           );
 
           enhancedChunks.push({
@@ -1354,10 +1314,7 @@ export class IndexingService {
             lspMetadata,
           });
         } catch (error) {
-          console.warn(
-            `Failed to get LSP metadata for chunk in ${filePath}:`,
-            error,
-          );
+          console.warn(`Failed to get LSP metadata for chunk in ${filePath}:`, error);
           // Add chunk without LSP metadata
           enhancedChunks.push(chunk);
         }
@@ -1394,7 +1351,7 @@ export class IndexingService {
    * @returns Promise that resolves after the delay
    */
   private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -1409,11 +1366,11 @@ export class IndexingService {
     const intensity = this.configService.getIndexingIntensity();
 
     switch (intensity) {
-      case "Low":
+      case 'Low':
         return 500; // 500ms delay - battery friendly
-      case "Medium":
+      case 'Medium':
         return 100; // 100ms delay - moderate speed
-      case "High":
+      case 'High':
       default:
         return 0; // No delay - maximum speed
     }
@@ -1488,14 +1445,18 @@ export class IndexingService {
    * @param limit - Maximum number of results to return (default: 10)
    * @returns Promise resolving to search results
    */
-  public async searchCode(query: string, limit: number = 10): Promise<any[]> {
+  public async searchCode(query: string, limit = 10): Promise<any[]> {
     // Ensure embedding provider is available
     if (!this.embeddingProvider) {
-      throw new Error("Embedding provider not available");
+      throw new Error('Embedding provider not available');
     }
 
     // Small retry wrapper for robustness on transient provider/network errors
-    const withRetry = async <T>(fn: () => Promise<T>, attempts = 2, backoffMs = 250): Promise<T> => {
+    const withRetry = async <T>(
+      fn: () => Promise<T>,
+      attempts = 2,
+      backoffMs = 250
+    ): Promise<T> => {
       let lastErr: any;
       for (let i = 0; i < attempts; i++) {
         try {
@@ -1508,7 +1469,7 @@ export class IndexingService {
             'IndexingService'
           );
           if (i < attempts - 1) {
-            await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+            await new Promise(r => setTimeout(r, backoffMs * (i + 1)));
           }
         }
       }
@@ -1522,7 +1483,9 @@ export class IndexingService {
 
     try {
       // Generate embedding for the query with retry
-      const queryEmbeddings = await withRetry(() => this.embeddingProvider!.generateEmbeddings([query]));
+      const queryEmbeddings = await withRetry(() =>
+        this.embeddingProvider!.generateEmbeddings([query])
+      );
       if (queryEmbeddings.length === 0) {
         return [];
       }
@@ -1530,15 +1493,11 @@ export class IndexingService {
       const collectionName = this.generateCollectionName();
 
       // Search in Qdrant
-      const results = await this.qdrantService.search(
-        collectionName,
-        queryEmbeddings[0],
-        limit,
-      );
+      const results = await this.qdrantService.search(collectionName, queryEmbeddings[0], limit);
 
       return results;
     } catch (error) {
-      console.error("Search failed:", error);
+      console.error('Search failed:', error);
       return [];
     }
   }
@@ -1589,26 +1548,25 @@ export class IndexingService {
 
       // Read the file content
       const fileContent = await vscode.workspace.fs.readFile(uri);
-      const content = Buffer.from(fileContent).toString("utf8");
+      const content = Buffer.from(fileContent).toString('utf8');
 
       // Process the file to get chunks
       const fileResult = await this.processFile(uri.fsPath);
 
       if (!fileResult.success || fileResult.chunks.length === 0) {
         console.warn(
-          `IndexingService: Failed to process file or no chunks generated: ${uri.fsPath}`,
+          `IndexingService: Failed to process file or no chunks generated: ${uri.fsPath}`
         );
         return;
       }
 
       // Generate embeddings for the chunks
-      const chunkContents = fileResult.chunks.map((chunk) => chunk.content);
-      const embeddings =
-        await this.embeddingProvider.generateEmbeddings(chunkContents);
+      const chunkContents = fileResult.chunks.map(chunk => chunk.content);
+      const embeddings = await this.embeddingProvider.generateEmbeddings(chunkContents);
 
       if (embeddings.length !== fileResult.chunks.length) {
         console.error(
-          `IndexingService: Embedding count mismatch for ${uri.fsPath}: ${embeddings.length} embeddings for ${fileResult.chunks.length} chunks`,
+          `IndexingService: Embedding count mismatch for ${uri.fsPath}: ${embeddings.length} embeddings for ${fileResult.chunks.length} chunks`
         );
         return;
       }
@@ -1618,23 +1576,18 @@ export class IndexingService {
       const success = await this.qdrantService.upsertChunks(
         collectionName,
         fileResult.chunks,
-        embeddings,
+        embeddings
       );
 
       if (success) {
         console.log(
-          `IndexingService: Successfully updated ${fileResult.chunks.length} chunks for file: ${uri.fsPath}`,
+          `IndexingService: Successfully updated ${fileResult.chunks.length} chunks for file: ${uri.fsPath}`
         );
       } else {
-        console.error(
-          `IndexingService: Failed to upsert chunks for file: ${uri.fsPath}`,
-        );
+        console.error(`IndexingService: Failed to upsert chunks for file: ${uri.fsPath}`);
       }
     } catch (error) {
-      console.error(
-        `IndexingService: Error updating file in index ${uri.fsPath}:`,
-        error,
-      );
+      console.error(`IndexingService: Error updating file in index ${uri.fsPath}:`, error);
       throw error;
     }
   }
@@ -1658,21 +1611,12 @@ export class IndexingService {
       // Delete all vectors associated with this file
       await this.qdrantService.deleteVectorsForFile(relativePath);
 
-      console.log(
-        `IndexingService: Successfully removed file from index: ${relativePath}`,
-      );
+      console.log(`IndexingService: Successfully removed file from index: ${relativePath}`);
     } catch (error) {
-      console.error(
-        `IndexingService: Error removing file from index ${uri.fsPath}:`,
-        error,
-      );
+      console.error(`IndexingService: Error removing file from index ${uri.fsPath}:`, error);
       throw error;
     }
   }
-
-
-
-
 
   /**
    * Continues indexing from a paused state
@@ -1682,13 +1626,13 @@ export class IndexingService {
    */
   private async continueIndexing(): Promise<void> {
     console.log(
-      `IndexingService: Continuing indexing. Parallel=${this.useParallelProcessing && this.workerPool.length > 0}, queue=${this.fileQueue.length}, remainingFiles=${this.remainingFiles.length}`,
+      `IndexingService: Continuing indexing. Parallel=${this.useParallelProcessing && this.workerPool.length > 0}, queue=${this.fileQueue.length}, remainingFiles=${this.remainingFiles.length}`
     );
 
     // Parallel mode: resume scheduling files to idle workers
     if (this.useParallelProcessing && this.workerPool.length > 0) {
       // Kick the scheduler to fill idle workers
-      const idleCount = this.workerPool.filter((w) => {
+      const idleCount = this.workerPool.filter(w => {
         const s = this.workerStates.get(w);
         return s && !s.busy;
       }).length;
@@ -1722,7 +1666,7 @@ export class IndexingService {
         await this.processFilesSequentially(
           this.remainingFiles,
           dummyResult,
-          this.currentProgressCallback,
+          this.currentProgressCallback
         );
       } finally {
         this.remainingFiles = [];
@@ -1741,16 +1685,14 @@ export class IndexingService {
    */
   public stop(): void {
     if (!this.stateManager.isIndexing()) {
-      console.warn(
-        "IndexingService: Cannot stop - no indexing operation in progress",
-      );
+      console.warn('IndexingService: Cannot stop - no indexing operation in progress');
       return;
     }
 
-    console.log("IndexingService: Stopping indexing operation...");
+    console.log('IndexingService: Stopping indexing operation...');
     this.isStopped = true;
     this.isPaused = false;
-    this.stateManager.setIndexingMessage("Stopping indexing...");
+    this.stateManager.setIndexingMessage('Stopping indexing...');
 
     // Signal abort to any ongoing operations
     if (this.abortController) {
@@ -1760,7 +1702,7 @@ export class IndexingService {
     // Terminate worker threads gracefully
     this.terminateWorkers();
 
-    console.log("IndexingService: Indexing stop requested");
+    console.log('IndexingService: Indexing stop requested');
   }
 
   /**
@@ -1772,17 +1714,15 @@ export class IndexingService {
    */
   public cancel(): void {
     if (!this.stateManager.isIndexing()) {
-      console.warn(
-        "IndexingService: Cannot cancel - no indexing operation in progress",
-      );
+      console.warn('IndexingService: Cannot cancel - no indexing operation in progress');
       return;
     }
 
-    console.log("IndexingService: Cancelling indexing operation...");
+    console.log('IndexingService: Cancelling indexing operation...');
     this.isCancelled = true;
     this.isPaused = false;
     this.isStopped = false;
-    this.stateManager.setIndexingMessage("Cancelling indexing...");
+    this.stateManager.setIndexingMessage('Cancelling indexing...');
 
     // Signal abort to any ongoing operations
     if (this.abortController) {
@@ -1800,7 +1740,7 @@ export class IndexingService {
     this.stateManager.setPaused(false);
     this.stateManager.setIndexingMessage(null);
 
-    console.log("IndexingService: Indexing cancelled");
+    console.log('IndexingService: Indexing cancelled');
   }
 
   /**
@@ -1814,7 +1754,7 @@ export class IndexingService {
         try {
           worker.terminate();
         } catch (error) {
-          console.warn("IndexingService: Error terminating worker:", error);
+          console.warn('IndexingService: Error terminating worker:', error);
         }
       });
 
@@ -1822,7 +1762,7 @@ export class IndexingService {
       this.workerStates.clear();
       this.fileQueue = [];
 
-      console.log("IndexingService: All worker threads terminated");
+      console.log('IndexingService: All worker threads terminated');
     }
   }
 
@@ -1840,8 +1780,6 @@ export class IndexingService {
     return this.stateManager.isIndexing() && !this.isCancelled && !this.isStopped;
   }
 
-
-
   /**
    * Clears the entire index for the current workspace
    *
@@ -1850,7 +1788,7 @@ export class IndexingService {
    */
   public async clearIndex(): Promise<boolean> {
     try {
-      console.log("IndexingService: Clearing index...");
+      console.log('IndexingService: Clearing index...');
 
       const collectionName = this.generateCollectionName();
       const success = await this.qdrantService.deleteCollection(collectionName);
@@ -1866,14 +1804,14 @@ export class IndexingService {
         this.stateManager.setIndexingMessage(null);
         this.stateManager.clearError();
 
-        console.log("IndexingService: Index cleared successfully");
+        console.log('IndexingService: Index cleared successfully');
         return true;
       } else {
-        console.error("IndexingService: Failed to clear index");
+        console.error('IndexingService: Failed to clear index');
         return false;
       }
     } catch (error) {
-      console.error("IndexingService: Error clearing index:", error);
+      console.error('IndexingService: Error clearing index:', error);
       return false;
     }
   }
@@ -1902,7 +1840,7 @@ export class IndexingService {
 
       return null;
     } catch (error) {
-      console.error("IndexingService: Error getting index info:", error);
+      console.error('IndexingService: Error getting index info:', error);
       return null;
     }
   }
@@ -1913,21 +1851,21 @@ export class IndexingService {
    */
   public async cleanup(): Promise<void> {
     try {
-      console.log("IndexingService: Cleaning up worker pool...");
+      console.log('IndexingService: Cleaning up worker pool...');
 
       // Terminate all workers
       for (const worker of this.workerPool) {
         try {
           // Send shutdown message first
-          worker.postMessage({ type: "shutdown" });
+          worker.postMessage({ type: 'shutdown' });
 
           // Wait a bit for graceful shutdown
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Force terminate if still running
           await worker.terminate();
         } catch (error) {
-          console.error("IndexingService: Error terminating worker:", error);
+          console.error('IndexingService: Error terminating worker:', error);
         }
       }
 
@@ -1950,9 +1888,9 @@ export class IndexingService {
         errors: [],
       };
 
-      console.log("IndexingService: Worker pool cleanup completed");
+      console.log('IndexingService: Worker pool cleanup completed');
     } catch (error) {
-      console.error("IndexingService: Error during cleanup:", error);
+      console.error('IndexingService: Error during cleanup:', error);
     }
   }
 
@@ -2013,7 +1951,7 @@ export class IndexingService {
   public getIndexingStatus(): IndexingProgressInfo {
     return {
       ...this.progressInfo,
-      errors: [...this.indexingErrors]
+      errors: [...this.indexingErrors],
     };
   }
 
@@ -2028,7 +1966,7 @@ export class IndexingService {
     const indexingError: IndexingError = {
       filePath,
       error: errorMessage,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     this.indexingErrors.push(indexingError);
@@ -2045,7 +1983,7 @@ export class IndexingService {
   private updateProgress(updates: Partial<IndexingProgressInfo>): void {
     this.progressInfo = {
       ...this.progressInfo,
-      ...updates
+      ...updates,
     };
 
     // Call progress callback if available
@@ -2056,7 +1994,7 @@ export class IndexingService {
         totalFiles: this.progressInfo.totalFiles,
         currentPhase: 'parsing',
         chunks: [],
-        errors: this.indexingErrors.map(e => e.error)
+        errors: this.indexingErrors.map(e => e.error),
       };
 
       this.currentProgressCallback(progress);

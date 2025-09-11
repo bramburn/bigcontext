@@ -11,14 +11,14 @@
  * - IndexingService for processing and indexing code files
  */
 
-import * as vscode from "vscode";
-import * as path from "path";
-import { IndexingService } from "../indexing/indexingService";
-import { QdrantService, SearchResult } from "../db/qdrantService";
-import { IEmbeddingProvider } from "../embeddings/embeddingProvider";
-import { ConfigService } from "../configService";
-import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
-import { WorkspaceManager } from "../workspaceManager";
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { IndexingService } from '../indexing/indexingService';
+import { QdrantService, SearchResult } from '../db/qdrantService';
+import { IEmbeddingProvider } from '../embeddings/embeddingProvider';
+import { ConfigService } from '../configService';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
+import { WorkspaceManager } from '../workspaceManager';
 
 /**
  * Represents the result of a file content retrieval operation
@@ -140,9 +140,9 @@ export class ContextService {
    */
   private createEmptyResult(
     query: string,
-    page: number = 1,
-    pageSize: number = 20,
-    startTime?: number,
+    page = 1,
+    pageSize = 20,
+    startTime?: number
   ): ContextResult {
     return {
       query: query,
@@ -175,7 +175,7 @@ export class ContextService {
     indexingService: IndexingService,
     configService: ConfigService,
     loggingService: CentralizedLoggingService,
-    workspaceManager: WorkspaceManager,
+    workspaceManager: WorkspaceManager
   ) {
     this.workspaceRoot = workspaceRoot;
     this.qdrantService = qdrantService;
@@ -207,10 +207,7 @@ export class ContextService {
    * @returns Promise resolving to file content and metadata
    * @throws Error if file cannot be read or processed
    */
-  async getFileContent(
-    filePath: string,
-    includeRelatedChunks: boolean = false,
-  ): Promise<FileContentResult> {
+  async getFileContent(filePath: string, includeRelatedChunks = false): Promise<FileContentResult> {
     try {
       // Resolve absolute path
       const absolutePath = path.isAbsolute(filePath)
@@ -220,7 +217,7 @@ export class ContextService {
 
       // Read file content
       const fileData = await vscode.workspace.fs.readFile(uri);
-      const content = Buffer.from(fileData).toString("utf8");
+      const content = Buffer.from(fileData).toString('utf8');
 
       // Get file stats
       const stats = await vscode.workspace.fs.stat(uri);
@@ -229,7 +226,7 @@ export class ContextService {
       const MAX_SAFE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
       if (stats.size > MAX_SAFE_FILE_SIZE) {
         console.warn(
-          `Large file detected (${(stats.size / 1024 / 1024).toFixed(2)}MB): ${filePath}`,
+          `Large file detected (${(stats.size / 1024 / 1024).toFixed(2)}MB): ${filePath}`
         );
       }
 
@@ -247,9 +244,7 @@ export class ContextService {
       // Optionally include related chunks
       if (includeRelatedChunks) {
         if (!this.embeddingProvider) {
-          console.warn(
-            "Embedding provider not available, cannot include related chunks",
-          );
+          console.warn('Embedding provider not available, cannot include related chunks');
         } else {
           // Search for chunks from this file
           const collectionName = this.generateCollectionName();
@@ -260,11 +255,11 @@ export class ContextService {
             {
               must: [
                 {
-                  key: "filePath",
+                  key: 'filePath',
                   match: { value: filePath },
                 },
               ],
-            },
+            }
           );
           result.relatedChunks = searchResults;
         }
@@ -274,7 +269,7 @@ export class ContextService {
     } catch (error) {
       console.error(`Failed to get file content for ${filePath}:`, error);
       throw new Error(
-        `Failed to read file: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to read file: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -296,21 +291,18 @@ export class ContextService {
     query: string,
     currentFilePath?: string,
     maxResults?: number,
-    minSimilarity?: number,
+    minSimilarity?: number
   ): Promise<RelatedFile[]> {
     // Get configuration values with fallbacks
     maxResults = maxResults ?? this.configService.getMaxSearchResults() ?? 10;
-    minSimilarity =
-      minSimilarity ?? this.configService.getMinSimilarityThreshold() ?? 0.5;
+    minSimilarity = minSimilarity ?? this.configService.getMinSimilarityThreshold() ?? 0.5;
     try {
       if (!this.embeddingProvider) {
-        throw new Error("Embedding provider not available");
+        throw new Error('Embedding provider not available');
       }
 
       // Generate embedding for the query
-      const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([
-        query,
-      ]);
+      const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([query]);
       if (queryEmbeddings.length === 0) {
         return [];
       }
@@ -321,7 +313,7 @@ export class ContextService {
       const searchResults = await this.qdrantService.search(
         collectionName,
         queryEmbeddings[0],
-        maxResults * 3, // Get more results to group by file
+        maxResults * 3 // Get more results to group by file
       );
 
       // Group results by file and calculate file-level similarity
@@ -338,10 +330,13 @@ export class ContextService {
       // Process search results and group by file path
       for (const result of searchResults) {
         // Skip results below similarity threshold
-        if (result.score < minSimilarity) continue;
-        // Skip current file if provided
-        if (currentFilePath && result.payload.filePath === currentFilePath)
+        if (result.score < minSimilarity) {
           continue;
+        }
+        // Skip current file if provided
+        if (currentFilePath && result.payload.filePath === currentFilePath) {
+          continue;
+        }
 
         const filePath = result.payload.filePath;
         // Initialize group if this is the first chunk for this file
@@ -365,15 +360,11 @@ export class ContextService {
       for (const [filePath, group] of fileGroups) {
         // Calculate average similarity score across all chunks
         group.avgScore =
-          group.chunks.reduce((sum, chunk) => sum + chunk.score, 0) /
-          group.chunks.length;
+          group.chunks.reduce((sum, chunk) => sum + chunk.score, 0) / group.chunks.length;
 
         // Generate human-readable reason for the relation
         const topChunk = group.chunks[0];
-        const reason = this.generateRelationReason(
-          topChunk,
-          group.chunks.length,
-        );
+        const reason = this.generateRelationReason(topChunk, group.chunks.length);
 
         relatedFiles.push({
           filePath: filePath,
@@ -385,11 +376,9 @@ export class ContextService {
       }
 
       // Sort by similarity (descending) and return top results
-      return relatedFiles
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, maxResults);
+      return relatedFiles.sort((a, b) => b.similarity - a.similarity).slice(0, maxResults);
     } catch (error) {
-      console.error("Failed to find related files:", error);
+      console.error('Failed to find related files:', error);
       return [];
     }
   }
@@ -411,7 +400,7 @@ export class ContextService {
 
     try {
       if (!this.embeddingProvider) {
-        throw new Error("Embedding provider not available");
+        throw new Error('Embedding provider not available');
       }
 
       // Extract pagination parameters with defaults
@@ -419,16 +408,9 @@ export class ContextService {
       const pageSize = Math.max(1, Math.min(100, contextQuery.pageSize ?? 20)); // Limit pageSize between 1-100
 
       // Generate embedding for the query
-      const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([
-        contextQuery.query,
-      ]);
+      const queryEmbeddings = await this.embeddingProvider.generateEmbeddings([contextQuery.query]);
       if (queryEmbeddings.length === 0) {
-        return this.createEmptyResult(
-          contextQuery.query,
-          page,
-          pageSize,
-          startTime,
-        );
+        return this.createEmptyResult(contextQuery.query, page, pageSize, startTime);
       }
 
       const collectionName = this.generateCollectionName();
@@ -437,11 +419,8 @@ export class ContextService {
       // For pagination, we need to fetch more results than just the current page
       // to ensure we have enough data for proper pagination
       const maxSearchResults =
-        contextQuery.maxResults ??
-        this.configService.getMaxSearchResults() ??
-        100;
-      const defaultMinSimilarity =
-        this.configService.getMinSimilarityThreshold() ?? 0.5;
+        contextQuery.maxResults ?? this.configService.getMaxSearchResults() ?? 100;
+      const defaultMinSimilarity = this.configService.getMinSimilarityThreshold() ?? 0.5;
 
       // Build filter for file types if specified
       let filter: any = undefined;
@@ -450,8 +429,8 @@ export class ContextService {
       if (contextQuery.fileTypes && contextQuery.fileTypes.length > 0) {
         // Create a filter that matches any of the specified languages
         mustClauses.push({
-          should: contextQuery.fileTypes.map((lang) => ({
-            key: "language",
+          should: contextQuery.fileTypes.map(lang => ({
+            key: 'language',
             match: { value: lang },
           })),
         });
@@ -460,7 +439,7 @@ export class ContextService {
       // Add support for additional filters from SearchFilters
       if ((contextQuery as any).fileType) {
         mustClauses.push({
-          key: "fileType",
+          key: 'fileType',
           match: { value: (contextQuery as any).fileType },
         });
       }
@@ -478,7 +457,7 @@ export class ContextService {
 
         if (Object.keys(rangeFilter).length > 0) {
           mustClauses.push({
-            key: "lastModified",
+            key: 'lastModified',
             range: rangeFilter,
           });
         }
@@ -494,14 +473,12 @@ export class ContextService {
         collectionName,
         queryEmbeddings[0],
         searchLimit,
-        filter,
+        filter
       );
 
       // Filter by minimum similarity if specified
       const minSimilarity = contextQuery.minSimilarity ?? defaultMinSimilarity;
-      const filteredResults = searchResults.filter(
-        (r) => r.score >= minSimilarity,
-      );
+      const filteredResults = searchResults.filter(r => r.score >= minSimilarity);
 
       // Implement deduplication logic - group by file path and keep highest score
       const uniqueFiles = new Map<string, SearchResult>();
@@ -518,7 +495,7 @@ export class ContextService {
 
       // Convert map to array and sort by score (descending)
       const allDeduplicatedResults = Array.from(uniqueFiles.values()).sort(
-        (a, b) => b.score - a.score,
+        (a, b) => b.score - a.score
       );
 
       // Calculate pagination metadata
@@ -529,29 +506,21 @@ export class ContextService {
       const hasMore = page < totalPages;
 
       // Get the results for the current page
-      const paginatedResults = allDeduplicatedResults.slice(
-        startIndex,
-        endIndex,
-      );
+      const paginatedResults = allDeduplicatedResults.slice(startIndex, endIndex);
 
       // Conditionally read file content if requested (only for current page results)
       if (contextQuery.includeContent) {
         for (const result of paginatedResults) {
           try {
             const filePath = result.payload.filePath;
-            const uri = vscode.Uri.file(
-              path.join(this.workspaceRoot, filePath),
-            );
+            const uri = vscode.Uri.file(path.join(this.workspaceRoot, filePath));
             const fileContent = await vscode.workspace.fs.readFile(uri);
-            const content = Buffer.from(fileContent).toString("utf8");
+            const content = Buffer.from(fileContent).toString('utf8');
 
             // Add content to the result payload
             result.payload.content = content;
           } catch (error) {
-            console.warn(
-              `Failed to read content for ${result.payload.filePath}:`,
-              error,
-            );
+            console.warn(`Failed to read content for ${result.payload.filePath}:`, error);
             // Continue without content for this file
           }
         }
@@ -564,7 +533,7 @@ export class ContextService {
           contextQuery.query,
           contextQuery.filePath,
           this.DEFAULT_RELATED_FILES_LIMIT, // Use configurable constant
-          minSimilarity,
+          minSimilarity
         );
       }
 
@@ -581,16 +550,11 @@ export class ContextService {
         hasMore: hasMore,
       };
     } catch (error) {
-      console.error("Context query failed:", error);
+      console.error('Context query failed:', error);
       // Return empty results with timing and pagination information on error
       const page = Math.max(1, contextQuery.page ?? 1);
       const pageSize = Math.max(1, Math.min(100, contextQuery.pageSize ?? 20));
-      return this.createEmptyResult(
-        contextQuery.query,
-        page,
-        pageSize,
-        startTime,
-      );
+      return this.createEmptyResult(contextQuery.query, page, pageSize, startTime);
     }
   }
 
@@ -611,42 +575,42 @@ export class ContextService {
     const ext = path.extname(filePath).toLowerCase();
     const languageMap: Record<string, string> = {
       // JavaScript family
-      ".ts": "typescript",
-      ".tsx": "typescript",
-      ".js": "javascript",
-      ".jsx": "javascript",
-      ".mjs": "javascript",
-      ".cjs": "javascript",
+      '.ts': 'typescript',
+      '.tsx': 'typescript',
+      '.js': 'javascript',
+      '.jsx': 'javascript',
+      '.mjs': 'javascript',
+      '.cjs': 'javascript',
 
       // Web technologies
-      ".html": "html",
-      ".css": "css",
-      ".scss": "scss",
-      ".less": "less",
-      ".vue": "vue",
-      ".svelte": "svelte",
+      '.html': 'html',
+      '.css': 'css',
+      '.scss': 'scss',
+      '.less': 'less',
+      '.vue': 'vue',
+      '.svelte': 'svelte',
 
       // Backend languages
-      ".py": "python",
-      ".rb": "ruby",
-      ".php": "php",
-      ".java": "java",
-      ".cs": "csharp",
-      ".go": "go",
-      ".rs": "rust",
+      '.py': 'python',
+      '.rb': 'ruby',
+      '.php': 'php',
+      '.java': 'java',
+      '.cs': 'csharp',
+      '.go': 'go',
+      '.rs': 'rust',
 
       // Data formats
-      ".json": "json",
-      ".yaml": "yaml",
-      ".yml": "yaml",
-      ".xml": "xml",
-      ".md": "markdown",
+      '.json': 'json',
+      '.yaml': 'yaml',
+      '.yml': 'yaml',
+      '.xml': 'xml',
+      '.md': 'markdown',
 
       // Shell scripts
-      ".sh": "shell",
-      ".bash": "shell",
-      ".zsh": "shell",
-      ".ps1": "powershell",
+      '.sh': 'shell',
+      '.bash': 'shell',
+      '.zsh': 'shell',
+      '.ps1': 'powershell',
     };
 
     return languageMap[ext];
@@ -659,17 +623,14 @@ export class ContextService {
    * @param chunkCount - Total number of matching chunks in the file
    * @returns A descriptive string explaining the relation
    */
-  private generateRelationReason(
-    topChunk: SearchResult,
-    chunkCount: number,
-  ): string {
+  private generateRelationReason(topChunk: SearchResult, chunkCount: number): string {
     const type = topChunk.payload.type;
     const name = topChunk.payload.name;
 
     if (chunkCount > 1) {
-      return `Contains ${chunkCount} related ${type}s${name ? ` including "${name}"` : ""}`;
+      return `Contains ${chunkCount} related ${type}s${name ? ` including "${name}"` : ''}`;
     } else {
-      return `Contains related ${type}${name ? ` "${name}"` : ""}`;
+      return `Contains related ${type}${name ? ` "${name}"` : ''}`;
     }
   }
 
@@ -693,19 +654,19 @@ export class ContextService {
       // Check if Qdrant is available
       const qdrantReady = await this.qdrantService.healthCheck();
       if (!qdrantReady) {
-        console.warn("Qdrant service health check failed");
+        console.warn('Qdrant service health check failed');
         return false;
       }
 
       // Check if embedding provider is available
       if (!this.embeddingProvider) {
-        console.warn("Embedding provider not available");
+        console.warn('Embedding provider not available');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error("Error checking service readiness:", error);
+      console.error('Error checking service readiness:', error);
       return false;
     }
   }
@@ -739,8 +700,7 @@ export class ContextService {
 
     // Check if collection exists and get its info
     const collectionName = this.generateCollectionName();
-    const collectionInfo =
-      await this.qdrantService.getCollectionInfo(collectionName);
+    const collectionInfo = await this.qdrantService.getCollectionInfo(collectionName);
     const collectionExists = collectionInfo !== null;
 
     // Return comprehensive status object

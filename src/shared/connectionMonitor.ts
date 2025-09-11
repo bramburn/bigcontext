@@ -10,8 +10,8 @@ export interface ConnectionState {
   lastHeartbeat: number;
   latency: number;
   reconnectAttempts: number;
-  connectionQuality: "excellent" | "good" | "poor" | "disconnected";
-  bandwidth: "high" | "medium" | "low" | "unknown";
+  connectionQuality: 'excellent' | 'good' | 'poor' | 'disconnected';
+  bandwidth: 'high' | 'medium' | 'low' | 'unknown';
   lastError?: string;
 }
 
@@ -32,12 +32,12 @@ export interface PerformanceMetrics {
 }
 
 export type ConnectionEventType =
-  | "connected"
-  | "disconnected"
-  | "reconnecting"
-  | "error"
-  | "heartbeat"
-  | "qualityChange";
+  | 'connected'
+  | 'disconnected'
+  | 'reconnecting'
+  | 'error'
+  | 'heartbeat'
+  | 'qualityChange';
 
 export interface ConnectionEvent {
   type: ConnectionEventType;
@@ -75,8 +75,8 @@ export class ConnectionMonitor {
       lastHeartbeat: 0,
       latency: 0,
       reconnectAttempts: 0,
-      connectionQuality: "disconnected",
-      bandwidth: "unknown",
+      connectionQuality: 'disconnected',
+      bandwidth: 'unknown',
     };
 
     this.metrics = {
@@ -110,7 +110,7 @@ export class ConnectionMonitor {
     // Perform initial bandwidth test
     this.performBandwidthTest();
 
-    this.emit("connected", { timestamp: Date.now() });
+    this.emit('connected', { timestamp: Date.now() });
   }
 
   /**
@@ -130,13 +130,15 @@ export class ConnectionMonitor {
    * Send a heartbeat message to the extension
    */
   private sendHeartbeat(): void {
-    if (!this.vscodeApi || !this.isInitialized) return;
+    if (!this.vscodeApi || !this.isInitialized) {
+      return;
+    }
 
     const startTime = Date.now();
 
     try {
       this.vscodeApi.postMessage({
-        command: "heartbeat",
+        command: 'heartbeat',
         timestamp: startTime,
         connectionId: this.generateConnectionId(),
       });
@@ -149,7 +151,7 @@ export class ConnectionMonitor {
         }
       }, this.HEARTBEAT_TIMEOUT);
     } catch (error) {
-      this.handleError("Heartbeat failed", error);
+      this.handleError('Heartbeat failed', error);
     }
   }
 
@@ -166,10 +168,10 @@ export class ConnectionMonitor {
 
     if (!this.state.isConnected) {
       this.updateConnectionState(true);
-      this.emit("connected", { latency, timestamp: now });
+      this.emit('connected', { latency, timestamp: now });
     }
 
-    this.emit("heartbeat", { latency, timestamp: now });
+    this.emit('heartbeat', { latency, timestamp: now });
 
     // Check network quality after each successful heartbeat
     this.checkNetworkQuality();
@@ -180,13 +182,13 @@ export class ConnectionMonitor {
    */
   private updateConnectionQuality(latency: number): void {
     if (latency < 100) {
-      this.state.connectionQuality = "excellent";
+      this.state.connectionQuality = 'excellent';
     } else if (latency < 300) {
-      this.state.connectionQuality = "good";
+      this.state.connectionQuality = 'good';
     } else if (latency < 1000) {
-      this.state.connectionQuality = "poor";
+      this.state.connectionQuality = 'poor';
     } else {
-      this.state.connectionQuality = "disconnected";
+      this.state.connectionQuality = 'disconnected';
     }
 
     // Update bandwidth estimation based on latency and other factors
@@ -198,22 +200,22 @@ export class ConnectionMonitor {
    */
   private updateBandwidthEstimation(latency: number): void {
     // Use Network Information API if available
-    if ("connection" in navigator) {
+    if ('connection' in navigator) {
       const connection = (navigator as any).connection;
       if (connection && connection.effectiveType) {
         switch (connection.effectiveType) {
-          case "4g":
-            this.state.bandwidth = "high";
+          case '4g':
+            this.state.bandwidth = 'high';
             break;
-          case "3g":
-            this.state.bandwidth = "medium";
+          case '3g':
+            this.state.bandwidth = 'medium';
             break;
-          case "2g":
-          case "slow-2g":
-            this.state.bandwidth = "low";
+          case '2g':
+          case 'slow-2g':
+            this.state.bandwidth = 'low';
             break;
           default:
-            this.state.bandwidth = "medium";
+            this.state.bandwidth = 'medium';
         }
         return;
       }
@@ -221,11 +223,11 @@ export class ConnectionMonitor {
 
     // Fallback to latency-based estimation
     if (latency < 100) {
-      this.state.bandwidth = "high";
+      this.state.bandwidth = 'high';
     } else if (latency < 500) {
-      this.state.bandwidth = "medium";
+      this.state.bandwidth = 'medium';
     } else {
-      this.state.bandwidth = "low";
+      this.state.bandwidth = 'low';
     }
   }
 
@@ -236,7 +238,7 @@ export class ConnectionMonitor {
     let quality: 'good' | 'poor' = 'good';
 
     // Try to use navigator.connection API first
-    if ("connection" in navigator) {
+    if ('connection' in navigator) {
       const connection = (navigator as any).connection;
       if (connection && connection.effectiveType) {
         // Consider 'slow-2g' and '2g' as poor quality
@@ -246,7 +248,8 @@ export class ConnectionMonitor {
       }
     } else {
       // Fallback to latency-based detection
-      if (this.state.latency > 1000) { // Consider >1s latency as poor
+      if (this.state.latency > 1000) {
+        // Consider >1s latency as poor
         quality = 'poor';
       }
     }
@@ -276,15 +279,15 @@ export class ConnectionMonitor {
       const speedKbps = (testSize * 8) / duration; // bits per millisecond to Kbps
 
       if (speedKbps > 1000) {
-        this.state.bandwidth = "high";
+        this.state.bandwidth = 'high';
       } else if (speedKbps > 100) {
-        this.state.bandwidth = "medium";
+        this.state.bandwidth = 'medium';
       } else {
-        this.state.bandwidth = "low";
+        this.state.bandwidth = 'low';
       }
     } catch (error) {
-      console.warn("Bandwidth test failed:", error);
-      this.state.bandwidth = "unknown";
+      console.warn('Bandwidth test failed:', error);
+      this.state.bandwidth = 'unknown';
     }
   }
 
@@ -294,7 +297,7 @@ export class ConnectionMonitor {
   private handleConnectionLoss(): void {
     if (this.state.isConnected) {
       this.updateConnectionState(false);
-      this.emit("disconnected", { timestamp: Date.now() });
+      this.emit('disconnected', { timestamp: Date.now() });
       this.startReconnection();
     }
   }
@@ -304,17 +307,14 @@ export class ConnectionMonitor {
    */
   private startReconnection(): void {
     if (this.state.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-      this.handleError("Max reconnection attempts reached", null);
+      this.handleError('Max reconnection attempts reached', null);
       return;
     }
 
-    const delayIndex = Math.min(
-      this.state.reconnectAttempts,
-      this.RECONNECT_DELAYS.length - 1,
-    );
+    const delayIndex = Math.min(this.state.reconnectAttempts, this.RECONNECT_DELAYS.length - 1);
     const delay = this.RECONNECT_DELAYS[delayIndex];
 
-    this.emit("reconnecting", {
+    this.emit('reconnecting', {
       attempt: this.state.reconnectAttempts + 1,
       delay,
       timestamp: Date.now(),
@@ -335,7 +335,7 @@ export class ConnectionMonitor {
         this.sendHeartbeat();
       }
     } catch (error) {
-      this.handleError("Reconnection attempt failed", error);
+      this.handleError('Reconnection attempt failed', error);
       this.startReconnection();
     }
   }
@@ -354,7 +354,7 @@ export class ConnectionMonitor {
     }
 
     if (!connected && wasConnected) {
-      this.state.connectionQuality = "disconnected";
+      this.state.connectionQuality = 'disconnected';
     }
   }
 
@@ -398,7 +398,9 @@ export class ConnectionMonitor {
    * Send a message with automatic queuing if disconnected
    */
   public sendMessage(message: any): boolean {
-    if (!this.vscodeApi) return false;
+    if (!this.vscodeApi) {
+      return false;
+    }
 
     if (this.state.isConnected) {
       try {
@@ -422,7 +424,7 @@ export class ConnectionMonitor {
   private handleError(message: string, error: any): void {
     this.state.lastError = message;
     this.performance.errorCount++;
-    this.emit("error", { message, error, timestamp: Date.now() });
+    this.emit('error', { message, error, timestamp: Date.now() });
   }
 
   /**
@@ -432,7 +434,7 @@ export class ConnectionMonitor {
     const handlers = this.eventHandlers.get(type) || [];
     const event: ConnectionEvent = { type, timestamp: Date.now(), data };
 
-    handlers.forEach((handler) => {
+    handlers.forEach(handler => {
       try {
         handler(event);
       } catch (error) {
@@ -444,10 +446,7 @@ export class ConnectionMonitor {
   /**
    * Register an event handler
    */
-  public on(
-    type: ConnectionEventType,
-    handler: ConnectionEventHandler,
-  ): () => void {
+  public on(type: ConnectionEventType, handler: ConnectionEventHandler): () => void {
     if (!this.eventHandlers.has(type)) {
       this.eventHandlers.set(type, []);
     }

@@ -13,8 +13,8 @@
  * - Service coordination
  */
 
-import * as vscode from "vscode";
-import { TypeSafeCommunicationService } from "./typeSafeCommunicationService";
+import * as vscode from 'vscode';
+import { TypeSafeCommunicationService } from './typeSafeCommunicationService';
 import {
   WebviewToExtensionMessageType,
   ExtensionToWebviewMessageType,
@@ -25,15 +25,15 @@ import {
   FileOperationPayload,
   ExtensionStatePayload,
   NotificationPayload,
-} from "../shared/communicationTypes";
-import { ConfigService } from "../configService";
-import { SearchManager } from "../searchManager";
-import { IndexingService } from "../indexing/indexingService";
-import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
-import { NotificationService } from "../notifications/notificationService";
-import { ConfigurationValidationService } from "../validation/configurationValidationService";
-import { FileScanService } from "../services/fileScanService";
-import { WorkspaceManager } from "../workspaceManager";
+} from '../shared/communicationTypes';
+import { ConfigService } from '../configService';
+import { SearchManager } from '../searchManager';
+import { IndexingService } from '../indexing/indexingService';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
+import { NotificationService } from '../notifications/notificationService';
+import { ConfigurationValidationService } from '../validation/configurationValidationService';
+import { FileScanService } from '../services/fileScanService';
+import { WorkspaceManager } from '../workspaceManager';
 
 /**
  * Message router service
@@ -53,7 +53,7 @@ export class MessageRouter {
     communicationService: TypeSafeCommunicationService,
     configService: ConfigService,
     workspaceManager: WorkspaceManager,
-    loggingService?: CentralizedLoggingService,
+    loggingService?: CentralizedLoggingService
   ) {
     this.communicationService = communicationService;
     this.configService = configService;
@@ -85,14 +85,14 @@ export class MessageRouter {
     this.validationService = services.validationService;
 
     this.loggingService?.info(
-      "MessageRouter services updated",
+      'MessageRouter services updated',
       {
         hasSearchManager: !!this.searchManager,
         hasIndexingService: !!this.indexingService,
         hasNotificationService: !!this.notificationService,
         hasValidationService: !!this.validationService,
       },
-      "MessageRouter",
+      'MessageRouter'
     );
   }
 
@@ -103,85 +103,81 @@ export class MessageRouter {
     // Configuration handlers
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.GET_CONFIG,
-      this.handleGetConfig.bind(this),
+      this.handleGetConfig.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.UPDATE_CONFIG,
-      this.handleUpdateConfig.bind(this),
+      this.handleUpdateConfig.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.VALIDATE_CONFIG,
-      this.handleValidateConfig.bind(this),
+      this.handleValidateConfig.bind(this)
     );
 
     // Search handlers
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.SEARCH,
-      this.handleSearch.bind(this),
+      this.handleSearch.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.GET_SEARCH_HISTORY,
-      this.handleGetSearchHistory.bind(this),
+      this.handleGetSearchHistory.bind(this)
     );
 
     // Indexing handlers
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.START_INDEXING,
-      this.handleStartIndexing.bind(this),
+      this.handleStartIndexing.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.STOP_INDEXING,
-      this.handleStopIndexing.bind(this),
+      this.handleStopIndexing.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.GET_INDEXING_STATUS,
-      this.handleGetIndexingStatus.bind(this),
+      this.handleGetIndexingStatus.bind(this)
     );
 
     // File scanning handlers
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.START_FILE_SCAN,
-      this.handleStartFileScan.bind(this),
+      this.handleStartFileScan.bind(this)
     );
 
     // File operation handlers
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.OPEN_FILE,
-      this.handleOpenFile.bind(this),
+      this.handleOpenFile.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.SHOW_FILE_IN_EXPLORER,
-      this.handleShowFileInExplorer.bind(this),
+      this.handleShowFileInExplorer.bind(this)
     );
 
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.REQUEST_OPEN_FOLDER,
-      this.handleRequestOpenFolder.bind(this),
+      this.handleRequestOpenFolder.bind(this)
     );
 
     // State handlers
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.GET_STATE,
-      this.handleGetState.bind(this),
+      this.handleGetState.bind(this)
     );
 
     // Ready handler
     this.communicationService.registerMessageHandler(
       WebviewToExtensionMessageType.WEBVIEW_READY,
-      this.handleWebviewReady.bind(this),
+      this.handleWebviewReady.bind(this)
     );
 
-    this.loggingService?.info(
-      "MessageRouter handlers registered",
-      {},
-      "MessageRouter",
-    );
+    this.loggingService?.info('MessageRouter handlers registered', {}, 'MessageRouter');
   }
 
   /**
@@ -190,19 +186,15 @@ export class MessageRouter {
   private async handleGetConfig(): Promise<Record<string, any>> {
     try {
       const config = this.configService.getFullConfig();
-      this.loggingService?.debug(
-        "Configuration retrieved",
-        {},
-        "MessageRouter",
-      );
+      this.loggingService?.debug('Configuration retrieved', {}, 'MessageRouter');
       return config;
     } catch (error) {
       this.loggingService?.error(
-        "Failed to get configuration",
+        'Failed to get configuration',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -211,11 +203,9 @@ export class MessageRouter {
   /**
    * Handle update configuration request
    */
-  private async handleUpdateConfig(
-    payload: ConfigUpdatePayload,
-  ): Promise<ConfigUpdatePayload> {
+  private async handleUpdateConfig(payload: ConfigUpdatePayload): Promise<ConfigUpdatePayload> {
     try {
-      const config = vscode.workspace.getConfiguration("code-context-engine");
+      const config = vscode.workspace.getConfiguration('code-context-engine');
 
       // Update configuration values
       for (const [key, value] of Object.entries(payload.config)) {
@@ -228,9 +218,8 @@ export class MessageRouter {
       // Validate the updated configuration
       let errors: string[] = [];
       if (this.validationService) {
-        const validationResult =
-          await this.validationService.validateConfiguration();
-        errors = validationResult.errors.map((e) => e.message);
+        const validationResult = await this.validationService.validateConfiguration();
+        errors = validationResult.errors.map(e => e.message);
       }
 
       const result: ConfigUpdatePayload = {
@@ -241,24 +230,24 @@ export class MessageRouter {
       };
 
       this.loggingService?.info(
-        "Configuration updated",
+        'Configuration updated',
         {
           section: payload.section,
           success: result.success,
           errorCount: errors.length,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
 
       return result;
     } catch (error) {
       this.loggingService?.error(
-        "Failed to update configuration",
+        'Failed to update configuration',
         {
           error: error instanceof Error ? error.message : String(error),
           section: payload.section,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
 
       return {
@@ -276,27 +265,27 @@ export class MessageRouter {
   private async handleValidateConfig(): Promise<any> {
     try {
       if (!this.validationService) {
-        throw new Error("Configuration validation service not available");
+        throw new Error('Configuration validation service not available');
       }
 
       const result = await this.validationService.validateConfiguration();
       this.loggingService?.debug(
-        "Configuration validated",
+        'Configuration validated',
         {
           isValid: result.isValid,
           errorCount: result.errors.length,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
 
       return result;
     } catch (error) {
       this.loggingService?.error(
-        "Failed to validate configuration",
+        'Failed to validate configuration',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -305,12 +294,10 @@ export class MessageRouter {
   /**
    * Handle search request
    */
-  private async handleSearch(
-    payload: SearchRequestPayload,
-  ): Promise<SearchResultsPayload> {
+  private async handleSearch(payload: SearchRequestPayload): Promise<SearchResultsPayload> {
     try {
       if (!this.searchManager) {
-        throw new Error("Search manager not available");
+        throw new Error('Search manager not available');
       }
 
       // Convert date strings to Date objects for SearchFilters
@@ -327,22 +314,19 @@ export class MessageRouter {
         : undefined;
 
       const startTime = Date.now();
-      const results = await this.searchManager.search(
-        payload.query,
-        searchFilters,
-      );
+      const results = await this.searchManager.search(payload.query, searchFilters);
       const searchTime = Date.now() - startTime;
 
       const searchResults: SearchResultsPayload = {
         query: payload.query,
-        results: results.map((result) => ({
+        results: results.map(result => ({
           id: result.id,
           filePath: result.filePath,
           lineNumber: result.lineNumber,
           preview: result.preview,
           similarity: result.similarity,
           chunkType: result.chunkType,
-          language: result.language || "unknown",
+          language: result.language || 'unknown',
           metadata: {}, // EnhancedSearchResult doesn't have metadata property
           llmScore: result.llmScore,
           finalScore: result.finalScore,
@@ -353,29 +337,29 @@ export class MessageRouter {
         searchTime,
         usedQueryExpansion: false, // Will be determined from search history
         expandedTerms: [], // Will be determined from search history
-        usedLLMReRanking: results.some((r) => r.wasReRanked),
-        reRankedCount: results.filter((r) => r.wasReRanked).length,
+        usedLLMReRanking: results.some(r => r.wasReRanked),
+        reRankedCount: results.filter(r => r.wasReRanked).length,
       };
 
       this.loggingService?.info(
-        "Search completed",
+        'Search completed',
         {
           query: payload.query,
           resultCount: results.length,
           searchTime,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
 
       return searchResults;
     } catch (error) {
       this.loggingService?.error(
-        "Search failed",
+        'Search failed',
         {
           error: error instanceof Error ? error.message : String(error),
           query: payload.query,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -392,21 +376,21 @@ export class MessageRouter {
 
       const history = this.searchManager.getSearchHistory();
       this.loggingService?.debug(
-        "Search history retrieved",
+        'Search history retrieved',
         {
           count: history.length,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
 
       return history;
     } catch (error) {
       this.loggingService?.error(
-        "Failed to get search history",
+        'Failed to get search history',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       return [];
     }
@@ -418,35 +402,30 @@ export class MessageRouter {
   private async handleStartIndexing(): Promise<IndexingStatusPayload> {
     try {
       if (!this.indexingService) {
-        throw new Error("Indexing service not available");
+        throw new Error('Indexing service not available');
       }
 
       // Start indexing with a progress callback
-      const indexingPromise = this.indexingService.startIndexing((progress) => {
+      const indexingPromise = this.indexingService.startIndexing(progress => {
         // Send progress updates to webview
-        this.communicationService.sendMessage(
-          ExtensionToWebviewMessageType.INDEXING_PROGRESS,
-          {
-            isRunning: true,
-            progress: Math.round(
-              (progress.processedFiles / progress.totalFiles) * 100,
-            ),
-            status: `Processing ${progress.currentFile}`,
-            filesProcessed: progress.processedFiles,
-            totalFiles: progress.totalFiles,
-            chunksCreated: progress.chunks.length,
-            errors: progress.errors,
-          },
-        );
+        this.communicationService.sendMessage(ExtensionToWebviewMessageType.INDEXING_PROGRESS, {
+          isRunning: true,
+          progress: Math.round((progress.processedFiles / progress.totalFiles) * 100),
+          status: `Processing ${progress.currentFile}`,
+          filesProcessed: progress.processedFiles,
+          totalFiles: progress.totalFiles,
+          chunksCreated: progress.chunks.length,
+          errors: progress.errors,
+        });
       });
 
-      this.loggingService?.info("Indexing started", {}, "MessageRouter");
+      this.loggingService?.info('Indexing started', {}, 'MessageRouter');
 
       // Return initial status
       return {
         isRunning: true,
         progress: 0,
-        status: "Starting indexing...",
+        status: 'Starting indexing...',
         filesProcessed: 0,
         totalFiles: 0,
         chunksCreated: 0,
@@ -455,11 +434,11 @@ export class MessageRouter {
       };
     } catch (error) {
       this.loggingService?.error(
-        "Failed to start indexing",
+        'Failed to start indexing',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -471,19 +450,19 @@ export class MessageRouter {
   private async handleStopIndexing(): Promise<void> {
     try {
       if (!this.indexingService) {
-        throw new Error("Indexing service not available");
+        throw new Error('Indexing service not available');
       }
 
       // Use pause method to stop indexing
       this.indexingService.pause();
-      this.loggingService?.info("Indexing stopped", {}, "MessageRouter");
+      this.loggingService?.info('Indexing stopped', {}, 'MessageRouter');
     } catch (error) {
       this.loggingService?.error(
-        "Failed to stop indexing",
+        'Failed to stop indexing',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -495,7 +474,7 @@ export class MessageRouter {
   private async handleGetIndexingStatus(): Promise<IndexingStatusPayload> {
     try {
       if (!this.indexingService) {
-        throw new Error("Indexing service not available");
+        throw new Error('Indexing service not available');
       }
 
       // Since IndexingService doesn't have getIndexingStatus, we'll return a basic status
@@ -503,7 +482,7 @@ export class MessageRouter {
       return {
         isRunning: false, // Would check actual state
         progress: 0,
-        status: "Ready",
+        status: 'Ready',
         filesProcessed: 0,
         totalFiles: 0,
         chunksCreated: 0,
@@ -511,11 +490,11 @@ export class MessageRouter {
       };
     } catch (error) {
       this.loggingService?.error(
-        "Failed to get indexing status",
+        'Failed to get indexing status',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -527,23 +506,18 @@ export class MessageRouter {
   private async handleStartFileScan(): Promise<void> {
     try {
       if (!this.fileScanService) {
-        throw new Error("File scan service not available");
+        throw new Error('File scan service not available');
       }
 
-      this.loggingService?.info(
-        "Starting file scan",
-        {},
-        "MessageRouter"
-      );
+      this.loggingService?.info('Starting file scan', {}, 'MessageRouter');
 
       // Start the file scan (this will send progress messages automatically)
       await this.fileScanService.startFileScan();
-
     } catch (error) {
       this.loggingService?.error(
-        "Failed to start file scan",
+        'Failed to start file scan',
         { error: error instanceof Error ? error.message : String(error) },
-        "MessageRouter"
+        'MessageRouter'
       );
       throw error;
     }
@@ -561,28 +535,28 @@ export class MessageRouter {
       if (payload.lineNumber) {
         const position = new vscode.Position(
           Math.max(0, payload.lineNumber - 1),
-          payload.columnNumber || 0,
+          payload.columnNumber || 0
         );
         editor.selection = new vscode.Selection(position, position);
         editor.revealRange(new vscode.Range(position, position));
       }
 
       this.loggingService?.info(
-        "File opened",
+        'File opened',
         {
           filePath: payload.filePath,
           lineNumber: payload.lineNumber,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
     } catch (error) {
       this.loggingService?.error(
-        "Failed to open file",
+        'Failed to open file',
         {
           error: error instanceof Error ? error.message : String(error),
           filePath: payload.filePath,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -591,28 +565,26 @@ export class MessageRouter {
   /**
    * Handle show file in explorer request
    */
-  private async handleShowFileInExplorer(
-    payload: FileOperationPayload,
-  ): Promise<void> {
+  private async handleShowFileInExplorer(payload: FileOperationPayload): Promise<void> {
     try {
       const uri = vscode.Uri.file(payload.filePath);
-      await vscode.commands.executeCommand("revealFileInOS", uri);
+      await vscode.commands.executeCommand('revealFileInOS', uri);
 
       this.loggingService?.info(
-        "File revealed in explorer",
+        'File revealed in explorer',
         {
           filePath: payload.filePath,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
     } catch (error) {
       this.loggingService?.error(
-        "Failed to show file in explorer",
+        'Failed to show file in explorer',
         {
           error: error instanceof Error ? error.message : String(error),
           filePath: payload.filePath,
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -623,20 +595,16 @@ export class MessageRouter {
    */
   private async handleRequestOpenFolder(): Promise<void> {
     try {
-      await vscode.commands.executeCommand("vscode.openFolder");
+      await vscode.commands.executeCommand('vscode.openFolder');
 
-      this.loggingService?.info(
-        "Open folder dialog triggered",
-        {},
-        "MessageRouter",
-      );
+      this.loggingService?.info('Open folder dialog triggered', {}, 'MessageRouter');
     } catch (error) {
       this.loggingService?.error(
-        "Failed to open folder dialog",
+        'Failed to open folder dialog',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -651,7 +619,7 @@ export class MessageRouter {
       const indexingStatus = {
         isRunning: false,
         progress: 0,
-        status: "Not started",
+        status: 'Not started',
         filesProcessed: 0,
         totalFiles: 0,
         chunksCreated: 0,
@@ -661,32 +629,28 @@ export class MessageRouter {
       const state: ExtensionStatePayload = {
         config,
         indexingStatus,
-        searchHistory: searchHistory.map((h) => ({
+        searchHistory: searchHistory.map(h => ({
           query: h.query,
           timestamp: h.timestamp.getTime(),
           resultCount: h.resultCount,
         })),
-        version: "1.0.0", // TODO: Get from package.json
-        theme: "dark", // TODO: Get actual theme
+        version: '1.0.0', // TODO: Get from package.json
+        theme: 'dark', // TODO: Get actual theme
         availableProviders: {
-          embedding: ["ollama", "openai"],
-          llm: ["ollama", "openai"],
+          embedding: ['ollama', 'openai'],
+          llm: ['ollama', 'openai'],
         },
       };
 
-      this.loggingService?.debug(
-        "Extension state retrieved",
-        {},
-        "MessageRouter",
-      );
+      this.loggingService?.debug('Extension state retrieved', {}, 'MessageRouter');
       return state;
     } catch (error) {
       this.loggingService?.error(
-        "Failed to get extension state",
+        'Failed to get extension state',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
       throw error;
     }
@@ -699,23 +663,16 @@ export class MessageRouter {
     try {
       // Send initial state to webview
       const state = await this.handleGetState();
-      this.communicationService.sendMessage(
-        ExtensionToWebviewMessageType.STATE_UPDATE,
-        state,
-      );
+      this.communicationService.sendMessage(ExtensionToWebviewMessageType.STATE_UPDATE, state);
 
-      this.loggingService?.info(
-        "Webview ready, initial state sent",
-        {},
-        "MessageRouter",
-      );
+      this.loggingService?.info('Webview ready, initial state sent', {}, 'MessageRouter');
     } catch (error) {
       this.loggingService?.error(
-        "Failed to handle webview ready",
+        'Failed to handle webview ready',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "MessageRouter",
+        'MessageRouter'
       );
     }
   }
@@ -724,29 +681,20 @@ export class MessageRouter {
    * Send notification to webview
    */
   public sendNotification(notification: NotificationPayload): void {
-    this.communicationService.sendMessage(
-      ExtensionToWebviewMessageType.NOTIFICATION,
-      notification,
-    );
+    this.communicationService.sendMessage(ExtensionToWebviewMessageType.NOTIFICATION, notification);
   }
 
   /**
    * Send indexing progress update
    */
   public sendIndexingProgress(status: IndexingStatusPayload): void {
-    this.communicationService.sendMessage(
-      ExtensionToWebviewMessageType.INDEXING_PROGRESS,
-      status,
-    );
+    this.communicationService.sendMessage(ExtensionToWebviewMessageType.INDEXING_PROGRESS, status);
   }
 
   /**
    * Send configuration update notification
    */
   public sendConfigUpdate(config: Record<string, any>): void {
-    this.communicationService.sendMessage(
-      ExtensionToWebviewMessageType.CONFIG_UPDATE,
-      config,
-    );
+    this.communicationService.sendMessage(ExtensionToWebviewMessageType.CONFIG_UPDATE, config);
   }
 }

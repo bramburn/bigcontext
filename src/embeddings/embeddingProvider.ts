@@ -1,4 +1,4 @@
-import { ConfigService } from "../configService";
+import { ConfigService } from '../configService';
 
 /**
  * Core interface for embedding providers that can generate vector embeddings from text
@@ -60,7 +60,7 @@ export interface IEmbeddingProvider {
  */
 export interface EmbeddingConfig {
   /** The type of embedding provider to use ('ollama' or 'openai') */
-  provider: "ollama" | "openai";
+  provider: 'ollama' | 'openai';
 
   /** The specific model name to use for embeddings (optional, uses default if not specified) */
   model?: string;
@@ -118,21 +118,19 @@ export class EmbeddingProviderFactory {
    * @returns Promise resolving to a configured embedding provider instance
    * @throws Error if the specified provider type is not supported
    */
-  static async createProvider(
-    config: EmbeddingConfig,
-  ): Promise<IEmbeddingProvider> {
+  static async createProvider(config: EmbeddingConfig): Promise<IEmbeddingProvider> {
     switch (config.provider) {
-      case "ollama":
+      case 'ollama':
         // Dynamically import Ollama provider to avoid loading it when not needed
-        const { OllamaProvider } = await import("./ollamaProvider");
+        const { OllamaProvider } = await import('./ollamaProvider');
         return new OllamaProvider(config);
-      case "openai":
+      case 'openai':
         // Dynamically import OpenAI provider to avoid loading it when not needed
-        const { OpenAIProvider } = await import("./openaiProvider");
+        const { OpenAIProvider } = await import('./openaiProvider');
         return new OpenAIProvider(config);
       default:
         throw new Error(
-          `Unsupported embedding provider: ${config.provider}. Supported providers: ${this.getSupportedProviders().join(", ")}`,
+          `Unsupported embedding provider: ${config.provider}. Supported providers: ${this.getSupportedProviders().join(', ')}`
         );
     }
   }
@@ -150,7 +148,7 @@ export class EmbeddingProviderFactory {
    * @throws Error if the provider type is not supported or configuration is invalid
    */
   static async createProviderFromConfigService(
-    configService: ConfigService,
+    configService: ConfigService
   ): Promise<IEmbeddingProvider> {
     // Get the configured provider type from the central configuration
     const providerType = configService.getEmbeddingProvider();
@@ -158,19 +156,19 @@ export class EmbeddingProviderFactory {
     let config: EmbeddingConfig;
 
     // Build configuration based on provider type
-    if (providerType === "ollama") {
+    if (providerType === 'ollama') {
       const ollamaConfig = configService.getOllamaConfig();
       config = {
-        provider: "ollama",
+        provider: 'ollama',
         model: ollamaConfig.model,
         apiUrl: ollamaConfig.apiUrl,
         maxBatchSize: ollamaConfig.maxBatchSize,
         timeout: ollamaConfig.timeout,
       };
-    } else if (providerType === "openai") {
+    } else if (providerType === 'openai') {
       const openaiConfig = configService.getOpenAIConfig();
       config = {
-        provider: "openai",
+        provider: 'openai',
         model: openaiConfig.model,
         apiKey: openaiConfig.apiKey,
         maxBatchSize: openaiConfig.maxBatchSize,
@@ -178,7 +176,7 @@ export class EmbeddingProviderFactory {
       };
     } else {
       throw new Error(
-        `Unsupported embedding provider: ${providerType}. Supported providers: ${this.getSupportedProviders().join(", ")}`,
+        `Unsupported embedding provider: ${providerType}. Supported providers: ${this.getSupportedProviders().join(', ')}`
       );
     }
 
@@ -195,6 +193,6 @@ export class EmbeddingProviderFactory {
    * @returns Array of supported provider type strings
    */
   static getSupportedProviders(): string[] {
-    return ["ollama", "openai"];
+    return ['ollama', 'openai'];
   }
 }

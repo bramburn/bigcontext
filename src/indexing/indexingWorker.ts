@@ -11,28 +11,25 @@
  * receiving file paths to process and returning processed chunks with embeddings.
  */
 
-import { parentPort, workerData } from "worker_threads";
-import { readFileSync } from "fs";
-import { AstParser, SupportedLanguage } from "../parsing/astParser";
-import { Chunker, CodeChunk } from "../parsing/chunker";
-import {
-  IEmbeddingProvider,
-  EmbeddingProviderFactory,
-} from "../embeddings/embeddingProvider";
+import { parentPort, workerData } from 'worker_threads';
+import { readFileSync } from 'fs';
+import { AstParser, SupportedLanguage } from '../parsing/astParser';
+import { Chunker, CodeChunk } from '../parsing/chunker';
+import { IEmbeddingProvider, EmbeddingProviderFactory } from '../embeddings/embeddingProvider';
 // LSPService is not available in worker threads due to vscode API dependency
 // import { LSPService } from '../lsp/lspService';
-import * as path from "path";
+import * as path from 'path';
 
 // Ensure this file is run as a worker thread
 if (!parentPort) {
-  throw new Error("This file must be run as a worker thread.");
+  throw new Error('This file must be run as a worker thread.');
 }
 
 /**
  * Interface for messages sent from main thread to worker
  */
 interface WorkerMessage {
-  type: "processFile" | "shutdown";
+  type: 'processFile' | 'shutdown';
   filePath?: string;
   workspaceRoot?: string;
   embeddingConfig?: any;
@@ -55,7 +52,7 @@ interface ProcessedFileData {
  * Interface for worker response messages
  */
 interface WorkerResponse {
-  type: "processed" | "error" | "ready";
+  type: 'processed' | 'error' | 'ready';
   data?: ProcessedFileData;
   error?: string;
 }
@@ -73,7 +70,7 @@ let isInitialized = false;
  */
 async function initializeWorker(): Promise<void> {
   try {
-    console.log("IndexingWorker: Initializing worker services...");
+    console.log('IndexingWorker: Initializing worker services...');
 
     // Initialize AST parser
     astParser = new AstParser();
@@ -83,25 +80,23 @@ async function initializeWorker(): Promise<void> {
 
     // Initialize embedding provider from configuration
     if (workerData?.embeddingConfig) {
-      embeddingProvider = await EmbeddingProviderFactory.createProvider(
-        workerData.embeddingConfig,
-      );
+      embeddingProvider = await EmbeddingProviderFactory.createProvider(workerData.embeddingConfig);
     } else {
-      throw new Error("No embedding configuration provided to worker");
+      throw new Error('No embedding configuration provided to worker');
     }
 
     // LSP service is not available in worker threads due to vscode API dependency
     // Workers will process files without LSP semantic information
 
     isInitialized = true;
-    console.log("IndexingWorker: Worker services initialized successfully");
+    console.log('IndexingWorker: Worker services initialized successfully');
 
     // Notify main thread that worker is ready
-    parentPort?.postMessage({ type: "ready" } as WorkerResponse);
+    parentPort?.postMessage({ type: 'ready' } as WorkerResponse);
   } catch (error) {
-    console.error("IndexingWorker: Failed to initialize worker:", error);
+    console.error('IndexingWorker: Failed to initialize worker:', error);
     parentPort?.postMessage({
-      type: "error",
+      type: 'error',
       error: `Worker initialization failed: ${error instanceof Error ? error.message : String(error)}`,
     } as WorkerResponse);
   }
@@ -111,7 +106,11 @@ async function initializeWorker(): Promise<void> {
  * Create simple text chunks for large files that can't be AST parsed
  * This is a fallback method that splits files into manageable text chunks
  */
-function createSimpleTextChunks(filePath: string, content: string, language: SupportedLanguage): CodeChunk[] {
+function createSimpleTextChunks(
+  filePath: string,
+  content: string,
+  language: SupportedLanguage
+): CodeChunk[] {
   const chunks: CodeChunk[] = [];
   const lines = content.split('\n');
   const LINES_PER_CHUNK = 500; // Process 500 lines at a time for large files
@@ -121,7 +120,8 @@ function createSimpleTextChunks(filePath: string, content: string, language: Sup
     const chunkLines = lines.slice(i, Math.min(i + LINES_PER_CHUNK, lines.length));
     const chunkContent = chunkLines.join('\n');
 
-    if (chunkContent.trim().length > 0) { // Skip empty chunks
+    if (chunkContent.trim().length > 0) {
+      // Skip empty chunks
       chunks.push({
         filePath,
         content: chunkContent,
@@ -150,16 +150,16 @@ function getLanguage(filePath: string): SupportedLanguage | null {
   const ext = path.extname(filePath).toLowerCase();
 
   switch (ext) {
-    case ".ts":
-    case ".tsx":
-      return "typescript";
-    case ".js":
-    case ".jsx":
-      return "javascript";
-    case ".py":
-      return "python";
-    case ".cs":
-      return "csharp";
+    case '.ts':
+    case '.tsx':
+      return 'typescript';
+    case '.js':
+    case '.jsx':
+      return 'javascript';
+    case '.py':
+      return 'python';
+    case '.cs':
+      return 'csharp';
     default:
       return null;
   }
@@ -168,10 +168,7 @@ function getLanguage(filePath: string): SupportedLanguage | null {
 /**
  * Process a single file: read, parse, chunk, and generate embeddings
  */
-async function processFile(
-  filePath: string,
-  workspaceRoot?: string,
-): Promise<ProcessedFileData> {
+async function processFile(filePath: string, workspaceRoot?: string): Promise<ProcessedFileData> {
   const errors: string[] = [];
 
   try {
@@ -184,13 +181,15 @@ async function processFile(
         throw new Error(`File does not exist: ${filePath}`);
       }
     } catch (fsError) {
-      throw new Error(`File access error for ${filePath}: ${fsError instanceof Error ? fsError.message : String(fsError)}`);
+      throw new Error(
+        `File access error for ${filePath}: ${fsError instanceof Error ? fsError.message : String(fsError)}`
+      );
     }
 
     // Read file content with encoding fallback
     let content: string;
     try {
-      content = readFileSync(filePath, "utf-8");
+      content = readFileSync(filePath, 'utf-8');
     } catch (encodingError) {
       console.warn(`IndexingWorker: UTF-8 encoding failed for ${filePath}, trying latin1...`);
       try {
@@ -200,7 +199,9 @@ async function processFile(
         // Convert back to UTF-8 if possible
         content = Buffer.from(content, 'latin1').toString('utf-8');
       } catch (fallbackError) {
-        throw new Error(`Failed to read file with any encoding: ${filePath}. UTF-8 error: ${encodingError instanceof Error ? encodingError.message : String(encodingError)}, Latin1 error: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+        throw new Error(
+          `Failed to read file with any encoding: ${filePath}. UTF-8 error: ${encodingError instanceof Error ? encodingError.message : String(encodingError)}, Latin1 error: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`
+        );
       }
     }
 
@@ -219,10 +220,12 @@ async function processFile(
     }
 
     // Calculate file metrics
-    const lineCount = content.split("\n").length;
-    const byteCount = Buffer.byteLength(content, "utf8");
+    const lineCount = content.split('\n').length;
+    const byteCount = Buffer.byteLength(content, 'utf8');
     console.log(`IndexingWorker: File read successfully, ${lineCount} lines, ${byteCount} bytes`);
-    console.log(`IndexingWorker: Content type: ${typeof content}, first 50 chars: "${content.substring(0, 50).replace(/\n/g, '\\n')}..."`);
+    console.log(
+      `IndexingWorker: Content type: ${typeof content}, first 50 chars: "${content.substring(0, 50).replace(/\n/g, '\\n')}..."`
+    );
 
     // Determine language
     const language = getLanguage(filePath);
@@ -235,21 +238,25 @@ async function processFile(
     // Tree-sitter can have issues with very large files, so we use a conservative limit
     const MAX_FILE_SIZE = 100 * 1024; // 100KB limit for tree-sitter parsing
     if (content.length > MAX_FILE_SIZE) {
-      console.warn(`IndexingWorker: File too large for AST parsing: ${filePath} (${content.length} characters, max: ${MAX_FILE_SIZE})`);
+      console.warn(
+        `IndexingWorker: File too large for AST parsing: ${filePath} (${content.length} characters, max: ${MAX_FILE_SIZE})`
+      );
 
       // For very large files, we'll skip AST parsing and create simple text chunks
       const simpleChunks = createSimpleTextChunks(filePath, content, language);
 
       // Generate embeddings for simple chunks
-      const chunkContents = simpleChunks.map((chunk) => chunk.content);
-      console.log(`IndexingWorker: Generating embeddings for ${chunkContents.length} simple text chunks`);
+      const chunkContents = simpleChunks.map(chunk => chunk.content);
+      console.log(
+        `IndexingWorker: Generating embeddings for ${chunkContents.length} simple text chunks`
+      );
 
       const embeddings = await embeddingProvider.generateEmbeddings(chunkContents);
       console.log(`IndexingWorker: Generated ${embeddings.length} embeddings`);
 
       if (embeddings.length !== simpleChunks.length) {
         throw new Error(
-          `Embedding count mismatch: ${embeddings.length} embeddings for ${simpleChunks.length} chunks`,
+          `Embedding count mismatch: ${embeddings.length} embeddings for ${simpleChunks.length} chunks`
         );
       }
 
@@ -260,7 +267,9 @@ async function processFile(
         language,
         lineCount,
         byteCount,
-        errors: [`File too large for AST parsing (${content.length} chars), used simple text chunking`],
+        errors: [
+          `File too large for AST parsing (${content.length} chars), used simple text chunking`,
+        ],
       };
     }
 
@@ -274,26 +283,30 @@ async function processFile(
     const parseResult = astParser.parseWithErrorRecovery(language, content);
     if (parseResult.errors.length > 0) {
       console.log(`IndexingWorker: AST parsing had ${parseResult.errors.length} errors`);
-      errors.push(...parseResult.errors.map((err) => `${filePath}: ${err}`));
+      errors.push(...parseResult.errors.map(err => `${filePath}: ${err}`));
     }
 
     if (!parseResult.tree) {
-      console.warn(`IndexingWorker: AST parsing failed for ${filePath}, falling back to simple text chunking`);
+      console.warn(
+        `IndexingWorker: AST parsing failed for ${filePath}, falling back to simple text chunking`
+      );
       errors.push(`AST parsing failed for ${filePath}, using simple text chunking as fallback`);
 
       // Fall back to simple text chunking when AST parsing fails
       const simpleChunks = createSimpleTextChunks(filePath, content, language);
 
       // Generate embeddings for simple chunks
-      const chunkContents = simpleChunks.map((chunk) => chunk.content);
-      console.log(`IndexingWorker: Generating embeddings for ${chunkContents.length} simple text chunks (AST fallback)`);
+      const chunkContents = simpleChunks.map(chunk => chunk.content);
+      console.log(
+        `IndexingWorker: Generating embeddings for ${chunkContents.length} simple text chunks (AST fallback)`
+      );
 
       const embeddings = await embeddingProvider.generateEmbeddings(chunkContents);
       console.log(`IndexingWorker: Generated ${embeddings.length} embeddings (AST fallback)`);
 
       if (embeddings.length !== simpleChunks.length) {
         throw new Error(
-          `Embedding count mismatch: ${embeddings.length} embeddings for ${simpleChunks.length} chunks`,
+          `Embedding count mismatch: ${embeddings.length} embeddings for ${simpleChunks.length} chunks`
         );
       }
 
@@ -325,16 +338,15 @@ async function processFile(
     }
 
     // Generate embeddings for chunks
-    const chunkContents = chunks.map((chunk) => chunk.content);
+    const chunkContents = chunks.map(chunk => chunk.content);
     console.log(`IndexingWorker: Generating embeddings for ${chunkContents.length} chunks`);
 
-    const embeddings =
-      await embeddingProvider.generateEmbeddings(chunkContents);
+    const embeddings = await embeddingProvider.generateEmbeddings(chunkContents);
     console.log(`IndexingWorker: Generated ${embeddings.length} embeddings`);
 
     if (embeddings.length !== chunks.length) {
       throw new Error(
-        `Embedding count mismatch: ${embeddings.length} embeddings for ${chunks.length} chunks`,
+        `Embedding count mismatch: ${embeddings.length} embeddings for ${chunks.length} chunks`
       );
     }
 
@@ -366,92 +378,84 @@ async function processFile(
 }
 
 // Message handler for communication with main thread
-parentPort.on("message", async (message: WorkerMessage) => {
+parentPort.on('message', async (message: WorkerMessage) => {
   try {
     switch (message.type) {
-      case "processFile":
+      case 'processFile':
         if (!isInitialized) {
           parentPort?.postMessage({
-            type: "error",
-            error: "Worker not initialized",
+            type: 'error',
+            error: 'Worker not initialized',
           } as WorkerResponse);
           return;
         }
 
         if (!message.filePath) {
           parentPort?.postMessage({
-            type: "error",
-            error: "No file path provided",
+            type: 'error',
+            error: 'No file path provided',
           } as WorkerResponse);
           return;
         }
 
-        const processedData = await processFile(
-          message.filePath,
-          message.workspaceRoot,
-        );
+        const processedData = await processFile(message.filePath, message.workspaceRoot);
         parentPort?.postMessage({
-          type: "processed",
+          type: 'processed',
           data: processedData,
         } as WorkerResponse);
         break;
 
-      case "shutdown":
-        console.log("IndexingWorker: Received shutdown signal");
+      case 'shutdown':
+        console.log('IndexingWorker: Received shutdown signal');
         process.exit(0);
         break;
 
       default:
         parentPort?.postMessage({
-          type: "error",
+          type: 'error',
           error: `Unknown message type: ${(message as any).type}`,
         } as WorkerResponse);
     }
   } catch (error) {
-    console.error("IndexingWorker: Error processing message:", error);
+    console.error('IndexingWorker: Error processing message:', error);
     parentPort?.postMessage({
-      type: "error",
+      type: 'error',
       error: `Worker error: ${error instanceof Error ? error.message : String(error)}`,
     } as WorkerResponse);
   }
 });
 
 // Handle worker shutdown and termination signals
-process.on("SIGTERM", () => {
-  console.log("IndexingWorker: Received SIGTERM, exiting gracefully");
+process.on('SIGTERM', () => {
+  console.log('IndexingWorker: Received SIGTERM, exiting gracefully');
   process.exit(0);
 });
 
-process.on("SIGINT", () => {
-  console.log("IndexingWorker: Received SIGINT, exiting gracefully");
+process.on('SIGINT', () => {
+  console.log('IndexingWorker: Received SIGINT, exiting gracefully');
   process.exit(0);
 });
 
-process.on("uncaughtException", (err) => {
-  console.error("IndexingWorker: Uncaught exception:", err);
+process.on('uncaughtException', err => {
+  console.error('IndexingWorker: Uncaught exception:', err);
   parentPort?.postMessage({
-    type: "error",
+    type: 'error',
     error: `Worker uncaught exception: ${err.message}`,
   } as WorkerResponse);
   process.exit(1);
 });
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.error(
-    "IndexingWorker: Unhandled rejection at:",
-    promise,
-    "reason:",
-    reason,
-  );
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('IndexingWorker: Unhandled rejection at:', promise, 'reason:', reason);
   parentPort?.postMessage({
-    type: "error",
+    type: 'error',
     error: `Worker unhandled rejection: ${reason}`,
   } as WorkerResponse);
   process.exit(1);
 });
 
 // Initialize the worker when the module loads
-initializeWorker().catch((error) => {
-  console.error("IndexingWorker: Failed to initialize:", error);
+initializeWorker().catch(error => {
+  console.error('IndexingWorker: Failed to initialize:', error);
   process.exit(1);
 });

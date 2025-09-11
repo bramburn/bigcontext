@@ -1,6 +1,6 @@
-import Parser from "tree-sitter";
-import { SupportedLanguage } from "./astParser";
-import { LSPMetadata } from "../lsp/lspService";
+import Parser from 'tree-sitter';
+import { SupportedLanguage } from './astParser';
+import { LSPMetadata } from '../lsp/lspService';
 // TODO: (agent) we should be able to process all files except for executables
 export interface CodeChunk {
   filePath: string;
@@ -18,21 +18,21 @@ export interface CodeChunk {
 }
 
 export enum ChunkType {
-  FUNCTION = "function",
-  CLASS = "class",
-  METHOD = "method",
-  INTERFACE = "interface",
-  ENUM = "enum",
-  VARIABLE = "variable",
-  IMPORT = "import",
-  COMMENT = "comment",
-  MODULE = "module",
-  NAMESPACE = "namespace",
-  PROPERTY = "property",
-  CONSTRUCTOR = "constructor",
-  DECORATOR = "decorator",
-  TYPE_ALIAS = "type_alias",
-  GENERIC = "generic",
+  FUNCTION = 'function',
+  CLASS = 'class',
+  METHOD = 'method',
+  INTERFACE = 'interface',
+  ENUM = 'enum',
+  VARIABLE = 'variable',
+  IMPORT = 'import',
+  COMMENT = 'comment',
+  MODULE = 'module',
+  NAMESPACE = 'namespace',
+  PROPERTY = 'property',
+  CONSTRUCTOR = 'constructor',
+  DECORATOR = 'decorator',
+  TYPE_ALIAS = 'type_alias',
+  GENERIC = 'generic',
 }
 
 export class Chunker {
@@ -53,7 +53,7 @@ export class Chunker {
                 name: (identifier) @name
                 parameters: (formal_parameters) @params
                 body: (statement_block) @body) @function
-        `,
+        `
     );
     tsQueries.set(
       ChunkType.CLASS,
@@ -61,7 +61,7 @@ export class Chunker {
             (class_declaration
                 name: (type_identifier) @name
                 body: (class_body) @body) @class
-        `,
+        `
     );
     tsQueries.set(
       ChunkType.METHOD,
@@ -70,7 +70,7 @@ export class Chunker {
                 name: (property_identifier) @name
                 parameters: (formal_parameters) @params
                 body: (statement_block) @body) @method
-        `,
+        `
     );
     tsQueries.set(
       ChunkType.INTERFACE,
@@ -78,7 +78,7 @@ export class Chunker {
             (interface_declaration
                 name: (type_identifier) @name
                 body: (object_type) @body) @interface
-        `,
+        `
     );
     tsQueries.set(
       ChunkType.ENUM,
@@ -86,17 +86,17 @@ export class Chunker {
             (enum_declaration
                 name: (identifier) @name
                 body: (enum_body) @body) @enum
-        `,
+        `
     );
     tsQueries.set(
       ChunkType.IMPORT,
       `
             (import_statement) @import
-        `,
+        `
     );
 
-    this.languageQueries.set("typescript", tsQueries);
-    this.languageQueries.set("javascript", tsQueries);
+    this.languageQueries.set('typescript', tsQueries);
+    this.languageQueries.set('javascript', tsQueries);
 
     // Python queries
     const pyQueries = new Map<ChunkType, string>();
@@ -107,7 +107,7 @@ export class Chunker {
                 name: (identifier) @name
                 parameters: (parameters) @params
                 body: (block) @body) @function
-        `,
+        `
     );
     pyQueries.set(
       ChunkType.CLASS,
@@ -115,7 +115,7 @@ export class Chunker {
             (class_definition
                 name: (identifier) @name
                 body: (block) @body) @class
-        `,
+        `
     );
     pyQueries.set(
       ChunkType.METHOD,
@@ -124,17 +124,17 @@ export class Chunker {
                 name: (identifier) @name
                 parameters: (parameters) @params
                 body: (block) @body) @method
-        `,
+        `
     );
     pyQueries.set(
       ChunkType.IMPORT,
       `
             (import_statement) @import
             (import_from_statement) @import
-        `,
+        `
     );
 
-    this.languageQueries.set("python", pyQueries);
+    this.languageQueries.set('python', pyQueries);
 
     // C# queries
     const csQueries = new Map<ChunkType, string>();
@@ -144,7 +144,7 @@ export class Chunker {
             (class_declaration
                 name: (identifier) @name
                 body: (declaration_list) @body) @class
-        `,
+        `
     );
     csQueries.set(
       ChunkType.METHOD,
@@ -153,7 +153,7 @@ export class Chunker {
                 name: (identifier) @name
                 parameters: (parameter_list) @params
                 body: (block) @body) @method
-        `,
+        `
     );
     csQueries.set(
       ChunkType.INTERFACE,
@@ -161,7 +161,7 @@ export class Chunker {
             (interface_declaration
                 name: (identifier) @name
                 body: (declaration_list) @body) @interface
-        `,
+        `
     );
     csQueries.set(
       ChunkType.NAMESPACE,
@@ -169,17 +169,17 @@ export class Chunker {
             (namespace_declaration
                 name: (identifier) @name
                 body: (declaration_list) @body) @namespace
-        `,
+        `
     );
 
-    this.languageQueries.set("csharp", csQueries);
+    this.languageQueries.set('csharp', csQueries);
   }
 
   public chunk(
     filePath: string,
     tree: Parser.Tree,
     code: string,
-    language: SupportedLanguage,
+    language: SupportedLanguage
   ): CodeChunk[] {
     const chunks: CodeChunk[] = [];
     const queries = this.languageQueries.get(language);
@@ -193,28 +193,21 @@ export class Chunker {
     for (const [chunkType, queryString] of queries) {
       try {
         const languageGrammar = this.getLanguageGrammar(language);
-        if (!languageGrammar) continue;
+        if (!languageGrammar) {
+          continue;
+        }
 
         const query = new Parser.Query(languageGrammar, queryString);
         const matches = query.matches(tree.rootNode);
 
         for (const match of matches) {
-          const chunk = this.createChunkFromMatch(
-            filePath,
-            match,
-            code,
-            chunkType,
-            language,
-          );
+          const chunk = this.createChunkFromMatch(filePath, match, code, chunkType, language);
           if (chunk) {
             chunks.push(chunk);
           }
         }
       } catch (error) {
-        console.error(
-          `Error processing ${chunkType} chunks for ${language}:`,
-          error,
-        );
+        console.error(`Error processing ${chunkType} chunks for ${language}:`, error);
       }
     }
 
@@ -231,32 +224,33 @@ export class Chunker {
     match: Parser.QueryMatch,
     code: string,
     chunkType: ChunkType,
-    language: SupportedLanguage,
+    language: SupportedLanguage
   ): CodeChunk | null {
     const captures = match.captures;
-    const mainCapture =
-      captures.find((c: any) => c.name === chunkType) || captures[0];
+    const mainCapture = captures.find((c: any) => c.name === chunkType) || captures[0];
 
-    if (!mainCapture) return null;
+    if (!mainCapture) {
+      return null;
+    }
 
     const node = mainCapture.node;
     const content = code.slice(node.startIndex, node.endIndex);
 
     // Extract name if available
-    const nameCapture = captures.find((c: any) => c.name === "name");
+    const nameCapture = captures.find((c: any) => c.name === 'name');
     const name = nameCapture
       ? code.slice(nameCapture.node.startIndex, nameCapture.node.endIndex)
       : undefined;
 
     // Extract parameters/signature if available
-    const paramsCapture = captures.find((c: any) => c.name === "params");
+    const paramsCapture = captures.find((c: any) => c.name === 'params');
     const signature = paramsCapture
       ? code.slice(paramsCapture.node.startIndex, paramsCapture.node.endIndex)
       : undefined;
 
     // Extract docstring for Python
     let docstring: string | undefined;
-    if (language === "python" && chunkType === ChunkType.FUNCTION) {
+    if (language === 'python' && chunkType === ChunkType.FUNCTION) {
       docstring = this.extractPythonDocstring(node, code);
     }
 
@@ -281,9 +275,9 @@ export class Chunker {
   private createFileChunk(
     filePath: string,
     code: string,
-    language: SupportedLanguage,
+    language: SupportedLanguage
   ): CodeChunk[] {
-    const lines = code.split("\n");
+    const lines = code.split('\n');
     return [
       {
         filePath,
@@ -291,7 +285,7 @@ export class Chunker {
         startLine: 1,
         endLine: lines.length,
         type: ChunkType.MODULE,
-        name: filePath.split("/").pop()?.split(".")[0],
+        name: filePath.split('/').pop()?.split('.')[0],
         language,
         metadata: {
           isFileLevel: true,
@@ -302,18 +296,15 @@ export class Chunker {
     ];
   }
 
-  private extractPythonDocstring(
-    node: Parser.SyntaxNode,
-    code: string,
-  ): string | undefined {
+  private extractPythonDocstring(node: Parser.SyntaxNode, code: string): string | undefined {
     // Look for string literal as first statement in function body
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
-      if (child?.type === "block") {
+      if (child?.type === 'block') {
         const firstStatement = child.child(1); // Skip the colon
-        if (firstStatement?.type === "expression_statement") {
+        if (firstStatement?.type === 'expression_statement') {
           const expr = firstStatement.child(0);
-          if (expr?.type === "string") {
+          if (expr?.type === 'string') {
             return code.slice(expr.startIndex, expr.endIndex);
           }
         }
@@ -327,14 +318,14 @@ export class Chunker {
     // Import the actual language grammars
     try {
       switch (language) {
-        case "typescript":
-          return require("tree-sitter-typescript").typescript;
-        case "javascript":
-          return require("tree-sitter-typescript").javascript;
-        case "python":
-          return require("tree-sitter-python");
-        case "csharp":
-          return require("tree-sitter-c-sharp");
+        case 'typescript':
+          return require('tree-sitter-typescript').typescript;
+        case 'javascript':
+          return require('tree-sitter-typescript').javascript;
+        case 'python':
+          return require('tree-sitter-python');
+        case 'csharp':
+          return require('tree-sitter-c-sharp');
         default:
           return null;
       }
@@ -345,7 +336,7 @@ export class Chunker {
   }
 
   public getChunksByType(chunks: CodeChunk[], type: ChunkType): CodeChunk[] {
-    return chunks.filter((chunk) => chunk.type === type);
+    return chunks.filter(chunk => chunk.type === type);
   }
 
   public getChunkStats(chunks: CodeChunk[]): Record<ChunkType, number> {

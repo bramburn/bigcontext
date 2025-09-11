@@ -1,6 +1,6 @@
 /**
  * GitIgnore Manager Tests
- * 
+ *
  * Tests for the GitIgnore manager that handles .gitignore file operations
  */
 
@@ -32,9 +32,12 @@ describe('GitIgnoreManager', () => {
   describe('createGitIgnoreIfNotExists', () => {
     it('should create .gitignore file if it does not exist', async () => {
       await gitIgnoreManager.createGitIgnoreIfNotExists(tempDir);
-      
+
       const gitignorePath = path.join(tempDir, '.gitignore');
-      const exists = await fs.access(gitignorePath).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(gitignorePath)
+        .then(() => true)
+        .catch(() => false);
       assert.strictEqual(exists, true);
     });
 
@@ -44,7 +47,7 @@ describe('GitIgnoreManager', () => {
       await fs.writeFile(gitignorePath, existingContent);
 
       await gitIgnoreManager.createGitIgnoreIfNotExists(tempDir);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
       assert.strictEqual(content, existingContent);
     });
@@ -84,10 +87,10 @@ describe('GitIgnoreManager', () => {
   describe('ensurePatternPresent', () => {
     it('should add pattern to new .gitignore file', async () => {
       await gitIgnoreManager.ensurePatternPresent('.context/config.json', tempDir);
-      
+
       const gitignorePath = path.join(tempDir, '.gitignore');
       const content = await fs.readFile(gitignorePath, 'utf-8');
-      
+
       assert.ok(content.includes('.context/config.json'));
       assert.ok(content.includes('# Code Context Engine configuration'));
     });
@@ -98,9 +101,9 @@ describe('GitIgnoreManager', () => {
       await fs.writeFile(gitignorePath, existingContent);
 
       await gitIgnoreManager.ensurePatternPresent('.context/config.json', tempDir);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
-      
+
       assert.ok(content.includes('node_modules/'));
       assert.ok(content.includes('*.log'));
       assert.ok(content.includes('.context/config.json'));
@@ -112,10 +115,10 @@ describe('GitIgnoreManager', () => {
       await fs.writeFile(gitignorePath, 'node_modules/\n.context/config.json\n*.log\n');
 
       await gitIgnoreManager.ensurePatternPresent('.context/config.json', tempDir);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
       const occurrences = (content.match(/\.context\/config\.json/g) || []).length;
-      
+
       assert.strictEqual(occurrences, 1);
     });
 
@@ -124,9 +127,9 @@ describe('GitIgnoreManager', () => {
       await fs.writeFile(gitignorePath, '');
 
       await gitIgnoreManager.ensurePatternPresent('.context/config.json', tempDir);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
-      
+
       assert.ok(content.includes('.context/config.json'));
       assert.ok(content.includes('# Code Context Engine configuration'));
     });
@@ -136,9 +139,9 @@ describe('GitIgnoreManager', () => {
       await fs.writeFile(gitignorePath, '   \n\n  \n');
 
       await gitIgnoreManager.ensurePatternPresent('.context/config.json', tempDir);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
-      
+
       assert.ok(content.includes('.context/config.json'));
       assert.ok(content.includes('# Code Context Engine configuration'));
     });
@@ -148,10 +151,10 @@ describe('GitIgnoreManager', () => {
       await fs.writeFile(gitignorePath, 'node_modules/\n*.log');
 
       await gitIgnoreManager.ensurePatternPresent('.context/config.json', tempDir);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
       const lines = content.split('\n');
-      
+
       // Should have proper spacing and formatting
       assert.ok(lines.includes('node_modules/'));
       assert.ok(lines.includes('*.log'));
@@ -164,10 +167,10 @@ describe('GitIgnoreManager', () => {
   describe('ensureConfigPatternPresent', () => {
     it('should add default config pattern', async () => {
       await gitIgnoreManager.ensureConfigPatternPresent(tempDir);
-      
+
       const gitignorePath = path.join(tempDir, '.gitignore');
       const content = await fs.readFile(gitignorePath, 'utf-8');
-      
+
       assert.ok(content.includes('.context/config.json'));
     });
   });
@@ -176,7 +179,7 @@ describe('GitIgnoreManager', () => {
     it('should handle permission errors gracefully', async () => {
       // This test might not work on all systems, but we can test the error handling structure
       const invalidPath = '/root/invalid-path-that-should-not-exist';
-      
+
       await assert.rejects(
         () => gitIgnoreManager.ensurePatternPresent('.context/config.json', invalidPath),
         /Failed to update \.gitignore/
@@ -185,7 +188,7 @@ describe('GitIgnoreManager', () => {
 
     it('should handle invalid workspace paths', async () => {
       const nonExistentPath = path.join(tempDir, 'non-existent-directory');
-      
+
       await assert.rejects(
         () => gitIgnoreManager.ensurePatternPresent('.context/config.json', nonExistentPath),
         /Failed to update \.gitignore/
@@ -196,18 +199,18 @@ describe('GitIgnoreManager', () => {
   describe('edge cases', () => {
     it('should handle patterns with special characters', async () => {
       const specialPattern = '.context/*.json';
-      
+
       await gitIgnoreManager.ensurePatternPresent(specialPattern, tempDir);
-      
+
       const exists = await gitIgnoreManager.patternExists(specialPattern, tempDir);
       assert.strictEqual(exists, true);
     });
 
     it('should handle very long patterns', async () => {
       const longPattern = '.context/' + 'a'.repeat(200) + '.json';
-      
+
       await gitIgnoreManager.ensurePatternPresent(longPattern, tempDir);
-      
+
       const exists = await gitIgnoreManager.patternExists(longPattern, tempDir);
       assert.strictEqual(exists, true);
     });

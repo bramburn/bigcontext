@@ -6,20 +6,20 @@
  * and port availability for local services.
  */
 
-import * as vscode from "vscode";
-import * as os from "os";
-import * as fs from "fs";
-import * as path from "path";
-import { exec } from "child_process";
-import { promisify } from "util";
+import * as vscode from 'vscode';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
 export interface ValidationResult {
   isValid: boolean;
-  category: "docker" | "network" | "system" | "ports";
+  category: 'docker' | 'network' | 'system' | 'ports';
   check: string;
-  status: "pass" | "fail" | "warning";
+  status: 'pass' | 'fail' | 'warning';
   message: string;
   details?: string;
   fixSuggestion?: string;
@@ -27,7 +27,7 @@ export interface ValidationResult {
 }
 
 export interface SystemValidationReport {
-  overallStatus: "pass" | "warning" | "fail";
+  overallStatus: 'pass' | 'warning' | 'fail';
   results: ValidationResult[];
   summary: {
     passed: number;
@@ -57,17 +57,17 @@ export class SystemValidator {
 
     // Calculate summary
     const summary = {
-      passed: results.filter((r) => r.status === "pass").length,
-      warnings: results.filter((r) => r.status === "warning").length,
-      failed: results.filter((r) => r.status === "fail").length,
+      passed: results.filter(r => r.status === 'pass').length,
+      warnings: results.filter(r => r.status === 'warning').length,
+      failed: results.filter(r => r.status === 'fail').length,
     };
 
     // Determine overall status
-    let overallStatus: "pass" | "warning" | "fail" = "pass";
+    let overallStatus: 'pass' | 'warning' | 'fail' = 'pass';
     if (summary.failed > 0) {
-      overallStatus = "fail";
+      overallStatus = 'fail';
     } else if (summary.warnings > 0) {
-      overallStatus = "warning";
+      overallStatus = 'warning';
     }
 
     return {
@@ -85,27 +85,27 @@ export class SystemValidator {
 
     try {
       // Check if Docker is installed
-      const { stdout: versionOutput } = await execAsync("docker --version");
+      const { stdout: versionOutput } = await execAsync('docker --version');
       const dockerVersion = versionOutput.trim();
 
       results.push({
         isValid: true,
-        category: "docker",
-        check: "Docker Installation",
-        status: "pass",
+        category: 'docker',
+        check: 'Docker Installation',
+        status: 'pass',
         message: `Docker is installed: ${dockerVersion}`,
         details: dockerVersion,
       });
 
       // Check if Docker daemon is running
       try {
-        await execAsync("docker info");
+        await execAsync('docker info');
         results.push({
           isValid: true,
-          category: "docker",
-          check: "Docker Daemon",
-          status: "pass",
-          message: "Docker daemon is running and accessible",
+          category: 'docker',
+          check: 'Docker Daemon',
+          status: 'pass',
+          message: 'Docker daemon is running and accessible',
         });
 
         // Check Docker version compatibility
@@ -117,46 +117,45 @@ export class SystemValidator {
           if (major < 20) {
             results.push({
               isValid: false,
-              category: "docker",
-              check: "Docker Version",
-              status: "warning",
-              message: "Docker version is older than recommended (20.x)",
+              category: 'docker',
+              check: 'Docker Version',
+              status: 'warning',
+              message: 'Docker version is older than recommended (20.x)',
               details: `Current version: ${dockerVersion}`,
               fixSuggestion:
-                "Consider updating Docker to version 20.x or later for better compatibility",
+                'Consider updating Docker to version 20.x or later for better compatibility',
             });
           } else {
             results.push({
               isValid: true,
-              category: "docker",
-              check: "Docker Version",
-              status: "pass",
-              message: "Docker version is compatible",
+              category: 'docker',
+              check: 'Docker Version',
+              status: 'pass',
+              message: 'Docker version is compatible',
             });
           }
         }
       } catch (daemonError) {
         results.push({
           isValid: false,
-          category: "docker",
-          check: "Docker Daemon",
-          status: "fail",
-          message: "Docker daemon is not running or not accessible",
+          category: 'docker',
+          check: 'Docker Daemon',
+          status: 'fail',
+          message: 'Docker daemon is not running or not accessible',
           details: String(daemonError),
-          fixSuggestion: "Start Docker Desktop or Docker daemon service",
+          fixSuggestion: 'Start Docker Desktop or Docker daemon service',
           autoFixAvailable: true,
         });
       }
     } catch (installError) {
       results.push({
         isValid: false,
-        category: "docker",
-        check: "Docker Installation",
-        status: "fail",
-        message: "Docker is not installed or not in PATH",
+        category: 'docker',
+        check: 'Docker Installation',
+        status: 'fail',
+        message: 'Docker is not installed or not in PATH',
         details: String(installError),
-        fixSuggestion:
-          "Install Docker Desktop from https://docker.com/products/docker-desktop",
+        fixSuggestion: 'Install Docker Desktop from https://docker.com/products/docker-desktop',
         autoFixAvailable: false,
       });
     }
@@ -172,20 +171,20 @@ export class SystemValidator {
 
     // Test connectivity to key services
     const endpoints = [
-      { name: "OpenAI API", url: "https://api.openai.com", required: false },
+      { name: 'OpenAI API', url: 'https://api.openai.com', required: false },
       {
-        name: "Pinecone API",
-        url: "https://controller.us-east-1-aws.pinecone.io",
+        name: 'Pinecone API',
+        url: 'https://controller.us-east-1-aws.pinecone.io',
         required: false,
       },
       {
-        name: "Docker Hub",
-        url: "https://registry-1.docker.io",
+        name: 'Docker Hub',
+        url: 'https://registry-1.docker.io',
         required: true,
       },
       {
-        name: "GitHub (for updates)",
-        url: "https://api.github.com",
+        name: 'GitHub (for updates)',
+        url: 'https://api.github.com',
         required: false,
       },
     ];
@@ -196,7 +195,7 @@ export class SystemValidator {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         const response = await fetch(endpoint.url, {
-          method: "HEAD",
+          method: 'HEAD',
           signal: controller.signal,
         });
 
@@ -206,33 +205,32 @@ export class SystemValidator {
           // 404 is OK for connectivity test
           results.push({
             isValid: true,
-            category: "network",
+            category: 'network',
             check: `${endpoint.name} Connectivity`,
-            status: "pass",
+            status: 'pass',
             message: `Can reach ${endpoint.name}`,
           });
         } else {
-          const status = endpoint.required ? "fail" : "warning";
+          const status = endpoint.required ? 'fail' : 'warning';
           results.push({
             isValid: !endpoint.required,
-            category: "network",
+            category: 'network',
             check: `${endpoint.name} Connectivity`,
             status,
             message: `Cannot reach ${endpoint.name} (HTTP ${response.status})`,
-            fixSuggestion: "Check internet connection and firewall settings",
+            fixSuggestion: 'Check internet connection and firewall settings',
           });
         }
       } catch (error) {
-        const status = endpoint.required ? "fail" : "warning";
+        const status = endpoint.required ? 'fail' : 'warning';
         results.push({
           isValid: !endpoint.required,
-          category: "network",
+          category: 'network',
           check: `${endpoint.name} Connectivity`,
           status,
           message: `Cannot reach ${endpoint.name}`,
           details: error instanceof Error ? error.message : String(error),
-          fixSuggestion:
-            "Check internet connection, proxy settings, and firewall configuration",
+          fixSuggestion: 'Check internet connection, proxy settings, and firewall configuration',
         });
       }
     }
@@ -255,20 +253,19 @@ export class SystemValidator {
     if (totalMemoryGB < 4) {
       results.push({
         isValid: false,
-        category: "system",
-        check: "System Memory",
-        status: "warning",
+        category: 'system',
+        check: 'System Memory',
+        status: 'warning',
         message: `Low system memory: ${totalMemoryGB}GB total`,
         details: `Free: ${freeMemoryGB}GB, Total: ${totalMemoryGB}GB`,
-        fixSuggestion:
-          "Consider upgrading to at least 8GB RAM for optimal performance",
+        fixSuggestion: 'Consider upgrading to at least 8GB RAM for optimal performance',
       });
     } else {
       results.push({
         isValid: true,
-        category: "system",
-        check: "System Memory",
-        status: "pass",
+        category: 'system',
+        check: 'System Memory',
+        status: 'pass',
         message: `Sufficient memory: ${totalMemoryGB}GB total, ${freeMemoryGB}GB free`,
       });
     }
@@ -281,7 +278,7 @@ export class SystemValidator {
 
         // Use platform-specific commands to check disk space
         let command: string;
-        if (process.platform === "win32") {
+        if (process.platform === 'win32') {
           command = `dir "${workspacePath}" /-c | find "bytes free"`;
         } else {
           command = `df -h "${workspacePath}" | tail -1 | awk '{print $4}'`;
@@ -289,7 +286,7 @@ export class SystemValidator {
 
         const { stdout } = await execAsync(command);
 
-        if (process.platform === "win32") {
+        if (process.platform === 'win32') {
           // Parse Windows output
           const match = stdout.match(/(\d+) bytes free/);
           if (match) {
@@ -299,24 +296,23 @@ export class SystemValidator {
             if (freeSpaceGB < 2) {
               results.push({
                 isValid: false,
-                category: "system",
-                check: "Disk Space",
-                status: "warning",
+                category: 'system',
+                check: 'Disk Space',
+                status: 'warning',
                 message: `Low disk space: ${freeSpaceGB}GB free`,
-                fixSuggestion:
-                  "Free up disk space or use a different workspace location",
+                fixSuggestion: 'Free up disk space or use a different workspace location',
               });
             } else {
               results.push({
                 isValid: true,
-                category: "system",
-                check: "Disk Space",
-                status: "pass",
+                category: 'system',
+                check: 'Disk Space',
+                status: 'pass',
                 message: `Sufficient disk space: ${freeSpaceGB}GB free`,
               });
             }
           } else {
-            throw new Error("Could not parse disk space output");
+            throw new Error('Could not parse disk space output');
           }
         } else {
           // Parse Unix/Linux/macOS output
@@ -325,39 +321,38 @@ export class SystemValidator {
 
           if (match) {
             const value = parseFloat(match[1]);
-            const unit = freeSpace.includes("G") ? "GB" : "TB";
-            const freeSpaceGB = unit === "TB" ? value * 1024 : value;
+            const unit = freeSpace.includes('G') ? 'GB' : 'TB';
+            const freeSpaceGB = unit === 'TB' ? value * 1024 : value;
 
             if (freeSpaceGB < 2) {
               results.push({
                 isValid: false,
-                category: "system",
-                check: "Disk Space",
-                status: "warning",
+                category: 'system',
+                check: 'Disk Space',
+                status: 'warning',
                 message: `Low disk space: ${freeSpaceGB.toFixed(1)}GB free`,
-                fixSuggestion:
-                  "Free up disk space or use a different workspace location",
+                fixSuggestion: 'Free up disk space or use a different workspace location',
               });
             } else {
               results.push({
                 isValid: true,
-                category: "system",
-                check: "Disk Space",
-                status: "pass",
+                category: 'system',
+                check: 'Disk Space',
+                status: 'pass',
                 message: `Sufficient disk space: ${freeSpaceGB.toFixed(1)}GB free`,
               });
             }
           } else {
-            throw new Error("Could not parse disk space output");
+            throw new Error('Could not parse disk space output');
           }
         }
       } catch (error) {
         results.push({
           isValid: true,
-          category: "system",
-          check: "Disk Space",
-          status: "warning",
-          message: "Could not check disk space",
+          category: 'system',
+          check: 'Disk Space',
+          status: 'warning',
+          message: 'Could not check disk space',
           details: String(error),
         });
       }
@@ -365,23 +360,23 @@ export class SystemValidator {
 
     // Check Node.js version
     const nodeVersion = process.version;
-    const majorVersion = parseInt(nodeVersion.slice(1).split(".")[0]);
+    const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
 
     if (majorVersion < 16) {
       results.push({
         isValid: false,
-        category: "system",
-        check: "Node.js Version",
-        status: "warning",
+        category: 'system',
+        check: 'Node.js Version',
+        status: 'warning',
         message: `Node.js version ${nodeVersion} is older than recommended`,
-        fixSuggestion: "Update to Node.js 16 or later for better performance",
+        fixSuggestion: 'Update to Node.js 16 or later for better performance',
       });
     } else {
       results.push({
         isValid: true,
-        category: "system",
-        check: "Node.js Version",
-        status: "pass",
+        category: 'system',
+        check: 'Node.js Version',
+        status: 'pass',
         message: `Node.js version ${nodeVersion} is compatible`,
       });
     }
@@ -396,9 +391,9 @@ export class SystemValidator {
     const results: ValidationResult[] = [];
 
     const portsToCheck = [
-      { port: 6333, service: "Qdrant" },
-      { port: 8000, service: "ChromaDB" },
-      { port: 11434, service: "Ollama" },
+      { port: 6333, service: 'Qdrant' },
+      { port: 8000, service: 'ChromaDB' },
+      { port: 11434, service: 'Ollama' },
     ];
 
     for (const { port, service } of portsToCheck) {
@@ -408,17 +403,17 @@ export class SystemValidator {
         if (isAvailable) {
           results.push({
             isValid: true,
-            category: "ports",
+            category: 'ports',
             check: `Port ${port} (${service})`,
-            status: "pass",
+            status: 'pass',
             message: `Port ${port} is available for ${service}`,
           });
         } else {
           results.push({
             isValid: false,
-            category: "ports",
+            category: 'ports',
             check: `Port ${port} (${service})`,
-            status: "warning",
+            status: 'warning',
             message: `Port ${port} is already in use`,
             details: `Another service may be using port ${port}`,
             fixSuggestion: `Stop the service using port ${port} or configure ${service} to use a different port`,
@@ -427,9 +422,9 @@ export class SystemValidator {
       } catch (error) {
         results.push({
           isValid: true,
-          category: "ports",
+          category: 'ports',
           check: `Port ${port} (${service})`,
-          status: "warning",
+          status: 'warning',
           message: `Could not check port ${port} availability`,
           details: String(error),
         });
@@ -443,18 +438,18 @@ export class SystemValidator {
    * Check if a port is available
    */
   private async isPortAvailable(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const net = require("net");
+    return new Promise(resolve => {
+      const net = require('net');
       const server = net.createServer();
 
       server.listen(port, () => {
-        server.once("close", () => {
+        server.once('close', () => {
           resolve(true);
         });
         server.close();
       });
 
-      server.on("error", () => {
+      server.on('error', () => {
         resolve(false);
       });
     });
@@ -465,25 +460,25 @@ export class SystemValidator {
    */
   async autoFix(check: string): Promise<{ success: boolean; message: string }> {
     switch (check) {
-      case "Docker Daemon":
+      case 'Docker Daemon':
         try {
-          if (process.platform === "darwin") {
-            await execAsync("open -a Docker");
+          if (process.platform === 'darwin') {
+            await execAsync('open -a Docker');
             return {
               success: true,
-              message: "Attempting to start Docker Desktop...",
+              message: 'Attempting to start Docker Desktop...',
             };
-          } else if (process.platform === "win32") {
+          } else if (process.platform === 'win32') {
             await execAsync('start "" "Docker Desktop"');
             return {
               success: true,
-              message: "Attempting to start Docker Desktop...",
+              message: 'Attempting to start Docker Desktop...',
             };
           } else {
-            await execAsync("sudo systemctl start docker");
+            await execAsync('sudo systemctl start docker');
             return {
               success: true,
-              message: "Attempting to start Docker service...",
+              message: 'Attempting to start Docker service...',
             };
           }
         } catch (error) {
@@ -496,7 +491,7 @@ export class SystemValidator {
       default:
         return {
           success: false,
-          message: "No auto-fix available for this issue",
+          message: 'No auto-fix available for this issue',
         };
     }
   }

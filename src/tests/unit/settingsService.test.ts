@@ -59,4 +59,3 @@ describe('SettingsService', () => {
     expect(result.success).toBe(true);
   });
 });
-

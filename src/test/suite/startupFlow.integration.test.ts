@@ -1,6 +1,6 @@
 /**
  * Startup Flow Integration Tests
- * 
+ *
  * Integration tests for the complete startup flow with persistent configuration
  */
 
@@ -54,16 +54,12 @@ describe('Startup Flow Integration Tests', () => {
   beforeEach(async () => {
     // Create a temporary directory for each test
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'startup-test-'));
-    
+
     // Initialize services
     configService = new ConfigurationService(tempDir);
     gitIgnoreManager = new GitIgnoreManager();
     mockQdrantService = new MockQdrantService();
-    startupService = new StartupService(
-      configService,
-      mockQdrantService as any,
-      gitIgnoreManager
-    );
+    startupService = new StartupService(configService, mockQdrantService as any, gitIgnoreManager);
   });
 
   afterEach(async () => {
@@ -78,7 +74,7 @@ describe('Startup Flow Integration Tests', () => {
   describe('Fresh Installation Flow', () => {
     it('should handle first-time setup with no configuration', async () => {
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.action, 'showSetup');
       assert.ok(result.reason.includes('No configuration found')); // Reverted to match unit test
       assert.strictEqual(result.configurationLoaded, true);
@@ -105,12 +101,15 @@ describe('Startup Flow Integration Tests', () => {
 
     it('should set up .gitignore on first run', async () => {
       await startupService.executeStartupFlow(tempDir);
-      
+
       // Verify .gitignore was created and contains config pattern
       const gitignorePath = path.join(tempDir, '.gitignore');
-      const exists = await fs.access(gitignorePath).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(gitignorePath)
+        .then(() => true)
+        .catch(() => false);
       assert.strictEqual(exists, true);
-      
+
       const content = await fs.readFile(gitignorePath, 'utf-8');
       assert.ok(content.includes('.context/config.json'));
     });
@@ -146,7 +145,9 @@ describe('Startup Flow Integration Tests', () => {
       const result = await startupService.executeStartupFlow(tempDir);
 
       assert.strictEqual(result.action, 'proceedToSearch');
-      assert.ok(result.reason.includes('Configuration valid') && result.reason.includes('index exists'));
+      assert.ok(
+        result.reason.includes('Configuration valid') && result.reason.includes('index exists')
+      );
       assert.strictEqual(result.configurationLoaded, true);
       assert.strictEqual(result.qdrantConnected, true);
       assert.strictEqual(result.indexValid, true);
@@ -172,9 +173,9 @@ describe('Startup Flow Integration Tests', () => {
 
     it('should show setup when Qdrant connection fails', async () => {
       mockQdrantService.setConnectionStatus(false);
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.action, 'showSetup');
       assert.strictEqual(result.reason, 'Qdrant connection failed');
       assert.strictEqual(result.configurationLoaded, true);
@@ -254,8 +255,12 @@ describe('Startup Flow Integration Tests', () => {
 
       // Mock Qdrant service to throw errors
       const errorQdrantService = {
-        healthCheck: async () => { throw new Error('Connection failed'); },
-        collectionExists: async () => { throw new Error('Query failed'); },
+        healthCheck: async () => {
+          throw new Error('Connection failed');
+        },
+        collectionExists: async () => {
+          throw new Error('Query failed');
+        },
       };
 
       const errorStartupService = new StartupService(
@@ -287,17 +292,17 @@ describe('Startup Flow Integration Tests', () => {
           },
         },
       };
-      
+
       await configService.saveConfiguration(initialConfig);
-      
+
       // Add some files to change content
       await fs.writeFile(path.join(tempDir, 'new-file.ts'), 'console.log("new content");');
-      
+
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionStatus(true);
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.reindexingNeeded, true); // Content changed, should need reindexing
       assert.strictEqual(result.action, 'triggerReindexing'); // Should trigger reindexing due to content change
     });
@@ -305,7 +310,7 @@ describe('Startup Flow Integration Tests', () => {
     it('should not trigger reindexing when content is unchanged', async () => {
       // Generate current content hash
       const currentHash = await configService.generateContentHash(tempDir);
-      
+
       const config: Configuration = {
         ...DEFAULT_CONFIGURATION,
         qdrant: {
@@ -317,14 +322,14 @@ describe('Startup Flow Integration Tests', () => {
           },
         },
       };
-      
+
       await configService.saveConfiguration(config);
-      
+
       mockQdrantService.setConnectionStatus(true);
       mockQdrantService.setCollectionStatus(true);
-      
+
       const result = await startupService.executeStartupFlow(tempDir);
-      
+
       assert.strictEqual(result.reindexingNeeded, false);
       assert.strictEqual(result.action, 'proceedToSearch'); // Should proceed to search when everything is valid
     });
@@ -333,7 +338,7 @@ describe('Startup Flow Integration Tests', () => {
   describe('GitIgnore Integration', () => {
     it('should ensure .gitignore is properly configured', async () => {
       await startupService.executeStartupFlow(tempDir);
-      
+
       // Verify .gitignore contains the config pattern
       const hasPattern = await gitIgnoreManager.patternExists('.context/config.json', tempDir);
       assert.strictEqual(hasPattern, true);
@@ -344,12 +349,12 @@ describe('Startup Flow Integration Tests', () => {
       await startupService.executeStartupFlow(tempDir);
       await startupService.executeStartupFlow(tempDir);
       await startupService.executeStartupFlow(tempDir);
-      
+
       // Check that pattern appears only once
       const gitignorePath = path.join(tempDir, '.gitignore');
       const content = await fs.readFile(gitignorePath, 'utf-8');
       const occurrences = (content.match(/\.context\/config\.json/g) || []).length;
-      
+
       assert.strictEqual(occurrences, 1);
     });
   });

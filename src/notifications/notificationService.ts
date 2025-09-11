@@ -14,17 +14,17 @@
  * - Integration with centralized logging
  */
 
-import * as vscode from "vscode";
-import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import * as vscode from 'vscode';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 /**
  * Notification types
  */
 export enum NotificationType {
-  INFO = "info",
-  WARNING = "warning",
-  ERROR = "error",
-  SUCCESS = "success",
+  INFO = 'info',
+  WARNING = 'warning',
+  ERROR = 'error',
+  SUCCESS = 'success',
 }
 
 /**
@@ -94,9 +94,9 @@ export class NotificationService {
   private config: NotificationConfig;
   private loggingService?: CentralizedLoggingService;
   private notificationHistory: NotificationEntry[] = [];
-  private lastNotificationTime: number = 0;
+  private lastNotificationTime = 0;
   private notificationQueue: NotificationEntry[] = [];
-  private isProcessingQueue: boolean = false;
+  private isProcessingQueue = false;
 
   constructor(loggingService?: CentralizedLoggingService) {
     this.loggingService = loggingService;
@@ -109,16 +109,14 @@ export class NotificationService {
    */
   private loadConfig(): NotificationConfig {
     // Get configuration from VS Code settings
-    const config = vscode.workspace.getConfiguration(
-      "code-context-engine.notifications",
-    );
+    const config = vscode.workspace.getConfiguration('code-context-engine.notifications');
 
     return {
-      enabled: config.get<boolean>("enabled") ?? true,
-      maxHistorySize: config.get<number>("maxHistorySize") ?? 100,
-      showLowPriority: config.get<boolean>("showLowPriority") ?? false,
-      rateLimitMs: config.get<number>("rateLimitMs") ?? 1000,
-      persistNotifications: config.get<boolean>("persistNotifications") ?? true,
+      enabled: config.get<boolean>('enabled') ?? true,
+      maxHistorySize: config.get<number>('maxHistorySize') ?? 100,
+      showLowPriority: config.get<boolean>('showLowPriority') ?? false,
+      rateLimitMs: config.get<number>('rateLimitMs') ?? 1000,
+      persistNotifications: config.get<boolean>('persistNotifications') ?? true,
     };
   }
 
@@ -126,7 +124,9 @@ export class NotificationService {
    * Load notification history from storage
    */
   private loadNotificationHistory(): void {
-    if (!this.config.persistNotifications) return;
+    if (!this.config.persistNotifications) {
+      return;
+    }
 
     try {
       // In a real implementation, this would load from VS Code's global state
@@ -134,11 +134,11 @@ export class NotificationService {
       this.notificationHistory = [];
     } catch (error) {
       this.loggingService?.error(
-        "Failed to load notification history",
+        'Failed to load notification history',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "NotificationService",
+        'NotificationService'
       );
     }
   }
@@ -147,25 +147,27 @@ export class NotificationService {
    * Save notification history to storage
    */
   private saveNotificationHistory(): void {
-    if (!this.config.persistNotifications) return;
+    if (!this.config.persistNotifications) {
+      return;
+    }
 
     try {
       // In a real implementation, this would save to VS Code's global state
       // For now, we'll just log the action
       this.loggingService?.debug(
-        "Notification history saved",
+        'Notification history saved',
         {
           count: this.notificationHistory.length,
         },
-        "NotificationService",
+        'NotificationService'
       );
     } catch (error) {
       this.loggingService?.error(
-        "Failed to save notification history",
+        'Failed to save notification history',
         {
           error: error instanceof Error ? error.message : String(error),
         },
-        "NotificationService",
+        'NotificationService'
       );
     }
   }
@@ -193,10 +195,7 @@ export class NotificationService {
 
     // Limit history size
     if (this.notificationHistory.length > this.config.maxHistorySize) {
-      this.notificationHistory = this.notificationHistory.slice(
-        0,
-        this.config.maxHistorySize,
-      );
+      this.notificationHistory = this.notificationHistory.slice(0, this.config.maxHistorySize);
     }
 
     this.saveNotificationHistory();
@@ -215,9 +214,7 @@ export class NotificationService {
     while (this.notificationQueue.length > 0) {
       if (this.isRateLimited()) {
         // Wait for rate limit to pass
-        await new Promise((resolve) =>
-          setTimeout(resolve, this.config.rateLimitMs),
-        );
+        await new Promise(resolve => setTimeout(resolve, this.config.rateLimitMs));
       }
 
       const notification = this.notificationQueue.shift();
@@ -233,60 +230,44 @@ export class NotificationService {
   /**
    * Show notification immediately
    */
-  private async showNotificationImmediate(
-    notification: NotificationEntry,
-  ): Promise<void> {
+  private async showNotificationImmediate(notification: NotificationEntry): Promise<void> {
     if (!this.config.enabled) {
       return;
     }
 
     // Check priority filtering
-    if (
-      notification.priority === NotificationPriority.LOW &&
-      !this.config.showLowPriority
-    ) {
+    if (notification.priority === NotificationPriority.LOW && !this.config.showLowPriority) {
       return;
     }
 
     try {
       // Create action items for VS Code
-      const actions = notification.actions?.map((action) => action.title) || [];
+      const actions = notification.actions?.map(action => action.title) || [];
 
       let result: string | undefined;
 
       // Show appropriate notification type
       switch (notification.type) {
         case NotificationType.INFO:
-          result = await vscode.window.showInformationMessage(
-            notification.message,
-            ...actions,
-          );
+          result = await vscode.window.showInformationMessage(notification.message, ...actions);
           break;
         case NotificationType.WARNING:
-          result = await vscode.window.showWarningMessage(
-            notification.message,
-            ...actions,
-          );
+          result = await vscode.window.showWarningMessage(notification.message, ...actions);
           break;
         case NotificationType.ERROR:
-          result = await vscode.window.showErrorMessage(
-            notification.message,
-            ...actions,
-          );
+          result = await vscode.window.showErrorMessage(notification.message, ...actions);
           break;
         case NotificationType.SUCCESS:
           result = await vscode.window.showInformationMessage(
             `✓ ${notification.message}`,
-            ...actions,
+            ...actions
           );
           break;
       }
 
       // Handle action selection
       if (result && notification.actions) {
-        const selectedAction = notification.actions.find(
-          (action) => action.title === result,
-        );
+        const selectedAction = notification.actions.find(action => action.title === result);
         if (selectedAction) {
           try {
             await selectedAction.callback();
@@ -295,13 +276,13 @@ export class NotificationService {
             }
           } catch (error) {
             this.loggingService?.error(
-              "Notification action failed",
+              'Notification action failed',
               {
                 error: error instanceof Error ? error.message : String(error),
                 notificationId: notification.id,
                 action: selectedAction.title,
               },
-              "NotificationService",
+              'NotificationService'
             );
           }
         }
@@ -309,22 +290,22 @@ export class NotificationService {
 
       notification.shown = true;
       this.loggingService?.debug(
-        "Notification shown",
+        'Notification shown',
         {
           id: notification.id,
           type: notification.type,
           priority: NotificationPriority[notification.priority],
         },
-        "NotificationService",
+        'NotificationService'
       );
     } catch (error) {
       this.loggingService?.error(
-        "Failed to show notification",
+        'Failed to show notification',
         {
           error: error instanceof Error ? error.message : String(error),
           notificationId: notification.id,
         },
-        "NotificationService",
+        'NotificationService'
       );
     }
   }
@@ -340,13 +321,13 @@ export class NotificationService {
       priority?: NotificationPriority;
       actions?: NotificationAction[];
       metadata?: Record<string, any>;
-    },
+    }
   ): Promise<string> {
     const notification: NotificationEntry = {
       id: this.generateNotificationId(),
       type,
       priority: options?.priority ?? NotificationPriority.NORMAL,
-      title: options?.title ?? "",
+      title: options?.title ?? '',
       message,
       timestamp: new Date(),
       actions: options?.actions,
@@ -370,20 +351,14 @@ export class NotificationService {
   /**
    * Show info notification
    */
-  public async info(
-    message: string,
-    actions?: NotificationAction[],
-  ): Promise<string> {
+  public async info(message: string, actions?: NotificationAction[]): Promise<string> {
     return this.notify(NotificationType.INFO, message, { actions });
   }
 
   /**
    * Show warning notification
    */
-  public async warning(
-    message: string,
-    actions?: NotificationAction[],
-  ): Promise<string> {
+  public async warning(message: string, actions?: NotificationAction[]): Promise<string> {
     return this.notify(NotificationType.WARNING, message, {
       priority: NotificationPriority.HIGH,
       actions,
@@ -393,13 +368,10 @@ export class NotificationService {
   /**
    * Show error notification with automatic "View Logs" action
    */
-  public async error(
-    message: string,
-    actions?: NotificationAction[],
-  ): Promise<string> {
+  public async error(message: string, actions?: NotificationAction[]): Promise<string> {
     // Always add "View Logs" action for error notifications
     const viewLogsAction: NotificationAction = {
-      title: "View Logs",
+      title: 'View Logs',
       callback: () => {
         if (this.loggingService) {
           this.loggingService.showOutputChannel();
@@ -409,9 +381,7 @@ export class NotificationService {
     };
 
     // Combine provided actions with the View Logs action
-    const allActions = actions
-      ? [...actions, viewLogsAction]
-      : [viewLogsAction];
+    const allActions = actions ? [...actions, viewLogsAction] : [viewLogsAction];
 
     return this.notify(NotificationType.ERROR, message, {
       priority: NotificationPriority.CRITICAL,
@@ -422,10 +392,7 @@ export class NotificationService {
   /**
    * Show success notification
    */
-  public async success(
-    message: string,
-    actions?: NotificationAction[],
-  ): Promise<string> {
+  public async success(message: string, actions?: NotificationAction[]): Promise<string> {
     return this.notify(NotificationType.SUCCESS, message, { actions });
   }
 
@@ -436,8 +403,8 @@ export class NotificationService {
     options: ProgressNotification,
     task: (
       progress: vscode.Progress<{ message?: string; increment?: number }>,
-      token: vscode.CancellationToken,
-    ) => Thenable<T>,
+      token: vscode.CancellationToken
+    ) => Thenable<T>
   ): Promise<T> {
     return vscode.window.withProgress(
       {
@@ -445,7 +412,7 @@ export class NotificationService {
         title: options.title,
         cancellable: options.cancellable ?? false,
       },
-      task,
+      task
     );
   }
 
@@ -462,18 +429,14 @@ export class NotificationService {
   public clearHistory(): void {
     this.notificationHistory = [];
     this.saveNotificationHistory();
-    this.loggingService?.info(
-      "Notification history cleared",
-      {},
-      "NotificationService",
-    );
+    this.loggingService?.info('Notification history cleared', {}, 'NotificationService');
   }
 
   /**
    * Get notification by ID
    */
   public getNotification(id: string): NotificationEntry | undefined {
-    return this.notificationHistory.find((n) => n.id === id);
+    return this.notificationHistory.find(n => n.id === id);
   }
 
   /**
@@ -493,9 +456,9 @@ export class NotificationService {
   public updateConfig(newConfig: Partial<NotificationConfig>): void {
     this.config = { ...this.config, ...newConfig };
     this.loggingService?.debug(
-      "Notification configuration updated",
+      'Notification configuration updated',
       { config: this.config },
-      "NotificationService",
+      'NotificationService'
     );
   }
 

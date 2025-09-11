@@ -1,10 +1,10 @@
 /**
  * File Scanner for Enhanced Progress Messages
- * 
+ *
  * This module provides file scanning functionality specifically designed for
  * the enhanced progress messages feature. It builds upon the existing FileWalker
  * but focuses on providing real-time progress updates during file discovery.
- * 
+ *
  * The FileScanner is responsible for:
  * - Scanning the full file structure with progress updates
  * - Counting total files and ignored files
@@ -114,17 +114,17 @@ export class FileScanner {
    */
   private async loadIgnorePatterns(): Promise<void> {
     const ignoreFiles = ['.gitignore', '.geminiignore'];
-    
+
     for (const ignoreFile of ignoreFiles) {
       const ignorePath = path.join(this.workspaceRoot, ignoreFile);
-      
+
       try {
         const ignoreContent = await fs.promises.readFile(ignorePath, 'utf8');
         const lines = ignoreContent
           .split('\n')
           .map(line => line.trim())
           .filter(line => line && !line.startsWith('#'));
-        
+
         this.ignoreInstance.add(lines);
       } catch (error) {
         // Ignore file not found or not readable - this is normal
@@ -140,12 +140,13 @@ export class FileScanner {
     try {
       const entries = await fs.promises.readdir(this.workspaceRoot);
       // Filter out hidden files and common non-code directories
-      const relevantEntries = entries.filter(entry => 
-        !entry.startsWith('.') && 
-        entry !== 'node_modules' &&
-        entry !== 'dist' &&
-        entry !== 'build' &&
-        entry !== 'out'
+      const relevantEntries = entries.filter(
+        entry =>
+          !entry.startsWith('.') &&
+          entry !== 'node_modules' &&
+          entry !== 'dist' &&
+          entry !== 'build' &&
+          entry !== 'out'
       );
       return relevantEntries.length === 0;
     } catch (error) {
@@ -198,8 +199,8 @@ export class FileScanner {
       this.sendProgressMessage({
         type: 'scanStart',
         payload: {
-          message: 'Scanning full file structure...'
-        }
+          message: 'Scanning full file structure...',
+        },
       });
 
       // Check if repository is empty
@@ -209,7 +210,7 @@ export class FileScanner {
           totalFiles: 0,
           ignoredFiles: 0,
           scannedFiles: 0,
-          isEmpty: true
+          isEmpty: true,
         };
 
         this.sendProgressMessage({
@@ -217,8 +218,8 @@ export class FileScanner {
           payload: {
             totalFiles: 0,
             ignoredFiles: 0,
-            message: 'Scan complete: Repository is empty.'
-          }
+            message: 'Scan complete: Repository is empty.',
+          },
         });
 
         return stats;
@@ -291,7 +292,7 @@ export class FileScanner {
         '**/*.dockerfile',
         '**/Dockerfile*',
         '**/Makefile*',
-        '**/*.mk'
+        '**/*.mk',
       ];
 
       const updateInterval = 1000; // Update every 1000 files or every 2 seconds
@@ -304,7 +305,7 @@ export class FileScanner {
           absolute: true,
           dot: false,
           onlyFiles: true,
-          ignore: ['node_modules/**', '.git/**'] // Basic ignore patterns for performance
+          ignore: ['node_modules/**', '.git/**'], // Basic ignore patterns for performance
         });
 
         totalFiles = allFiles.length;
@@ -327,8 +328,8 @@ export class FileScanner {
               payload: {
                 scannedFiles,
                 ignoredFiles,
-                message: `Scanned ${scannedFiles} files, ${ignoredFiles} ignored...`
-              }
+                message: `Scanned ${scannedFiles} files, ${ignoredFiles} ignored...`,
+              },
             });
             lastUpdateTime = now;
           }
@@ -338,7 +339,7 @@ export class FileScanner {
           totalFiles,
           ignoredFiles,
           scannedFiles,
-          isEmpty: false
+          isEmpty: false,
         };
 
         this.loggingService?.info(
@@ -347,7 +348,7 @@ export class FileScanner {
             totalFiles,
             ignoredFiles,
             scannedFiles,
-            workspaceRoot: this.workspaceRoot
+            workspaceRoot: this.workspaceRoot,
           },
           'FileScanner'
         );
@@ -358,17 +359,15 @@ export class FileScanner {
           payload: {
             totalFiles,
             ignoredFiles,
-            message: `Scan complete: ${totalFiles} files in repo, ${ignoredFiles} files not considered.`
-          }
+            message: `Scan complete: ${totalFiles} files in repo, ${ignoredFiles} files not considered.`,
+          },
         });
 
         return stats;
-
       } catch (innerError) {
         // Handle errors from the inner try block (fast-glob operations)
         throw innerError;
       }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -378,7 +377,7 @@ export class FileScanner {
           error: errorMessage,
           workspaceRoot: this.workspaceRoot,
           scannedFiles: 0,
-          ignoredFiles: 0
+          ignoredFiles: 0,
         },
         'FileScanner'
       );
@@ -389,15 +388,15 @@ export class FileScanner {
         payload: {
           totalFiles: 0,
           ignoredFiles: 0,
-          message: `Scan failed: ${errorMessage}`
-        }
+          message: `Scan failed: ${errorMessage}`,
+        },
       });
 
       return {
         totalFiles: 0,
         ignoredFiles: 0,
         scannedFiles: 0,
-        isEmpty: false
+        isEmpty: false,
       };
     }
   }

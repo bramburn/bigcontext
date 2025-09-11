@@ -1,5 +1,5 @@
-import axios, { AxiosInstance } from "axios";
-import { IEmbeddingProvider, EmbeddingConfig } from "./embeddingProvider";
+import axios, { AxiosInstance } from 'axios';
+import { IEmbeddingProvider, EmbeddingConfig } from './embeddingProvider';
 
 /**
  * OpenAI embedding provider implementation
@@ -45,10 +45,10 @@ export class OpenAIProvider implements IEmbeddingProvider {
    */
   constructor(config: EmbeddingConfig) {
     // Set model with fallback to a popular default
-    this.model = config.model || "text-embedding-ada-002";
+    this.model = config.model || 'text-embedding-ada-002';
 
     // API key is required for OpenAI services
-    this.apiKey = config.apiKey || "";
+    this.apiKey = config.apiKey || '';
 
     // Set batch size with larger default since OpenAI supports bigger batches
     this.maxBatchSize = config.maxBatchSize || 100;
@@ -58,17 +58,15 @@ export class OpenAIProvider implements IEmbeddingProvider {
 
     // Validate that API key is provided
     if (!this.apiKey) {
-      throw new Error(
-        "OpenAI API key is required. Please set it in VS Code settings.",
-      );
+      throw new Error('OpenAI API key is required. Please set it in VS Code settings.');
     }
 
     // Configure HTTP client for OpenAI API communication with authentication
     this.client = axios.create({
-      baseURL: "https://api.openai.com/v1",
+      baseURL: 'https://api.openai.com/v1',
       timeout: this.timeout,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${this.apiKey}`,
       },
     });
@@ -120,9 +118,7 @@ export class OpenAIProvider implements IEmbeddingProvider {
 
     // Log warnings if there were any processing errors
     if (errors.length > 0) {
-      console.warn(
-        `OpenAI embedding generation completed with ${errors.length} errors`,
-      );
+      console.warn(`OpenAI embedding generation completed with ${errors.length} errors`);
     }
 
     return embeddings;
@@ -145,10 +141,10 @@ export class OpenAIProvider implements IEmbeddingProvider {
    */
   private async processBatch(chunks: string[]): Promise<number[][]> {
     try {
-      const response = await this.client.post("/embeddings", {
+      const response = await this.client.post('/embeddings', {
         model: this.model,
         input: chunks,
-        encoding_format: "float",
+        encoding_format: 'float',
       });
 
       // Validate response format and extract embeddings
@@ -156,32 +152,26 @@ export class OpenAIProvider implements IEmbeddingProvider {
         // OpenAI returns embeddings in the same order as input
         return response.data.data.map((item: any) => item.embedding);
       } else {
-        throw new Error("Invalid response format from OpenAI API");
+        throw new Error('Invalid response format from OpenAI API');
       }
     } catch (error) {
       // Handle specific error cases with helpful messages
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 401) {
-          throw new Error(
-            "Invalid OpenAI API key. Please check your API key in VS Code settings.",
-          );
+          throw new Error('Invalid OpenAI API key. Please check your API key in VS Code settings.');
         } else if (error.response?.status === 429) {
-          throw new Error(
-            "OpenAI API rate limit exceeded. Please try again later.",
-          );
+          throw new Error('OpenAI API rate limit exceeded. Please try again later.');
         } else if (error.response?.status === 400) {
           const errorData = error.response.data;
-          if (errorData?.error?.code === "invalid_request_error") {
+          if (errorData?.error?.code === 'invalid_request_error') {
             throw new Error(`OpenAI API error: ${errorData.error.message}`);
           }
-          throw new Error("Bad request to OpenAI API. Check your input data.");
+          throw new Error('Bad request to OpenAI API. Check your input data.');
         } else if (error.response?.status === 404) {
-          throw new Error(
-            `Model '${this.model}' not found. Please check the model name.`,
-          );
+          throw new Error(`Model '${this.model}' not found. Please check the model name.`);
         } else {
           throw new Error(
-            `OpenAI API error (${error.response?.status}): ${error.response?.data?.error?.message || error.message}`,
+            `OpenAI API error (${error.response?.status}): ${error.response?.data?.error?.message || error.message}`
           );
         }
       } else {
@@ -202,9 +192,9 @@ export class OpenAIProvider implements IEmbeddingProvider {
   getDimensions(): number {
     // Dimensions for popular OpenAI embedding models
     const modelDimensions: Record<string, number> = {
-      "text-embedding-ada-002": 1536,
-      "text-embedding-3-small": 1536,
-      "text-embedding-3-large": 3072,
+      'text-embedding-ada-002': 1536,
+      'text-embedding-3-small': 1536,
+      'text-embedding-3-large': 3072,
     };
 
     // Return known dimension or default to ada-002 dimensions for unknown models
@@ -237,10 +227,10 @@ export class OpenAIProvider implements IEmbeddingProvider {
   async isAvailable(): Promise<boolean> {
     try {
       // Test with a simple embedding request to verify connectivity and auth
-      const response = await this.client.post("/embeddings", {
+      const response = await this.client.post('/embeddings', {
         model: this.model,
-        input: "test",
-        encoding_format: "float",
+        input: 'test',
+        encoding_format: 'float',
       });
 
       return response.status === 200 && response.data?.data?.length > 0;
@@ -248,22 +238,20 @@ export class OpenAIProvider implements IEmbeddingProvider {
       // Provide specific error messages for different failure scenarios
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 401) {
-          console.error("OpenAI API key is invalid or missing");
+          console.error('OpenAI API key is invalid or missing');
         } else if (error.response?.status === 404) {
           console.error(`OpenAI model '${this.model}' not found`);
         } else if (error.response?.status === 429) {
-          console.warn(
-            "OpenAI API rate limit exceeded, but service is available",
-          );
+          console.warn('OpenAI API rate limit exceeded, but service is available');
           return true; // Rate limit means the service is available, just busy
         } else {
           console.error(
-            "OpenAI API availability check failed:",
-            error.response?.data || error.message,
+            'OpenAI API availability check failed:',
+            error.response?.data || error.message
           );
         }
       } else {
-        console.error("Failed to check OpenAI availability:", error);
+        console.error('Failed to check OpenAI availability:', error);
       }
       return false;
     }
@@ -315,7 +303,7 @@ export class OpenAIProvider implements IEmbeddingProvider {
    * @param maxTokens - Maximum allowed tokens (default: 8191)
    * @returns True if text is within token limits
    */
-  isWithinTokenLimit(text: string, maxTokens: number = 8191): boolean {
+  isWithinTokenLimit(text: string, maxTokens = 8191): boolean {
     return this.estimateTokens(text) <= maxTokens;
   }
 
@@ -329,7 +317,7 @@ export class OpenAIProvider implements IEmbeddingProvider {
    * @param maxTokens - Maximum allowed tokens (default: 8191)
    * @returns Truncated text that fits within token limits
    */
-  truncateToTokenLimit(text: string, maxTokens: number = 8191): string {
+  truncateToTokenLimit(text: string, maxTokens = 8191): string {
     const estimatedTokens = this.estimateTokens(text);
     if (estimatedTokens <= maxTokens) {
       return text;
@@ -338,6 +326,6 @@ export class OpenAIProvider implements IEmbeddingProvider {
     // Rough truncation based on character count
     // This is a simplification - proper truncation would use actual tokenization
     const maxChars = maxTokens * 4;
-    return text.substring(0, maxChars - 3) + "...";
+    return text.substring(0, maxChars - 3) + '...';
   }
 }

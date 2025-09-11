@@ -19,10 +19,31 @@
             "warn",
             {
                 "selector": "variable",
-                "format": [ "camelCase", "PascalCase" ]
+                "format": ["camelCase", "PascalCase"]
             }
         ],
         "@typescript-eslint/semi": "warn",
+        "@typescript-eslint/no-var-requires": "off",
+        "@typescript-eslint/no-empty-function": [
+            "warn",
+            {
+                "allow": [
+                    "private-constructors",
+                    "protected-constructors",
+                    "methods",
+                    "arrowFunctions"
+                ]
+            }
+        ],
+        "@typescript-eslint/ban-types": [
+            "warn",
+            {
+                "types": {
+                    "Function": false
+                }
+            }
+        ],
+        "@typescript-eslint/ban-ts-comment": "warn",
         "curly": "warn",
         "eqeqeq": "warn",
         "no-throw-literal": "warn",

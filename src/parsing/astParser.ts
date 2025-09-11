@@ -16,10 +16,10 @@
  * - Graceful handling of syntax errors with optional skipping
  */
 
-import Parser from "tree-sitter";
-import TypeScript from "tree-sitter-typescript";
-import Python from "tree-sitter-python";
-import CSharp from "tree-sitter-c-sharp";
+import Parser from 'tree-sitter';
+import TypeScript from 'tree-sitter-typescript';
+import Python from 'tree-sitter-python';
+import CSharp from 'tree-sitter-c-sharp';
 import { IConfigurationService } from '../services/interfaces/IConfigurationService';
 
 // TODO: (agent) Setup mono repo for our application to build and setup our ast parser modules
@@ -28,11 +28,7 @@ import { IConfigurationService } from '../services/interfaces/IConfigurationServ
  * Defines the programming languages supported by the AST parser.
  * Currently supports TypeScript, JavaScript, Python, and C#.
  */
-export type SupportedLanguage =
-  | "typescript"
-  | "javascript"
-  | "python"
-  | "csharp";
+export type SupportedLanguage = 'typescript' | 'javascript' | 'python' | 'csharp';
 
 /**
  * Parse result with error information and configuration-aware behavior
@@ -77,10 +73,10 @@ export class AstParser {
     this.configService = configService;
 
     // Initialize supported languages
-    this.languages.set("typescript", TypeScript.typescript);
-    this.languages.set("javascript", TypeScript.javascript);
-    this.languages.set("python", Python);
-    this.languages.set("csharp", CSharp);
+    this.languages.set('typescript', TypeScript.typescript);
+    this.languages.set('javascript', TypeScript.javascript);
+    this.languages.set('python', Python);
+    this.languages.set('csharp', CSharp);
   }
 
   /**
@@ -127,7 +123,9 @@ export class AstParser {
         this.parser.setLanguage(languageGrammar);
         console.log(`AstParser: Language ${language} set successfully`);
       } catch (setLanguageError) {
-        throw new Error(`Failed to set language ${language}: ${setLanguageError instanceof Error ? setLanguageError.message : String(setLanguageError)}`);
+        throw new Error(
+          `Failed to set language ${language}: ${setLanguageError instanceof Error ? setLanguageError.message : String(setLanguageError)}`
+        );
       }
 
       // Additional validation before parsing
@@ -146,7 +144,9 @@ export class AstParser {
             const normalizedCode = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             tree = this.parser.parse(normalizedCode);
             if (tree) {
-              console.log(`AstParser: Successfully parsed ${language} after normalizing line endings`);
+              console.log(
+                `AstParser: Successfully parsed ${language} after normalizing line endings`
+              );
             }
           } catch (retryError) {
             console.error(`AstParser: Retry parse failed for ${language}:`, retryError);
@@ -154,14 +154,18 @@ export class AstParser {
         }
 
         if (!tree) {
-          throw new Error(`Tree-sitter parse failed for ${language}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+          throw new Error(
+            `Tree-sitter parse failed for ${language}: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+          );
         }
       }
 
       if (!tree) {
         // Provide more detailed error information
         const codePreview = code.substring(0, 200).replace(/\n/g, '\\n');
-        throw new Error(`Failed to parse code for language: ${language}. Code preview: "${codePreview}..."`);
+        throw new Error(
+          `Failed to parse code for language: ${language}. Code preview: "${codePreview}..."`
+        );
       }
 
       // Validate the parsed tree
@@ -169,7 +173,9 @@ export class AstParser {
         throw new Error(`Parsed tree has no root node for language: ${language}`);
       }
 
-      console.log(`AstParser: Successfully parsed ${language} code - root node type: ${tree.rootNode.type}`);
+      console.log(
+        `AstParser: Successfully parsed ${language} code - root node type: ${tree.rootNode.type}`
+      );
       return tree;
     } catch (error) {
       console.error(`Error parsing code for language ${language}:`, error);
@@ -189,11 +195,7 @@ export class AstParser {
    * @param language - The programming language of the source code
    * @returns A ParseResult object with tree, errors, and metadata
    */
-  public parseRobust(
-    filePath: string,
-    code: string,
-    language: SupportedLanguage,
-  ): ParseResult {
+  public parseRobust(filePath: string, code: string, language: SupportedLanguage): ParseResult {
     const errors: string[] = [];
     let tree: Parser.Tree | null = null;
     let errorsSkipped = false;
@@ -230,7 +232,6 @@ export class AstParser {
         errorsSkipped,
         filePath,
       };
-
     } catch (error) {
       const errorMessage = `Parse error: ${error instanceof Error ? error.message : String(error)}`;
       errors.push(errorMessage);
@@ -257,7 +258,7 @@ export class AstParser {
    */
   public parseWithErrorRecovery(
     language: SupportedLanguage,
-    code: string,
+    code: string
   ): { tree: Parser.Tree | null; errors: string[] } {
     const errors: string[] = [];
 
@@ -271,9 +272,7 @@ export class AstParser {
       return { tree, errors };
     } catch (error) {
       // Handle any exceptions during parsing
-      errors.push(
-        `Parse error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      errors.push(`Parse error: ${error instanceof Error ? error.message : String(error)}`);
       return { tree: null, errors };
     }
   }
@@ -305,10 +304,10 @@ export class AstParser {
    */
   private collectSyntaxErrors(node: Parser.SyntaxNode, errors: string[]): void {
     if (node.hasError) {
-      if (node.type === "ERROR") {
+      if (node.type === 'ERROR') {
         // Convert to 1-based line and column numbers for human readability
         errors.push(
-          `Syntax error at line ${node.startPosition.row + 1}, column ${node.startPosition.column + 1}`,
+          `Syntax error at line ${node.startPosition.row + 1}, column ${node.startPosition.column + 1}`
         );
       }
 
@@ -329,19 +328,19 @@ export class AstParser {
    * @returns The detected language or null if the extension is not supported
    */
   public getLanguageFromFilePath(filePath: string): SupportedLanguage | null {
-    const extension = filePath.toLowerCase().split(".").pop();
+    const extension = filePath.toLowerCase().split('.').pop();
 
     switch (extension) {
-      case "ts":
-      case "tsx":
-        return "typescript";
-      case "js":
-      case "jsx":
-        return "javascript";
-      case "py":
-        return "python";
-      case "cs":
-        return "csharp";
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'py':
+        return 'python';
+      case 'cs':
+        return 'csharp';
       default:
         return null;
     }
@@ -406,10 +405,7 @@ export class AstParser {
    * @param nodeType - The type of nodes to find (e.g., 'function_declaration')
    * @returns An array of matching syntax nodes
    */
-  public findNodesByType(
-    tree: Parser.Tree,
-    nodeType: string,
-  ): Parser.SyntaxNode[] {
+  public findNodesByType(tree: Parser.Tree, nodeType: string): Parser.SyntaxNode[] {
     const nodes: Parser.SyntaxNode[] = [];
 
     /**
@@ -444,7 +440,7 @@ export class AstParser {
   public queryNodes(
     tree: Parser.Tree,
     language: SupportedLanguage,
-    queryString: string,
+    queryString: string
   ): Parser.QueryMatch[] {
     try {
       const languageGrammar = this.languages.get(language);

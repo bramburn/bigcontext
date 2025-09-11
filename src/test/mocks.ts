@@ -5,10 +5,10 @@
  * but provide predictable, controllable behavior for unit testing.
  */
 
-import { QdrantPoint, SearchResult } from "../db/qdrantService";
-import { IEmbeddingProvider } from "../embeddings/embeddingProvider";
-import { CodeChunk, ChunkType } from "../parsing/chunker";
-import { SupportedLanguage } from "../parsing/astParser";
+import { QdrantPoint, SearchResult } from '../db/qdrantService';
+import { IEmbeddingProvider } from '../embeddings/embeddingProvider';
+import { CodeChunk, ChunkType } from '../parsing/chunker';
+import { SupportedLanguage } from '../parsing/astParser';
 import {
   ConfigService,
   DatabaseConfig,
@@ -16,7 +16,7 @@ import {
   OpenAIConfig,
   IndexingConfig,
   ExtensionConfig,
-} from "../configService";
+} from '../configService';
 
 /**
  * Mock implementation of QdrantService for testing
@@ -32,8 +32,8 @@ export class MockQdrantService {
 
   async createCollectionIfNotExists(
     collectionName: string,
-    vectorSize: number = 768,
-    distance: "Cosine" | "Dot" | "Euclid" = "Cosine",
+    vectorSize = 768,
+    distance: 'Cosine' | 'Dot' | 'Euclid' = 'Cosine'
   ): Promise<boolean> {
     this.collections.add(collectionName);
     if (!this.points.has(collectionName)) {
@@ -48,10 +48,7 @@ export class MockQdrantService {
     return true;
   }
 
-  async upsertPoints(
-    collectionName: string,
-    points: QdrantPoint[],
-  ): Promise<boolean> {
+  async upsertPoints(collectionName: string, points: QdrantPoint[]): Promise<boolean> {
     if (!this.collections.has(collectionName)) {
       await this.createCollectionIfNotExists(collectionName);
     }
@@ -60,9 +57,7 @@ export class MockQdrantService {
 
     // Update or insert points
     for (const newPoint of points) {
-      const existingIndex = existingPoints.findIndex(
-        (p) => p.id === newPoint.id,
-      );
+      const existingIndex = existingPoints.findIndex(p => p.id === newPoint.id);
       if (existingIndex >= 0) {
         existingPoints[existingIndex] = newPoint;
       } else {
@@ -77,8 +72,8 @@ export class MockQdrantService {
   async search(
     collectionName: string,
     queryVector: number[],
-    limit: number = 10,
-    filter?: any,
+    limit = 10,
+    filter?: any
   ): Promise<SearchResult[]> {
     const points = this.points.get(collectionName) || [];
 
@@ -97,7 +92,7 @@ export class MockQdrantService {
 
     const points = this.points.get(collectionName) || [];
     return {
-      status: "green",
+      status: 'green',
       vectors_count: points.length,
       indexed_vectors_count: points.length,
       points_count: points.length,
@@ -125,13 +120,11 @@ export class MockQdrantService {
 export class MockEmbeddingProvider implements IEmbeddingProvider {
   private isAvailableFlag = true;
   private dimensions = 768;
-  private providerName = "mock-provider";
+  private providerName = 'mock-provider';
 
   async generateEmbeddings(chunks: string[]): Promise<number[][]> {
     // Generate mock embeddings - arrays of random numbers
-    return chunks.map(() =>
-      Array.from({ length: this.dimensions }, () => Math.random() - 0.5),
-    );
+    return chunks.map(() => Array.from({ length: this.dimensions }, () => Math.random() - 0.5));
   }
 
   getDimensions(): number {
@@ -186,8 +179,8 @@ export class MockFileWalker {
     filesByExtension: Record<string, number>;
   }> {
     const filesByExtension: Record<string, number> = {};
-    this.mockFiles.forEach((file) => {
-      const ext = file.substring(file.lastIndexOf("."));
+    this.mockFiles.forEach(file => {
+      const ext = file.substring(file.lastIndexOf('.'));
       filesByExtension[ext] = (filesByExtension[ext] || 0) + 1;
     });
 
@@ -198,25 +191,14 @@ export class MockFileWalker {
   }
 
   public isCodeFile(filePath: string): boolean {
-    const codeExtensions = [
-      ".ts",
-      ".tsx",
-      ".js",
-      ".jsx",
-      ".py",
-      ".cs",
-      ".java",
-    ];
-    return codeExtensions.some((ext) => filePath.endsWith(ext));
+    const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.cs', '.java'];
+    return codeExtensions.some(ext => filePath.endsWith(ext));
   }
 
-  async getFiles(
-    extensions: string[] = [],
-    excludePatterns: string[] = [],
-  ): Promise<string[]> {
-    return this.mockFiles.filter((file) => {
+  async getFiles(extensions: string[] = [], excludePatterns: string[] = []): Promise<string[]> {
+    return this.mockFiles.filter(file => {
       if (extensions.length > 0) {
-        return extensions.some((ext) => file.endsWith(ext));
+        return extensions.some(ext => file.endsWith(ext));
       }
       return true;
     });
@@ -269,7 +251,7 @@ export class MockChunker {
     content: string,
     filePath: string,
     language: SupportedLanguage,
-    astResult?: any,
+    astResult?: any
   ): CodeChunk[] {
     if (this.mockChunks.length > 0) {
       return this.mockChunks;
@@ -335,18 +317,18 @@ export class MockConfigService {
 
   constructor(initialConfig?: any) {
     this.mockConfig = initialConfig || {
-      databaseConnectionString: "mock-qdrant-connection",
-      embeddingProvider: "ollama",
-      ollamaModel: "mock-ollama-model",
-      ollamaApiUrl: "http://mock-ollama:11434",
+      databaseConnectionString: 'mock-qdrant-connection',
+      embeddingProvider: 'ollama',
+      ollamaModel: 'mock-ollama-model',
+      ollamaApiUrl: 'http://mock-ollama:11434',
       ollamaMaxBatchSize: 10,
       ollamaTimeout: 30000,
-      openaiApiKey: "mock-openai-key",
-      openaiModel: "mock-openai-model",
+      openaiApiKey: 'mock-openai-key',
+      openaiModel: 'mock-openai-model',
       openaiMaxBatchSize: 100,
       openaiTimeout: 60000,
-      excludePatterns: ["**/mock_exclude/**"],
-      supportedLanguages: ["typescript", "python"],
+      excludePatterns: ['**/mock_exclude/**'],
+      supportedLanguages: ['typescript', 'python'],
       maxFileSize: 10 * 1024 * 1024,
       indexingChunkSize: 500,
       indexingChunkOverlap: 100,
@@ -355,7 +337,7 @@ export class MockConfigService {
       enableDebugLogging: false,
       maxSearchResults: 20,
       minSimilarityThreshold: 0.5,
-      indexingIntensity: "High",
+      indexingIntensity: 'High',
     };
   }
 
@@ -369,12 +351,12 @@ export class MockConfigService {
 
   public getDatabaseConfig(): DatabaseConfig {
     return {
-      type: "qdrant",
+      type: 'qdrant',
       connectionString: this.getQdrantConnectionString(),
     };
   }
 
-  public getEmbeddingProvider(): "ollama" | "openai" {
+  public getEmbeddingProvider(): 'ollama' | 'openai' {
     return this.mockConfig.embeddingProvider;
   }
 
@@ -436,14 +418,14 @@ export class MockConfigService {
     return this.mockConfig.enableDebugLogging;
   }
 
-  public getIndexingIntensity(): "High" | "Medium" | "Low" {
+  public getIndexingIntensity(): 'High' | 'Medium' | 'Low' {
     return this.mockConfig.indexingIntensity;
   }
 
-  public isProviderConfigured(provider: "ollama" | "openai"): boolean {
-    if (provider === "ollama") {
+  public isProviderConfigured(provider: 'ollama' | 'openai'): boolean {
+    if (provider === 'ollama') {
       return !!this.getOllamaConfig().apiUrl;
-    } else if (provider === "openai") {
+    } else if (provider === 'openai') {
       return !!this.getOpenAIConfig().apiKey;
     }
     return false;
@@ -451,7 +433,7 @@ export class MockConfigService {
 
   public getCurrentProviderConfig(): OllamaConfig | OpenAIConfig {
     const providerType = this.getEmbeddingProvider();
-    if (providerType === "ollama") {
+    if (providerType === 'ollama') {
       return this.getOllamaConfig();
     }
     return this.getOpenAIConfig();

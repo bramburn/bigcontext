@@ -19,7 +19,7 @@ export interface ConfigurationSchema {
 export interface ConfigurationMetadata {
   name: string;
   description?: string;
-  environment: "development" | "staging" | "production" | "custom";
+  environment: 'development' | 'staging' | 'production' | 'custom';
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -28,7 +28,7 @@ export interface ConfigurationMetadata {
 }
 
 export interface DatabaseConfiguration {
-  provider: "qdrant" | "chromadb" | "pinecone";
+  provider: 'qdrant' | 'chromadb' | 'pinecone';
   connection: {
     url?: string;
     apiKey?: string;
@@ -43,7 +43,7 @@ export interface DatabaseConfiguration {
     collections: Array<{
       name: string;
       vectorSize: number;
-      distance: "cosine" | "euclidean" | "dot";
+      distance: 'cosine' | 'euclidean' | 'dot';
       metadata?: Record<string, any>;
     }>;
   };
@@ -60,7 +60,7 @@ export interface DatabaseConfiguration {
 }
 
 export interface EmbeddingConfiguration {
-  provider: "ollama" | "openai";
+  provider: 'ollama' | 'openai';
   connection: {
     url?: string;
     apiKey?: string;
@@ -123,7 +123,7 @@ export interface SearchConfiguration {
     includeContent: boolean;
   };
   ranking: {
-    algorithm: "similarity" | "hybrid" | "semantic";
+    algorithm: 'similarity' | 'hybrid' | 'semantic';
     weights: {
       similarity: number;
       recency: number;
@@ -147,7 +147,7 @@ export interface PerformanceConfiguration {
   memory: {
     maxHeapSize?: string;
     cacheSize: number;
-    gcStrategy?: "default" | "aggressive" | "conservative";
+    gcStrategy?: 'default' | 'aggressive' | 'conservative';
   };
   concurrency: {
     maxConcurrentRequests: number;
@@ -182,7 +182,7 @@ export interface SecurityConfiguration {
   };
   audit: {
     enabled: boolean;
-    logLevel: "error" | "warn" | "info" | "debug";
+    logLevel: 'error' | 'warn' | 'info' | 'debug';
     retentionDays: number;
   };
 }
@@ -197,7 +197,7 @@ export interface ValidationError {
   path: string;
   message: string;
   code: string;
-  severity: "error" | "warning";
+  severity: 'error' | 'warning';
 }
 
 export interface ValidationWarning {
@@ -207,8 +207,8 @@ export interface ValidationWarning {
 }
 
 export class ConfigurationValidator {
-  private static readonly CURRENT_VERSION = "1.0.0";
-  private static readonly SUPPORTED_VERSIONS = ["1.0.0"];
+  private static readonly CURRENT_VERSION = '1.0.0';
+  private static readonly SUPPORTED_VERSIONS = ['1.0.0'];
 
   /**
    * Validate a complete configuration object
@@ -220,17 +220,17 @@ export class ConfigurationValidator {
     // Version validation
     if (!config.version) {
       errors.push({
-        path: "version",
-        message: "Configuration version is required",
-        code: "MISSING_VERSION",
-        severity: "error",
+        path: 'version',
+        message: 'Configuration version is required',
+        code: 'MISSING_VERSION',
+        severity: 'error',
       });
     } else if (!this.SUPPORTED_VERSIONS.includes(config.version)) {
       errors.push({
-        path: "version",
+        path: 'version',
         message: `Unsupported configuration version: ${config.version}`,
-        code: "UNSUPPORTED_VERSION",
-        severity: "error",
+        code: 'UNSUPPORTED_VERSION',
+        severity: 'error',
       });
     }
 
@@ -239,10 +239,10 @@ export class ConfigurationValidator {
       this.validateMetadata(config.metadata, errors, warnings);
     } else {
       errors.push({
-        path: "metadata",
-        message: "Configuration metadata is required",
-        code: "MISSING_METADATA",
-        severity: "error",
+        path: 'metadata',
+        message: 'Configuration metadata is required',
+        code: 'MISSING_METADATA',
+        severity: 'error',
       });
     }
 
@@ -251,10 +251,10 @@ export class ConfigurationValidator {
       this.validateDatabase(config.database, errors, warnings);
     } else {
       errors.push({
-        path: "database",
-        message: "Database configuration is required",
-        code: "MISSING_DATABASE",
-        severity: "error",
+        path: 'database',
+        message: 'Database configuration is required',
+        code: 'MISSING_DATABASE',
+        severity: 'error',
       });
     }
 
@@ -263,10 +263,10 @@ export class ConfigurationValidator {
       this.validateEmbedding(config.embedding, errors, warnings);
     } else {
       errors.push({
-        path: "embedding",
-        message: "Embedding configuration is required",
-        code: "MISSING_EMBEDDING",
-        severity: "error",
+        path: 'embedding',
+        message: 'Embedding configuration is required',
+        code: 'MISSING_EMBEDDING',
+        severity: 'error',
       });
     }
 
@@ -297,30 +297,30 @@ export class ConfigurationValidator {
   private static validateMetadata(
     metadata: ConfigurationMetadata,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (!metadata.name || metadata.name.trim().length === 0) {
       errors.push({
-        path: "metadata.name",
-        message: "Configuration name is required",
-        code: "MISSING_NAME",
-        severity: "error",
+        path: 'metadata.name',
+        message: 'Configuration name is required',
+        code: 'MISSING_NAME',
+        severity: 'error',
       });
     }
 
     if (!metadata.environment) {
       warnings.push({
-        path: "metadata.environment",
-        message: "Environment not specified, defaulting to development",
-        suggestion: "Specify environment for better configuration management",
+        path: 'metadata.environment',
+        message: 'Environment not specified, defaulting to development',
+        suggestion: 'Specify environment for better configuration management',
       });
     }
 
     if (!metadata.createdAt) {
       warnings.push({
-        path: "metadata.createdAt",
-        message: "Creation timestamp missing",
-        suggestion: "Add timestamp for better version tracking",
+        path: 'metadata.createdAt',
+        message: 'Creation timestamp missing',
+        suggestion: 'Add timestamp for better version tracking',
       });
     }
   }
@@ -328,26 +328,26 @@ export class ConfigurationValidator {
   private static validateDatabase(
     database: DatabaseConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (!database.provider) {
       errors.push({
-        path: "database.provider",
-        message: "Database provider is required",
-        code: "MISSING_PROVIDER",
-        severity: "error",
+        path: 'database.provider',
+        message: 'Database provider is required',
+        code: 'MISSING_PROVIDER',
+        severity: 'error',
       });
     }
 
     // Provider-specific validation
     switch (database.provider) {
-      case "qdrant":
+      case 'qdrant':
         this.validateQdrantConfig(database, errors, warnings);
         break;
-      case "chromadb":
+      case 'chromadb':
         this.validateChromaDBConfig(database, errors, warnings);
         break;
-      case "pinecone":
+      case 'pinecone':
         this.validatePineconeConfig(database, errors, warnings);
         break;
     }
@@ -355,10 +355,10 @@ export class ConfigurationValidator {
     // Collections validation
     if (!database.collections?.defaultCollection) {
       errors.push({
-        path: "database.collections.defaultCollection",
-        message: "Default collection name is required",
-        code: "MISSING_DEFAULT_COLLECTION",
-        severity: "error",
+        path: 'database.collections.defaultCollection',
+        message: 'Default collection name is required',
+        code: 'MISSING_DEFAULT_COLLECTION',
+        severity: 'error',
       });
     }
   }
@@ -366,54 +366,53 @@ export class ConfigurationValidator {
   private static validateEmbedding(
     embedding: EmbeddingConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (!embedding.provider) {
       errors.push({
-        path: "embedding.provider",
-        message: "Embedding provider is required",
-        code: "MISSING_PROVIDER",
-        severity: "error",
+        path: 'embedding.provider',
+        message: 'Embedding provider is required',
+        code: 'MISSING_PROVIDER',
+        severity: 'error',
       });
     }
 
     if (!embedding.model?.name) {
       errors.push({
-        path: "embedding.model.name",
-        message: "Embedding model name is required",
-        code: "MISSING_MODEL",
-        severity: "error",
+        path: 'embedding.model.name',
+        message: 'Embedding model name is required',
+        code: 'MISSING_MODEL',
+        severity: 'error',
       });
     }
 
     if (!embedding.model?.dimensions || embedding.model.dimensions <= 0) {
       errors.push({
-        path: "embedding.model.dimensions",
-        message: "Valid embedding dimensions are required",
-        code: "INVALID_DIMENSIONS",
-        severity: "error",
+        path: 'embedding.model.dimensions',
+        message: 'Valid embedding dimensions are required',
+        code: 'INVALID_DIMENSIONS',
+        severity: 'error',
       });
     }
 
     // Provider-specific validation
     switch (embedding.provider) {
-      case "openai":
+      case 'openai':
         if (!embedding.connection?.apiKey) {
           errors.push({
-            path: "embedding.connection.apiKey",
-            message: "OpenAI API key is required",
-            code: "MISSING_API_KEY",
-            severity: "error",
+            path: 'embedding.connection.apiKey',
+            message: 'OpenAI API key is required',
+            code: 'MISSING_API_KEY',
+            severity: 'error',
           });
         }
         break;
-      case "ollama":
+      case 'ollama':
         if (!embedding.connection?.url) {
           warnings.push({
-            path: "embedding.connection.url",
-            message: "Ollama URL not specified, using default",
-            suggestion:
-              "Specify custom URL if not using default localhost:11434",
+            path: 'embedding.connection.url',
+            message: 'Ollama URL not specified, using default',
+            suggestion: 'Specify custom URL if not using default localhost:11434',
           });
         }
         break;
@@ -423,13 +422,13 @@ export class ConfigurationValidator {
   private static validateQdrantConfig(
     database: DatabaseConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (!database.connection?.url) {
       warnings.push({
-        path: "database.connection.url",
-        message: "Qdrant URL not specified, using default",
-        suggestion: "Specify custom URL if not using default localhost:6333",
+        path: 'database.connection.url',
+        message: 'Qdrant URL not specified, using default',
+        suggestion: 'Specify custom URL if not using default localhost:6333',
       });
     }
   }
@@ -437,13 +436,13 @@ export class ConfigurationValidator {
   private static validateChromaDBConfig(
     database: DatabaseConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (!database.connection?.url) {
       warnings.push({
-        path: "database.connection.url",
-        message: "ChromaDB URL not specified, using default",
-        suggestion: "Specify custom URL if not using default localhost:8000",
+        path: 'database.connection.url',
+        message: 'ChromaDB URL not specified, using default',
+        suggestion: 'Specify custom URL if not using default localhost:8000',
       });
     }
   }
@@ -451,23 +450,23 @@ export class ConfigurationValidator {
   private static validatePineconeConfig(
     database: DatabaseConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (!database.connection?.apiKey) {
       errors.push({
-        path: "database.connection.apiKey",
-        message: "Pinecone API key is required",
-        code: "MISSING_API_KEY",
-        severity: "error",
+        path: 'database.connection.apiKey',
+        message: 'Pinecone API key is required',
+        code: 'MISSING_API_KEY',
+        severity: 'error',
       });
     }
 
     if (!database.connection?.environment) {
       errors.push({
-        path: "database.connection.environment",
-        message: "Pinecone environment is required",
-        code: "MISSING_ENVIRONMENT",
-        severity: "error",
+        path: 'database.connection.environment',
+        message: 'Pinecone environment is required',
+        code: 'MISSING_ENVIRONMENT',
+        severity: 'error',
       });
     }
   }
@@ -475,26 +474,23 @@ export class ConfigurationValidator {
   private static validateIndexing(
     indexing: IndexingConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (indexing.processing?.chunkSize && indexing.processing.chunkSize <= 0) {
       errors.push({
-        path: "indexing.processing.chunkSize",
-        message: "Chunk size must be positive",
-        code: "INVALID_CHUNK_SIZE",
-        severity: "error",
+        path: 'indexing.processing.chunkSize',
+        message: 'Chunk size must be positive',
+        code: 'INVALID_CHUNK_SIZE',
+        severity: 'error',
       });
     }
 
-    if (
-      indexing.processing?.parallelism &&
-      indexing.processing.parallelism <= 0
-    ) {
+    if (indexing.processing?.parallelism && indexing.processing.parallelism <= 0) {
       errors.push({
-        path: "indexing.processing.parallelism",
-        message: "Parallelism must be positive",
-        code: "INVALID_PARALLELISM",
-        severity: "error",
+        path: 'indexing.processing.parallelism',
+        message: 'Parallelism must be positive',
+        code: 'INVALID_PARALLELISM',
+        severity: 'error',
       });
     }
   }
@@ -502,14 +498,14 @@ export class ConfigurationValidator {
   private static validateSearch(
     search: SearchConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (search.defaults?.maxResults && search.defaults.maxResults <= 0) {
       errors.push({
-        path: "search.defaults.maxResults",
-        message: "Max results must be positive",
-        code: "INVALID_MAX_RESULTS",
-        severity: "error",
+        path: 'search.defaults.maxResults',
+        message: 'Max results must be positive',
+        code: 'INVALID_MAX_RESULTS',
+        severity: 'error',
       });
     }
 
@@ -518,10 +514,10 @@ export class ConfigurationValidator {
       (search.defaults.minSimilarity < 0 || search.defaults.minSimilarity > 1)
     ) {
       errors.push({
-        path: "search.defaults.minSimilarity",
-        message: "Min similarity must be between 0 and 1",
-        code: "INVALID_MIN_SIMILARITY",
-        severity: "error",
+        path: 'search.defaults.minSimilarity',
+        message: 'Min similarity must be between 0 and 1',
+        code: 'INVALID_MIN_SIMILARITY',
+        severity: 'error',
       });
     }
   }
@@ -529,17 +525,17 @@ export class ConfigurationValidator {
   private static validatePerformance(
     performance: PerformanceConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (
       performance.concurrency?.maxConcurrentRequests &&
       performance.concurrency.maxConcurrentRequests <= 0
     ) {
       errors.push({
-        path: "performance.concurrency.maxConcurrentRequests",
-        message: "Max concurrent requests must be positive",
-        code: "INVALID_CONCURRENCY",
-        severity: "error",
+        path: 'performance.concurrency.maxConcurrentRequests',
+        message: 'Max concurrent requests must be positive',
+        code: 'INVALID_CONCURRENCY',
+        severity: 'error',
       });
     }
   }
@@ -547,17 +543,17 @@ export class ConfigurationValidator {
   private static validateSecurity(
     security: SecurityConfiguration,
     errors: ValidationError[],
-    warnings: ValidationWarning[],
+    warnings: ValidationWarning[]
   ): void {
     if (
       security.access?.rateLimiting?.requestsPerMinute &&
       security.access.rateLimiting.requestsPerMinute <= 0
     ) {
       errors.push({
-        path: "security.access.rateLimiting.requestsPerMinute",
-        message: "Rate limiting requests per minute must be positive",
-        code: "INVALID_RATE_LIMIT",
-        severity: "error",
+        path: 'security.access.rateLimiting.requestsPerMinute',
+        message: 'Rate limiting requests per minute must be positive',
+        code: 'INVALID_RATE_LIMIT',
+        severity: 'error',
       });
     }
   }
@@ -569,25 +565,25 @@ export class ConfigurationValidator {
     return {
       version: this.CURRENT_VERSION,
       metadata: {
-        name: "Default Configuration",
-        description: "Default Code Context Engine configuration",
-        environment: "development",
+        name: 'Default Configuration',
+        description: 'Default Code Context Engine configuration',
+        environment: 'development',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       database: {
-        provider: "qdrant",
+        provider: 'qdrant',
         connection: {
-          url: "http://localhost:6333",
+          url: 'http://localhost:6333',
           timeout: 30000,
         },
         collections: {
-          defaultCollection: "code_context",
+          defaultCollection: 'code_context',
           collections: [
             {
-              name: "code_context",
+              name: 'code_context',
               vectorSize: 384,
-              distance: "cosine",
+              distance: 'cosine',
             },
           ],
         },
@@ -598,13 +594,13 @@ export class ConfigurationValidator {
         },
       },
       embedding: {
-        provider: "ollama",
+        provider: 'ollama',
         connection: {
-          url: "http://localhost:11434",
+          url: 'http://localhost:11434',
           timeout: 30000,
         },
         model: {
-          name: "nomic-embed-text",
+          name: 'nomic-embed-text',
           dimensions: 384,
         },
         advanced: {
@@ -613,22 +609,9 @@ export class ConfigurationValidator {
       },
       indexing: {
         patterns: {
-          include: [
-            "**/*.ts",
-            "**/*.js",
-            "**/*.py",
-            "**/*.java",
-            "**/*.cpp",
-            "**/*.c",
-            "**/*.h",
-          ],
-          exclude: [
-            "**/node_modules/**",
-            "**/dist/**",
-            "**/build/**",
-            "**/.git/**",
-          ],
-          fileTypes: ["typescript", "javascript", "python", "java", "cpp", "c"],
+          include: ['**/*.ts', '**/*.js', '**/*.py', '**/*.java', '**/*.cpp', '**/*.c', '**/*.h'],
+          exclude: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
+          fileTypes: ['typescript', 'javascript', 'python', 'java', 'cpp', 'c'],
           maxFileSize: 1048576, // 1MB
         },
         processing: {
@@ -646,7 +629,7 @@ export class ConfigurationValidator {
           languageDetection: true,
           codeAnalysis: true,
           semanticChunking: false,
-          metadataExtraction: ["language", "functions", "classes", "imports"],
+          metadataExtraction: ['language', 'functions', 'classes', 'imports'],
         },
       },
       search: {
@@ -657,7 +640,7 @@ export class ConfigurationValidator {
           includeContent: true,
         },
         ranking: {
-          algorithm: "similarity",
+          algorithm: 'similarity',
           weights: {
             similarity: 0.7,
             recency: 0.1,
@@ -666,7 +649,7 @@ export class ConfigurationValidator {
           },
         },
         filters: {
-          enabledFilters: ["fileType", "language", "dateRange"],
+          enabledFilters: ['fileType', 'language', 'dateRange'],
           defaultFilters: {},
         },
         advanced: {
@@ -679,7 +662,7 @@ export class ConfigurationValidator {
       performance: {
         memory: {
           cacheSize: 100,
-          gcStrategy: "default",
+          gcStrategy: 'default',
         },
         concurrency: {
           maxConcurrentRequests: 10,
@@ -707,7 +690,7 @@ export class ConfigurationValidator {
         },
         audit: {
           enabled: false,
-          logLevel: "info",
+          logLevel: 'info',
           retentionDays: 30,
         },
       },

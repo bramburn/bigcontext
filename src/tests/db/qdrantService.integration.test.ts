@@ -83,7 +83,8 @@ describe.skipIf(!shouldRunIntegrationTests)('QdrantService Integration Tests', (
         },
         {
           filePath: '/test/string.ts',
-          content: 'export function formatString(str: string): string { return str.trim().toLowerCase(); }',
+          content:
+            'export function formatString(str: string): string { return str.trim().toLowerCase(); }',
           startLine: 10,
           endLine: 12,
           type: 'function',
@@ -203,7 +204,11 @@ describe.skipIf(!shouldRunIntegrationTests)('QdrantService Integration Tests', (
         },
       ];
 
-      const vectors = chunks.map(() => Array(128).fill(0).map(() => Math.random()));
+      const vectors = chunks.map(() =>
+        Array(128)
+          .fill(0)
+          .map(() => Math.random())
+      );
 
       const upserted = await qdrantService.upsertChunks(testCollectionName, chunks, vectors);
       expect(upserted).toBe(true);
@@ -264,7 +269,11 @@ describe.skipIf(!shouldRunIntegrationTests)('QdrantService Integration Tests', (
 
       // Try to upsert with wrong vector dimension
       const wrongSizeVector = Array(64).fill(0.5); // Should be 128
-      const result = await qdrantService.upsertChunks(testCollectionName, [chunk], [wrongSizeVector]);
+      const result = await qdrantService.upsertChunks(
+        testCollectionName,
+        [chunk],
+        [wrongSizeVector]
+      );
       expect(result).toBe(false);
     });
   });

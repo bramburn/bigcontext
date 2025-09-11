@@ -24,7 +24,7 @@ function createMockChunk(id: number): CodeChunk {
     content: `Mock content for chunk ${id}`,
     filePath: `/mock/path/file${id}.ts`,
     startLine: id * 10,
-    endLine: (id * 10) + 5,
+    endLine: id * 10 + 5,
     language: 'typescript',
     metadata: {
       functionName: `mockFunction${id}`,
@@ -215,7 +215,10 @@ describe('QdrantService', () => {
       language: 'typescript',
     });
 
-    const createMockVector = (): number[] => Array(768).fill(0).map(() => Math.random());
+    const createMockVector = (): number[] =>
+      Array(768)
+        .fill(0)
+        .map(() => Math.random());
 
     it('should successfully upsert chunks', async () => {
       mockQdrantClient.getCollections.mockResolvedValue({ collections: [] });
@@ -262,8 +265,12 @@ describe('QdrantService', () => {
       mockQdrantClient.upsert.mockResolvedValue({});
 
       // Create more chunks than batch size
-      const chunks = Array(25).fill(0).map((_, i) => createMockChunk(i));
-      const vectors = Array(25).fill(0).map(() => createMockVector());
+      const chunks = Array(25)
+        .fill(0)
+        .map((_, i) => createMockChunk(i));
+      const vectors = Array(25)
+        .fill(0)
+        .map(() => createMockVector());
 
       const result = await qdrantService.upsertChunks('test_collection', chunks, vectors);
 
@@ -309,7 +316,9 @@ describe('QdrantService', () => {
         },
       ]);
 
-      const queryVector = Array(768).fill(0).map(() => Math.random());
+      const queryVector = Array(768)
+        .fill(0)
+        .map(() => Math.random());
       const results = await qdrantService.search('test_collection', queryVector, 10);
 
       expect(results).toHaveLength(1);
@@ -326,7 +335,9 @@ describe('QdrantService', () => {
     it('should validate collection exists before search', async () => {
       mockQdrantClient.getCollections.mockResolvedValue({ collections: [] });
 
-      const queryVector = Array(768).fill(0).map(() => Math.random());
+      const queryVector = Array(768)
+        .fill(0)
+        .map(() => Math.random());
       const results = await qdrantService.search('nonexistent_collection', queryVector, 10);
 
       expect(results).toHaveLength(0);
@@ -340,7 +351,9 @@ describe('QdrantService', () => {
     });
 
     it('should validate search parameters', async () => {
-      const queryVector = Array(768).fill(0).map(() => Math.random());
+      const queryVector = Array(768)
+        .fill(0)
+        .map(() => Math.random());
       const results = await qdrantService.search('test_collection', queryVector, 0);
 
       expect(results).toHaveLength(0);
@@ -359,9 +372,11 @@ describe('QdrantService', () => {
       });
       mockQdrantClient.search.mockResolvedValue([]);
 
-      const queryVector = Array(768).fill(0).map(() => Math.random());
+      const queryVector = Array(768)
+        .fill(0)
+        .map(() => Math.random());
       const filter = { must: [{ key: 'language', match: { value: 'typescript' } }] };
-      
+
       await qdrantService.search('test_collection', queryVector, 10, filter);
 
       expect(mockQdrantClient.search).toHaveBeenCalledWith('test_collection', {
@@ -434,12 +449,7 @@ describe('QdrantService', () => {
 
     it('should validate vector values', async () => {
       const chunk = createMockChunk(1);
-      const invalidVectors = [
-        [NaN, 0.5, 0.3],
-        [Infinity, 0.5, 0.3],
-        [-Infinity, 0.5, 0.3],
-        [],
-      ];
+      const invalidVectors = [[NaN, 0.5, 0.3], [Infinity, 0.5, 0.3], [-Infinity, 0.5, 0.3], []];
 
       for (const vector of invalidVectors) {
         const result = await qdrantService.upsertChunks('test_collection', [chunk], [vector]);
@@ -463,14 +473,14 @@ describe('QdrantService', () => {
     });
 
     it('should handle malformed responses', async () => {
-      mockQdrantClient.search.mockResolvedValue([
-        { id: 'test', score: null, payload: null },
-      ]);
+      mockQdrantClient.search.mockResolvedValue([{ id: 'test', score: null, payload: null }]);
       mockQdrantClient.getCollections.mockResolvedValue({
         collections: [{ name: 'test_collection' }],
       });
 
-      const queryVector = Array(768).fill(0).map(() => Math.random());
+      const queryVector = Array(768)
+        .fill(0)
+        .map(() => Math.random());
       const results = await qdrantService.search('test_collection', queryVector, 10);
 
       expect(results).toHaveLength(1);

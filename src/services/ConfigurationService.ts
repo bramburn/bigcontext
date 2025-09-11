@@ -1,6 +1,6 @@
 /**
  * Configuration Service
- * 
+ *
  * Manages persistent application configuration through .context/config.json file.
  * Handles loading, saving, validation, and Git integration for configuration settings.
  */
@@ -8,11 +8,11 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { 
-  Configuration, 
-  DEFAULT_CONFIGURATION, 
+import {
+  Configuration,
+  DEFAULT_CONFIGURATION,
   ConfigurationValidationResult,
-  QdrantIndexInfo 
+  QdrantIndexInfo,
 } from '../types/configuration';
 import { IConfigurationService } from './interfaces/IConfigurationService';
 import { GitIgnoreManager } from './GitIgnoreManager';
@@ -25,7 +25,7 @@ import * as crypto from 'crypto';
 export class ConfigurationService implements IConfigurationService {
   private static readonly CONFIG_DIR = '.context';
   private static readonly CONFIG_FILENAME = 'config.json';
-  
+
   private currentConfig: Configuration;
   private gitIgnoreManager: GitIgnoreManager;
   private workspaceRoot: string;
@@ -33,7 +33,7 @@ export class ConfigurationService implements IConfigurationService {
 
   /**
    * Creates a new configuration service instance
-   * 
+   *
    * @param workspaceRoot The workspace root directory
    * @param qdrantService Optional Qdrant service for index validation
    */
@@ -50,7 +50,7 @@ export class ConfigurationService implements IConfigurationService {
   public async loadConfiguration(): Promise<Configuration> {
     try {
       const configPath = this.getConfigurationFilePath();
-      
+
       // Check if configuration file exists
       const exists = await this.configurationFileExists();
       if (!exists) {
@@ -58,29 +58,28 @@ export class ConfigurationService implements IConfigurationService {
         this.currentConfig = { ...DEFAULT_CONFIGURATION };
         return this.currentConfig;
       }
-      
+
       // Read and parse configuration file
       const configContent = await fs.readFile(configPath, 'utf-8');
       const parsedConfig = JSON.parse(configContent) as Partial<Configuration>;
-      
+
       // Merge with defaults to ensure all required fields are present
       this.currentConfig = this.mergeWithDefaults(parsedConfig);
-      
+
       console.log('ConfigurationService: Configuration loaded successfully');
       return this.currentConfig;
-      
     } catch (error) {
       console.error('ConfigurationService: Failed to load configuration:', error);
-      
+
       // Fall back to defaults on error
       this.currentConfig = { ...DEFAULT_CONFIGURATION };
-      
+
       // Show error to user
       vscode.window.showWarningMessage(
         'Failed to load configuration file. Using default settings. ' +
-        'Please check the .context/config.json file for syntax errors.'
+          'Please check the .context/config.json file for syntax errors.'
       );
-      
+
       return this.currentConfig;
     }
   }
@@ -95,29 +94,30 @@ export class ConfigurationService implements IConfigurationService {
       if (!validation.isValid) {
         throw new Error(`Invalid configuration: ${validation.errors.join(', ')}`);
       }
-      
+
       // Ensure .context directory exists
       const configDir = path.dirname(this.getConfigurationFilePath());
       await fs.mkdir(configDir, { recursive: true });
-      
+
       // Save configuration file
       const configPath = this.getConfigurationFilePath();
       const configContent = JSON.stringify(config, null, 2);
       await fs.writeFile(configPath, configContent, 'utf-8');
-      
+
       // Update current configuration
       this.currentConfig = { ...config };
-      
+
       // Update .gitignore if configured
       if (config.git.ignoreConfig) {
         await this.gitIgnoreManager.ensureConfigPatternPresent(this.workspaceRoot);
       }
-      
+
       console.log('ConfigurationService: Configuration saved successfully');
-      
     } catch (error) {
       console.error('ConfigurationService: Failed to save configuration:', error);
-      throw new Error(`Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -134,13 +134,12 @@ export class ConfigurationService implements IConfigurationService {
   public async updateSetting(key: string, value: any): Promise<void> {
     try {
       const updatedConfig = { ...this.currentConfig };
-      
+
       // Use dot notation to set nested properties
       this.setNestedProperty(updatedConfig, key, value);
-      
+
       // Save the updated configuration
       await this.saveConfiguration(updatedConfig);
-      
     } catch (error) {
       console.error(`ConfigurationService: Failed to update setting '${key}':`, error);
       throw error;
@@ -154,37 +153,41 @@ export class ConfigurationService implements IConfigurationService {
     const configToValidate = config || this.currentConfig;
     const errors: string[] = [];
     const warnings: string[] = [];
-    
+
     // Validate Qdrant configuration
     if (!configToValidate.qdrant.host || configToValidate.qdrant.host.trim() === '') {
       errors.push('Qdrant host is required');
     }
-    
-    if (!configToValidate.qdrant.port || configToValidate.qdrant.port <= 0 || configToValidate.qdrant.port > 65535) {
+
+    if (
+      !configToValidate.qdrant.port ||
+      configToValidate.qdrant.port <= 0 ||
+      configToValidate.qdrant.port > 65535
+    ) {
       errors.push('Qdrant port must be a valid port number (1-65535)');
     }
-    
+
     // Validate Ollama configuration
     if (!configToValidate.ollama.endpoint || configToValidate.ollama.endpoint.trim() === '') {
       errors.push('Ollama endpoint is required');
     }
-    
+
     if (!configToValidate.ollama.model || configToValidate.ollama.model.trim() === '') {
       errors.push('Ollama model is required');
     }
-    
+
     // Validate Ollama endpoint format
     try {
       new URL(configToValidate.ollama.endpoint);
     } catch {
       errors.push('Ollama endpoint must be a valid URL');
     }
-    
+
     // Check for index info warnings
     if (!configToValidate.qdrant.indexInfo) {
       warnings.push('No Qdrant index information found - reindexing may be required');
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,
@@ -216,20 +219,25 @@ export class ConfigurationService implements IConfigurationService {
           const collectionExists = collections.includes(indexInfo.collectionName);
 
           if (!collectionExists) {
-            console.log(`ConfigurationService: Collection '${indexInfo.collectionName}' does not exist`);
+            console.log(
+              `ConfigurationService: Collection '${indexInfo.collectionName}' does not exist`
+            );
             return false;
           }
 
           // Check if collection has points
-          const collectionInfo = await this.qdrantService.getCollectionInfo(indexInfo.collectionName);
+          const collectionInfo = await this.qdrantService.getCollectionInfo(
+            indexInfo.collectionName
+          );
           if (!collectionInfo || (collectionInfo.points_count || 0) === 0) {
             console.log(`ConfigurationService: Collection '${indexInfo.collectionName}' is empty`);
             return false;
           }
 
-          console.log(`ConfigurationService: Index validation successful for collection '${indexInfo.collectionName}'`);
+          console.log(
+            `ConfigurationService: Index validation successful for collection '${indexInfo.collectionName}'`
+          );
           return true;
-
         } catch (error) {
           console.warn('ConfigurationService: Failed to validate index against Qdrant:', error);
           return false;
@@ -239,7 +247,6 @@ export class ConfigurationService implements IConfigurationService {
       // If no Qdrant service, just validate structure
       console.log('ConfigurationService: No Qdrant service available, validating structure only');
       return true;
-
     } catch (error) {
       console.error('ConfigurationService: Error validating Qdrant index:', error);
       return false;
@@ -268,7 +275,11 @@ export class ConfigurationService implements IConfigurationService {
    * Gets the path to the configuration file
    */
   public getConfigurationFilePath(): string {
-    return path.join(this.workspaceRoot, ConfigurationService.CONFIG_DIR, ConfigurationService.CONFIG_FILENAME);
+    return path.join(
+      this.workspaceRoot,
+      ConfigurationService.CONFIG_DIR,
+      ConfigurationService.CONFIG_FILENAME
+    );
   }
 
   /**
@@ -331,7 +342,6 @@ export class ConfigurationService implements IConfigurationService {
       }
 
       return hash.digest('hex');
-
     } catch (error) {
       console.error('ConfigurationService: Failed to generate content hash:', error);
       // Return a timestamp-based hash as fallback
@@ -371,7 +381,6 @@ export class ConfigurationService implements IConfigurationService {
 
       console.log('ConfigurationService: Content hash matches - no reindexing needed');
       return false;
-
     } catch (error) {
       console.error('ConfigurationService: Error checking if reindexing needed:', error);
       return true; // Default to reindexing on error
@@ -398,7 +407,11 @@ export class ConfigurationService implements IConfigurationService {
 
             // Skip common directories that shouldn't be indexed
             if (entry.isDirectory()) {
-              if (!['node_modules', '.git', 'dist', 'build', '.vscode', '.context'].includes(entry.name)) {
+              if (
+                !['node_modules', '.git', 'dist', 'build', '.vscode', '.context'].includes(
+                  entry.name
+                )
+              ) {
                 await walkDir(fullPath);
               }
             } else if (entry.isFile()) {
@@ -416,7 +429,6 @@ export class ConfigurationService implements IConfigurationService {
 
       await walkDir(workspaceRoot);
       return files;
-
     } catch (error) {
       console.error('ConfigurationService: Failed to get indexable files:', error);
       return [];

@@ -7,9 +7,9 @@
  * uses for features like Go to Definition, Find References, etc.
  */
 
-import * as vscode from "vscode";
-import { SupportedLanguage } from "../parsing/astParser";
-import { CentralizedLoggingService } from "../logging/centralizedLoggingService";
+import * as vscode from 'vscode';
+import { SupportedLanguage } from '../parsing/astParser';
+import { CentralizedLoggingService } from '../logging/centralizedLoggingService';
 
 /**
  * Represents a symbol definition from the LSP
@@ -92,10 +92,7 @@ export class LSPService {
   private workspaceRoot: string;
   private loggingService: CentralizedLoggingService;
 
-  constructor(
-    workspaceRoot: string,
-    loggingService: CentralizedLoggingService,
-  ) {
+  constructor(workspaceRoot: string, loggingService: CentralizedLoggingService) {
     this.workspaceRoot = workspaceRoot;
     this.loggingService = loggingService;
   }
@@ -115,7 +112,7 @@ export class LSPService {
     content: string,
     startLine: number,
     endLine: number,
-    language: SupportedLanguage,
+    language: SupportedLanguage
   ): Promise<LSPMetadata> {
     try {
       const uri = vscode.Uri.file(filePath);
@@ -124,7 +121,7 @@ export class LSPService {
       // Create range for the chunk
       const range = new vscode.Range(
         new vscode.Position(startLine, 0),
-        new vscode.Position(endLine, Number.MAX_SAFE_INTEGER),
+        new vscode.Position(endLine, Number.MAX_SAFE_INTEGER)
       );
 
       // Get symbols in the document
@@ -138,24 +135,15 @@ export class LSPService {
 
       for (const symbol of chunkSymbols) {
         // Get definition information
-        const symbolDefinitions = await this.getDefinitions(
-          document,
-          symbol.selectionRange.start,
-        );
+        const symbolDefinitions = await this.getDefinitions(document, symbol.selectionRange.start);
         definitions.push(...symbolDefinitions);
 
         // Get references
-        const symbolReferences = await this.getReferences(
-          document,
-          symbol.selectionRange.start,
-        );
+        const symbolReferences = await this.getReferences(document, symbol.selectionRange.start);
         references.push(...symbolReferences);
 
         // Get hover information
-        const hover = await this.getHoverInfo(
-          document,
-          symbol.selectionRange.start,
-        );
+        const hover = await this.getHoverInfo(document, symbol.selectionRange.start);
         if (hover) {
           hoverInfo[symbol.name] = hover;
         }
@@ -173,7 +161,7 @@ export class LSPService {
       this.loggingService.warn(
         `Failed to get LSP metadata for ${filePath}`,
         { error: error instanceof Error ? error.message : String(error) },
-        "LSPService",
+        'LSPService'
       );
       return {
         definitions: [],
@@ -189,20 +177,19 @@ export class LSPService {
   /**
    * Get document symbols from the LSP
    */
-  private async getDocumentSymbols(
-    document: vscode.TextDocument,
-  ): Promise<LSPSymbol[]> {
+  private async getDocumentSymbols(document: vscode.TextDocument): Promise<LSPSymbol[]> {
     try {
-      const symbols = await vscode.commands.executeCommand<
-        vscode.DocumentSymbol[]
-      >("vscode.executeDocumentSymbolProvider", document.uri);
+      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        document.uri
+      );
 
       return symbols ? this.convertDocumentSymbols(symbols) : [];
     } catch (error) {
       this.loggingService.warn(
-        "Failed to get document symbols",
+        'Failed to get document symbols',
         { error: error instanceof Error ? error.message : String(error) },
-        "LSPService",
+        'LSPService'
       );
       return [];
     }
@@ -211,37 +198,28 @@ export class LSPService {
   /**
    * Convert VS Code DocumentSymbol to our LSPSymbol format
    */
-  private convertDocumentSymbols(
-    symbols: vscode.DocumentSymbol[],
-  ): LSPSymbol[] {
-    return symbols.map((symbol) => ({
+  private convertDocumentSymbols(symbols: vscode.DocumentSymbol[]): LSPSymbol[] {
+    return symbols.map(symbol => ({
       name: symbol.name,
       kind: symbol.kind,
       range: symbol.range,
       selectionRange: symbol.selectionRange,
       detail: symbol.detail,
-      children: symbol.children
-        ? this.convertDocumentSymbols(symbol.children)
-        : undefined,
+      children: symbol.children ? this.convertDocumentSymbols(symbol.children) : undefined,
     }));
   }
 
   /**
    * Filter symbols that are within the specified range
    */
-  private filterSymbolsInRange(
-    symbols: LSPSymbol[],
-    range: vscode.Range,
-  ): LSPSymbol[] {
+  private filterSymbolsInRange(symbols: LSPSymbol[], range: vscode.Range): LSPSymbol[] {
     const result: LSPSymbol[] = [];
 
     for (const symbol of symbols) {
       if (range.intersection(symbol.range)) {
         const filteredSymbol: LSPSymbol = {
           ...symbol,
-          children: symbol.children
-            ? this.filterSymbolsInRange(symbol.children, range)
-            : undefined,
+          children: symbol.children ? this.filterSymbolsInRange(symbol.children, range) : undefined,
         };
         result.push(filteredSymbol);
       }
@@ -255,29 +233,31 @@ export class LSPService {
    */
   private async getDefinitions(
     document: vscode.TextDocument,
-    position: vscode.Position,
+    position: vscode.Position
   ): Promise<LSPDefinition[]> {
     try {
       const locations = await vscode.commands.executeCommand<vscode.Location[]>(
-        "vscode.executeDefinitionProvider",
+        'vscode.executeDefinitionProvider',
         document.uri,
-        position,
+        position
       );
 
-      if (!locations) return [];
+      if (!locations) {
+        return [];
+      }
 
-      return locations.map((location) => ({
+      return locations.map(location => ({
         uri: location.uri.toString(),
         range: location.range,
-        name: "", // Will be filled by caller
+        name: '', // Will be filled by caller
         kind: vscode.SymbolKind.Null, // Will be determined by caller
         detail: undefined,
       }));
     } catch (error) {
       this.loggingService.warn(
-        "Failed to get definitions",
+        'Failed to get definitions',
         { error: error instanceof Error ? error.message : String(error) },
-        "LSPService",
+        'LSPService'
       );
       return [];
     }
@@ -288,27 +268,29 @@ export class LSPService {
    */
   private async getReferences(
     document: vscode.TextDocument,
-    position: vscode.Position,
+    position: vscode.Position
   ): Promise<LSPReference[]> {
     try {
       const locations = await vscode.commands.executeCommand<vscode.Location[]>(
-        "vscode.executeReferenceProvider",
+        'vscode.executeReferenceProvider',
         document.uri,
-        position,
+        position
       );
 
-      if (!locations) return [];
+      if (!locations) {
+        return [];
+      }
 
-      return locations.map((location) => ({
+      return locations.map(location => ({
         uri: location.uri.toString(),
         range: location.range,
         isDefinition: false, // This would need more sophisticated logic to determine
       }));
     } catch (error) {
       this.loggingService.warn(
-        "Failed to get references",
+        'Failed to get references',
         { error: error instanceof Error ? error.message : String(error) },
-        "LSPService",
+        'LSPService'
       );
       return [];
     }
@@ -319,16 +301,18 @@ export class LSPService {
    */
   private async getHoverInfo(
     document: vscode.TextDocument,
-    position: vscode.Position,
+    position: vscode.Position
   ): Promise<LSPHoverInfo | null> {
     try {
       const hover = await vscode.commands.executeCommand<vscode.Hover>(
-        "vscode.executeHoverProvider",
+        'vscode.executeHoverProvider',
         document.uri,
-        position,
+        position
       );
 
-      if (!hover) return null;
+      if (!hover) {
+        return null;
+      }
 
       return {
         contents: hover.contents as vscode.MarkdownString[],
@@ -336,9 +320,9 @@ export class LSPService {
       };
     } catch (error) {
       this.loggingService.warn(
-        "Failed to get hover info",
+        'Failed to get hover info',
         { error: error instanceof Error ? error.message : String(error) },
-        "LSPService",
+        'LSPService'
       );
       return null;
     }
@@ -357,16 +341,17 @@ export class LSPService {
       });
 
       // Try to get symbols - if this works, LSP is available
-      const symbols = await vscode.commands.executeCommand<
-        vscode.DocumentSymbol[]
-      >("vscode.executeDocumentSymbolProvider", tempDoc.uri);
+      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        tempDoc.uri
+      );
 
       return symbols !== undefined;
     } catch (error) {
       this.loggingService.warn(
         `LSP not available for ${language}`,
         { error: error instanceof Error ? error.message : String(error) },
-        "LSPService",
+        'LSPService'
       );
       return false;
     }
@@ -377,16 +362,16 @@ export class LSPService {
    */
   private getTestContent(language: SupportedLanguage): string {
     switch (language) {
-      case "typescript":
+      case 'typescript':
         return 'function test() { return "hello"; }';
-      case "javascript":
+      case 'javascript':
         return 'function test() { return "hello"; }';
-      case "python":
+      case 'python':
         return 'def test():\n    return "hello"';
-      case "csharp":
+      case 'csharp':
         return 'public class Test { public string Method() { return "hello"; } }';
       default:
-        return "";
+        return '';
     }
   }
 
@@ -395,16 +380,16 @@ export class LSPService {
    */
   private getVSCodeLanguageId(language: SupportedLanguage): string {
     switch (language) {
-      case "typescript":
-        return "typescript";
-      case "javascript":
-        return "javascript";
-      case "python":
-        return "python";
-      case "csharp":
-        return "csharp";
+      case 'typescript':
+        return 'typescript';
+      case 'javascript':
+        return 'javascript';
+      case 'python':
+        return 'python';
+      case 'csharp':
+        return 'csharp';
       default:
-        return "plaintext";
+        return 'plaintext';
     }
   }
 }

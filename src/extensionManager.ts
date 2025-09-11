@@ -46,577 +46,648 @@ import { HistoryManager } from './historyManager';
  * central point of access to all core services and managers throughout the extension.
  */
 export class ExtensionManager {
-    private context: vscode.ExtensionContext;
-    private disposables: vscode.Disposable[] = [];
+  private context: vscode.ExtensionContext;
+  private disposables: vscode.Disposable[] = [];
 
-    // Core services - fundamental services that provide core functionality
-    private configService!: ConfigService;
-    private loggingService!: CentralizedLoggingService;
-    private notificationService!: NotificationService;
-    private qdrantService!: QdrantService;
-    private embeddingProvider!: IEmbeddingProvider;
-    private contextService!: ContextService;
-    private indexingService!: IndexingService;
-    private fileWatcherService!: FileWatcherService;
-    private workspaceManager!: WorkspaceManager;
+  // Core services - fundamental services that provide core functionality
+  private configService!: ConfigService;
+  private loggingService!: CentralizedLoggingService;
+  private notificationService!: NotificationService;
+  private qdrantService!: QdrantService;
+  private embeddingProvider!: IEmbeddingProvider;
+  private contextService!: ContextService;
+  private indexingService!: IndexingService;
+  private fileWatcherService!: FileWatcherService;
+  private workspaceManager!: WorkspaceManager;
 
-    // Managers - services that manage specific aspects of the extension
-    private commandManager!: CommandManager;
-    private webviewManager!: WebviewManager;
-    private searchManager!: SearchManager;
-    private configurationManager!: ConfigurationManager;
-    private performanceManager!: PerformanceManager;
-    private stateManager!: StateManager;
-    private xmlFormatterService!: XmlFormatterService;
-    private statusBarManager!: StatusBarManager;
-    private historyManager!: HistoryManager;
-    private startupService!: StartupService;
-    private persistentConfigService!: ConfigurationService;
+  // Managers - services that manage specific aspects of the extension
+  private commandManager!: CommandManager;
+  private webviewManager!: WebviewManager;
+  private searchManager!: SearchManager;
+  private configurationManager!: ConfigurationManager;
+  private performanceManager!: PerformanceManager;
+  private stateManager!: StateManager;
+  private xmlFormatterService!: XmlFormatterService;
+  private statusBarManager!: StatusBarManager;
+  private historyManager!: HistoryManager;
+  private startupService!: StartupService;
+  private persistentConfigService!: ConfigurationService;
 
-    /**
-     * Creates a new ExtensionManager instance
-     * @param context - The VS Code extension context providing access to extension APIs
-     */
-    constructor(context: vscode.ExtensionContext) {
-        this.context = context;
-        // Note: All services are initialized in the initialize() method to allow for async initialization
-    }
+  /**
+   * Creates a new ExtensionManager instance
+   * @param context - The VS Code extension context providing access to extension APIs
+   */
+  constructor(context: vscode.ExtensionContext) {
+    this.context = context;
+    // Note: All services are initialized in the initialize() method to allow for async initialization
+  }
 
-    /**
-     * Initializes all core services and managers using dependency injection
-     * This method sets up the entire extension architecture in a specific order
-     * to ensure dependencies are available when needed.
-     *
-     * The initialization follows a specific order:
-     * 1. Services with no dependencies (StateManager, ConfigService)
-     * 2. Services that depend on basic configuration (QdrantService, EmbeddingProvider)
-     * 3. Workspace-dependent services (IndexingService, ContextService)
-     * 4. UI and management services (PerformanceManager, ConfigurationManager, etc.)
-     * 5. User interface services (WebviewManager, CommandManager, StatusBarManager)
-     *
-     * @throws Error if any service fails to initialize
-     */
-    async initialize(): Promise<void> {
-        try {
-            // Step 1: Initialize StateManager first (no dependencies)
-            // StateManager must be initialized first as it manages the extension's state
-            // and may be needed by other services during their initialization
-            this.stateManager = new StateManager();
+  /**
+   * Initializes all core services and managers using dependency injection
+   * This method sets up the entire extension architecture in a specific order
+   * to ensure dependencies are available when needed.
+   *
+   * The initialization follows a specific order:
+   * 1. Services with no dependencies (StateManager, ConfigService)
+   * 2. Services that depend on basic configuration (QdrantService, EmbeddingProvider)
+   * 3. Workspace-dependent services (IndexingService, ContextService)
+   * 4. UI and management services (PerformanceManager, ConfigurationManager, etc.)
+   * 5. User interface services (WebviewManager, CommandManager, StatusBarManager)
+   *
+   * @throws Error if any service fails to initialize
+   */
+  async initialize(): Promise<void> {
+    try {
+      // Step 1: Initialize StateManager first (no dependencies)
+      // StateManager must be initialized first as it manages the extension's state
+      // and may be needed by other services during their initialization
+      this.stateManager = new StateManager();
 
-            // Step 2: Initialize ConfigService (no dependencies)
-            // ConfigService provides configuration settings needed by other services
-            this.configService = new ConfigService();
+      // Step 2: Initialize ConfigService (no dependencies)
+      // ConfigService provides configuration settings needed by other services
+      this.configService = new ConfigService();
 
-            // Step 2.1: Initialize CentralizedLoggingService (depends on ConfigService)
-            // CentralizedLoggingService provides unified logging for all other services
-            this.loggingService = new CentralizedLoggingService(this.configService);
-            this.disposables.push(this.loggingService);
+      // Step 2.1: Initialize CentralizedLoggingService (depends on ConfigService)
+      // CentralizedLoggingService provides unified logging for all other services
+      this.loggingService = new CentralizedLoggingService(this.configService);
+      this.disposables.push(this.loggingService);
 
-            // Now we can use proper logging for all subsequent initialization
-            this.loggingService.info('ExtensionManager initialization started', {
-                vscodeVersion: vscode.version,
-                extensionVersion: this.context.extension.packageJSON.version,
-                platform: process.platform,
-                nodeVersion: process.version
-            }, 'ExtensionManager');
+      // Now we can use proper logging for all subsequent initialization
+      this.loggingService.info(
+        'ExtensionManager initialization started',
+        {
+          vscodeVersion: vscode.version,
+          extensionVersion: this.context.extension.packageJSON.version,
+          platform: process.platform,
+          nodeVersion: process.version,
+        },
+        'ExtensionManager'
+      );
 
-            this.loggingService.info('StateManager initialized', {}, 'ExtensionManager');
-            this.loggingService.info('ConfigService initialized', {}, 'ExtensionManager');
-            this.loggingService.info('CentralizedLoggingService initialized', {}, 'ExtensionManager');
+      this.loggingService.info('StateManager initialized', {}, 'ExtensionManager');
+      this.loggingService.info('ConfigService initialized', {}, 'ExtensionManager');
+      this.loggingService.info('CentralizedLoggingService initialized', {}, 'ExtensionManager');
 
-            // Provide extension context to StateManager for persistence support
-            this.stateManager.setContext(this.context);
-            this.stateManager.setExtensionManager(this);
-            this.loggingService.info('StateManager context set for persistence', {}, 'ExtensionManager');
+      // Provide extension context to StateManager for persistence support
+      this.stateManager.setContext(this.context);
+      this.stateManager.setExtensionManager(this);
+      this.loggingService.info('StateManager context set for persistence', {}, 'ExtensionManager');
 
-            // Step 2.2: Initialize WorkspaceManager (depends on CentralizedLoggingService)
-            // WorkspaceManager handles multi-workspace support and workspace switching
-            this.workspaceManager = new WorkspaceManager(this.loggingService);
+      // Step 2.2: Initialize WorkspaceManager (depends on CentralizedLoggingService)
+      // WorkspaceManager handles multi-workspace support and workspace switching
+      this.workspaceManager = new WorkspaceManager(this.loggingService);
 
-            // Set up workspace change listener to handle workspace switching
-            const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged((workspace) => {
-                this.loggingService.info('Workspace changed', {
-                    workspaceName: workspace?.name || 'none',
-                    workspacePath: workspace?.path || 'none'
-                }, 'ExtensionManager');
+      // Set up workspace change listener to handle workspace switching
+      const workspaceChangeDisposable = this.workspaceManager.onWorkspaceChanged(workspace => {
+        this.loggingService.info(
+          'Workspace changed',
+          {
+            workspaceName: workspace?.name || 'none',
+            workspacePath: workspace?.path || 'none',
+          },
+          'ExtensionManager'
+        );
 
-                // Notify other services about workspace change if needed
-                // The IndexingService will automatically use the new workspace for collection naming
+        // Notify other services about workspace change if needed
+        // The IndexingService will automatically use the new workspace for collection naming
 
-                // Notify webview about workspace change
-                if (this.webviewManager) {
-                    this.webviewManager.updateWorkspaceState(!!workspace);
-                }
-            });
-            this.disposables.push(workspaceChangeDisposable);
-
-            this.loggingService.info('WorkspaceManager initialized', {}, 'ExtensionManager');
-
-            // Step 2.3: Initialize NotificationService (depends on CentralizedLoggingService)
-            // NotificationService provides standardized user notifications with logging integration
-            this.notificationService = new NotificationService(this.loggingService);
-            this.loggingService.info('NotificationService initialized', {}, 'ExtensionManager');
-
-            // Step 3: Initialize QdrantService with configuration
-            // QdrantService requires the database connection string from ConfigService and logging service
-            const qdrantConfig = {
-                connectionString: this.configService.getQdrantConnectionString(),
-                retryConfig: {
-                    maxRetries: 3,
-                    baseDelayMs: 1000,
-                    maxDelayMs: 10000,
-                    backoffMultiplier: 2,
-                },
-                batchSize: 100,
-                healthCheckIntervalMs: 30000,
-            };
-            this.qdrantService = new QdrantService(qdrantConfig, this.loggingService);
-            this.loggingService.info('QdrantService initialized', {}, 'ExtensionManager');
-
-            // Step 4: Initialize EmbeddingProvider using factory and configuration
-            // EmbeddingProvider is created asynchronously using the factory pattern
-            // and depends on configuration settings from ConfigService
-            this.embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(this.configService);
-            this.loggingService.info('EmbeddingProvider initialized', {}, 'ExtensionManager');
-
-            // Step 5: Initialize workspace-dependent services
-            // These services require a workspace folder to function properly
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (workspaceFolders && workspaceFolders.length > 0) {
-                const workspaceRoot = workspaceFolders[0].uri.fsPath;
-
-                // Step 5.1: Initialize persistent configuration service
-                // This replaces the VS Code settings-based configuration with persistent file-based config
-                this.persistentConfigService = new ConfigurationService(workspaceRoot, this.qdrantService);
-                this.loggingService.info('Persistent ConfigurationService initialized', {}, 'ExtensionManager');
-
-                // Create all dependencies for IndexingService
-                // These services are used internally by IndexingService and don't need to be stored as class properties
-                const fileWalker = new FileWalker(workspaceRoot);
-                const astParser = new AstParser(this.persistentConfigService); // Pass config service for error handling
-                const chunker = new Chunker();
-                const lspService = new LSPService(workspaceRoot, this.loggingService);
-
-                // Initialize IndexingService with all dependencies including StateManager, WorkspaceManager, ConfigService, and LoggingService
-                // IndexingService coordinates file indexing, parsing, and storage in the vector database
-                this.indexingService = new IndexingService(
-                    workspaceRoot,
-                    fileWalker,
-                    astParser,
-                    chunker,
-                    this.qdrantService,
-                    this.embeddingProvider,
-                    lspService,
-                    this.stateManager,
-                    this.workspaceManager,
-                    this.configService,
-                    this.loggingService
-                );
-                this.loggingService.info('ExtensionManager: IndexingService initialized');
-
-                // Step 5.2: Initialize configuration service
-                const configurationService = new ConfigurationService(workspaceRoot, this.qdrantService);
-
-                // Step 5.3: Initialize startup service and execute startup flow
-                // This handles configuration loading, index validation, and reindexing decisions
-                this.startupService = new StartupService(
-                    configurationService,
-                    this.qdrantService
-                );
-
-                // Execute startup flow to determine next steps
-                const startupResult = await this.startupService.executeStartupFlow(workspaceRoot);
-                this.loggingService.info('Startup flow completed', {
-                    action: startupResult.action,
-                    reason: startupResult.reason,
-                    configurationLoaded: startupResult.configurationLoaded,
-                    qdrantConnected: startupResult.qdrantConnected,
-                    indexValid: startupResult.indexValid,
-                    reindexingNeeded: startupResult.reindexingNeeded
-                }, 'ExtensionManager');
-
-                // Initialize ContextService with dependencies including LoggingService
-                // ContextService provides context-aware functionality and search capabilities
-                this.contextService = new ContextService(
-                    workspaceRoot,
-                    this.qdrantService,
-                    this.embeddingProvider,
-                    this.indexingService,
-                    this.configService,
-                    this.loggingService,
-                    this.workspaceManager
-                );
-                this.loggingService.info('ExtensionManager: ContextService initialized');
-
-                // Initialize FileWatcherService for automatic indexing
-                // FileWatcherService monitors file changes and keeps the index up-to-date
-                // It depends on IndexingService for performing incremental updates
-                this.fileWatcherService = new FileWatcherService(this.indexingService);
-                await this.fileWatcherService.initialize();
-                this.disposables.push(this.fileWatcherService);
-                this.loggingService.info('FileWatcherService initialized', {}, 'ExtensionManager');
-            } else {
-                this.loggingService.warn('No workspace folder found, some services not initialized', {}, 'ExtensionManager');
-            }
-
-            // Step 6: Initialize PerformanceManager
-            // PerformanceManager tracks and monitors extension performance metrics
-            this.performanceManager = new PerformanceManager();
-            this.loggingService.info('PerformanceManager initialized', {}, 'ExtensionManager');
-
-            // Step 7: Initialize ConfigurationManager
-            // ConfigurationManager handles dynamic configuration changes and updates
-            this.configurationManager = new ConfigurationManager(this.configService);
-            this.loggingService.info('ConfigurationManager initialized', {}, 'ExtensionManager');
-
-            // Step 8: Initialize XmlFormatterService
-            // XmlFormatterService provides XML formatting capabilities for search results
-            this.xmlFormatterService = new XmlFormatterService();
-            this.loggingService.info('XmlFormatterService initialized', {}, 'ExtensionManager');
-
-            // Step 9: Initialize SearchManager
-            // SearchManager coordinates search operations across the codebase
-            // Depends on ContextService, ConfigService, LoggingService, and NotificationService
-            this.searchManager = new SearchManager(this.contextService, this.configService, this.loggingService, this.notificationService);
-            this.loggingService.info('SearchManager initialized', {}, 'ExtensionManager');
-
-            // Step 10: Initialize WebviewManager
-            // WebviewManager handles the UI webview and user interactions
-            // Pass the extension context, ExtensionManager, and required services
-            this.webviewManager = new WebviewManager(this.context, this, this.loggingService, this.notificationService);
-            this.loggingService.info('WebviewManager initialized', {}, 'ExtensionManager');
-
-            // Step 10.1: Register WebviewViewProvider for sidebar
-            // Register the WebviewManager as the provider for the sidebar view
-            const webviewViewProviderDisposable = vscode.window.registerWebviewViewProvider(
-                'code-context-engine-view',
-                this.webviewManager
-            );
-            this.disposables.push(webviewViewProviderDisposable);
-            this.loggingService.info('WebviewViewProvider registered for sidebar', {}, 'ExtensionManager');
-
-            // Step 11: Initialize CommandManager and register commands
-            // CommandManager handles all extension commands and their execution
-            // Depends on IndexingService, WebviewManager, NotificationService, and LoggingService for command functionality
-            this.commandManager = new CommandManager(this.indexingService, this.webviewManager, this.notificationService, this.loggingService);
-            const commandDisposables = this.commandManager.registerCommands();
-            this.disposables.push(...commandDisposables);
-            this.loggingService.info('CommandManager initialized and commands registered', {}, 'ExtensionManager');
-
-            // Step 12: Initialize StatusBarManager
-            // StatusBarManager manages the status bar items and their visibility
-            // Requires logging and notification services, with optional context and StateManager
-            this.statusBarManager = new StatusBarManager(this.loggingService, this.notificationService, this.context, this.stateManager);
-            this.disposables.push(this.statusBarManager);
-            this.loggingService.info('StatusBarManager initialized', {}, 'ExtensionManager');
-
-            // Create and show primary status bar item
-            const statusItemId = this.statusBarManager.createItem({
-                id: 'code-context-engine.status',
-                text: '$(zap) Code Context: Ready',
-                tooltip: 'Code Context Engine - Click to open',
-                command: 'code-context-engine.openMainPanel',
-                alignment: 'left',
-                priority: 100
-            });
-            this.statusBarManager.showItem(statusItemId);
-
-            // React to indexing state changes to update the status bar
-            try {
-                const unsubscribe = this.stateManager.subscribeAll(({ key, newValue }) => {
-                    if (key === 'isIndexing') {
-                        if (newValue === true) {
-                            this.statusBarManager.setText(statusItemId, '$(sync~spin) Indexing...');
-                            this.statusBarManager.setTooltip(statusItemId, 'Code Context Engine is indexing your workspace');
-                        } else {
-                            this.statusBarManager.setText(statusItemId, '$(zap) Code Context: Ready');
-                            this.statusBarManager.setTooltip(statusItemId, 'Code Context Engine - Click to open');
-                        }
-                    } else if (key === 'lastError' && newValue) {
-                        this.statusBarManager.setText(statusItemId, '$(error) Code Context: Error');
-                        this.statusBarManager.setTooltip(statusItemId, String(newValue));
-                    }
-                });
-                this.disposables.push({ dispose: unsubscribe });
-            } catch (e) {
-                this.loggingService.warn('Unable to subscribe to state changes for status bar updates', {
-                    error: e instanceof Error ? e.message : String(e)
-                }, 'ExtensionManager');
-            }
-
-            // Step 13: Initialize HistoryManager
-            // HistoryManager tracks user search history and interactions
-            // Requires the extension context for persistent storage
-            this.historyManager = new HistoryManager(this.context);
-            this.disposables.push(this.historyManager);
-            this.loggingService.info('HistoryManager initialized', {}, 'ExtensionManager');
-
-            this.loggingService.info('All services initialized successfully', {}, 'ExtensionManager');
-
-        } catch (error) {
-            // Use logging service if available, otherwise fall back to console
-            if (this.loggingService) {
-                this.loggingService.error('Failed to initialize services', {
-                    error: error instanceof Error ? error.message : String(error),
-                    stack: error instanceof Error ? error.stack : undefined
-                }, 'ExtensionManager');
-            } else {
-                console.error('ExtensionManager: Failed to initialize services:', error);
-            }
-            throw error;
-        }
-    }
-
-    /**
-     * Disposes of all resources and cleans up services
-     * This method should be called when the extension is deactivated
-     *
-     * The disposal follows the reverse order of initialization to ensure
-     * that services are properly cleaned up and no dangling references remain.
-     * Each service is checked for existence before disposal to handle cases
-     * where initialization may have failed partially.
-     */
-    dispose(): void {
-        if (this.loggingService) {
-            this.loggingService.info('ExtensionManager disposal started', {}, 'ExtensionManager');
-        }
-
-        // Dispose of managers in reverse order of initialization
-        // This ensures that services with dependencies are disposed first
-
-        if (this.statusBarManager) {
-            this.statusBarManager.dispose();
-        }
-
+        // Notify webview about workspace change
         if (this.webviewManager) {
-            this.webviewManager.dispose();
+          this.webviewManager.updateWorkspaceState(!!workspace);
         }
+      });
+      this.disposables.push(workspaceChangeDisposable);
 
-        if (this.searchManager) {
-            this.searchManager.dispose();
-        }
+      this.loggingService.info('WorkspaceManager initialized', {}, 'ExtensionManager');
 
-        if (this.configurationManager) {
-            this.configurationManager.dispose();
-        }
+      // Step 2.3: Initialize NotificationService (depends on CentralizedLoggingService)
+      // NotificationService provides standardized user notifications with logging integration
+      this.notificationService = new NotificationService(this.loggingService);
+      this.loggingService.info('NotificationService initialized', {}, 'ExtensionManager');
 
-        if (this.performanceManager) {
-            this.performanceManager.dispose();
-        }
+      // Step 3: Initialize QdrantService with configuration
+      // QdrantService requires the database connection string from ConfigService and logging service
+      const qdrantConfig = {
+        connectionString: this.configService.getQdrantConnectionString(),
+        retryConfig: {
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          maxDelayMs: 10000,
+          backoffMultiplier: 2,
+        },
+        batchSize: 100,
+        healthCheckIntervalMs: 30000,
+      };
+      this.qdrantService = new QdrantService(qdrantConfig, this.loggingService);
+      this.loggingService.info('QdrantService initialized', {}, 'ExtensionManager');
 
-        // Cleanup IndexingService worker threads before disposing StateManager
-        if (this.indexingService) {
-            this.indexingService.cleanup().catch(error => {
-                if (this.loggingService) {
-                    this.loggingService.error('Error cleaning up IndexingService', {
-                        error: error instanceof Error ? error.message : String(error)
-                    }, 'ExtensionManager');
-                } else {
-                    console.error('ExtensionManager: Error cleaning up IndexingService:', error);
-                }
-            });
-        }
+      // Step 4: Initialize EmbeddingProvider using factory and configuration
+      // EmbeddingProvider is created asynchronously using the factory pattern
+      // and depends on configuration settings from ConfigService
+      this.embeddingProvider = await EmbeddingProviderFactory.createProviderFromConfigService(
+        this.configService
+      );
+      this.loggingService.info('EmbeddingProvider initialized', {}, 'ExtensionManager');
 
-        if (this.stateManager) {
-            this.stateManager.dispose();
-        }
+      // Step 5: Initialize workspace-dependent services
+      // These services require a workspace folder to function properly
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-        // Dispose of all registered disposables
-        // This includes command registrations, event listeners, and other VS Code resources
-        this.disposables.forEach(disposable => {
-            try {
-                disposable.dispose();
-            } catch (error) {
-                if (this.loggingService) {
-                    this.loggingService.error('Error disposing resource', {
-                        error: error instanceof Error ? error.message : String(error)
-                    }, 'ExtensionManager');
-                } else {
-                    console.error('ExtensionManager: Error disposing resource:', error);
-                }
+        // Step 5.1: Initialize persistent configuration service
+        // This replaces the VS Code settings-based configuration with persistent file-based config
+        this.persistentConfigService = new ConfigurationService(workspaceRoot, this.qdrantService);
+        this.loggingService.info(
+          'Persistent ConfigurationService initialized',
+          {},
+          'ExtensionManager'
+        );
+
+        // Create all dependencies for IndexingService
+        // These services are used internally by IndexingService and don't need to be stored as class properties
+        const fileWalker = new FileWalker(workspaceRoot);
+        const astParser = new AstParser(this.persistentConfigService); // Pass config service for error handling
+        const chunker = new Chunker();
+        const lspService = new LSPService(workspaceRoot, this.loggingService);
+
+        // Initialize IndexingService with all dependencies including StateManager, WorkspaceManager, ConfigService, and LoggingService
+        // IndexingService coordinates file indexing, parsing, and storage in the vector database
+        this.indexingService = new IndexingService(
+          workspaceRoot,
+          fileWalker,
+          astParser,
+          chunker,
+          this.qdrantService,
+          this.embeddingProvider,
+          lspService,
+          this.stateManager,
+          this.workspaceManager,
+          this.configService,
+          this.loggingService
+        );
+        this.loggingService.info('ExtensionManager: IndexingService initialized');
+
+        // Step 5.2: Initialize configuration service
+        const configurationService = new ConfigurationService(workspaceRoot, this.qdrantService);
+
+        // Step 5.3: Initialize startup service and execute startup flow
+        // This handles configuration loading, index validation, and reindexing decisions
+        this.startupService = new StartupService(configurationService, this.qdrantService);
+
+        // Execute startup flow to determine next steps
+        const startupResult = await this.startupService.executeStartupFlow(workspaceRoot);
+        this.loggingService.info(
+          'Startup flow completed',
+          {
+            action: startupResult.action,
+            reason: startupResult.reason,
+            configurationLoaded: startupResult.configurationLoaded,
+            qdrantConnected: startupResult.qdrantConnected,
+            indexValid: startupResult.indexValid,
+            reindexingNeeded: startupResult.reindexingNeeded,
+          },
+          'ExtensionManager'
+        );
+
+        // Initialize ContextService with dependencies including LoggingService
+        // ContextService provides context-aware functionality and search capabilities
+        this.contextService = new ContextService(
+          workspaceRoot,
+          this.qdrantService,
+          this.embeddingProvider,
+          this.indexingService,
+          this.configService,
+          this.loggingService,
+          this.workspaceManager
+        );
+        this.loggingService.info('ExtensionManager: ContextService initialized');
+
+        // Initialize FileWatcherService for automatic indexing
+        // FileWatcherService monitors file changes and keeps the index up-to-date
+        // It depends on IndexingService for performing incremental updates
+        this.fileWatcherService = new FileWatcherService(this.indexingService);
+        await this.fileWatcherService.initialize();
+        this.disposables.push(this.fileWatcherService);
+        this.loggingService.info('FileWatcherService initialized', {}, 'ExtensionManager');
+      } else {
+        this.loggingService.warn(
+          'No workspace folder found, some services not initialized',
+          {},
+          'ExtensionManager'
+        );
+      }
+
+      // Step 6: Initialize PerformanceManager
+      // PerformanceManager tracks and monitors extension performance metrics
+      this.performanceManager = new PerformanceManager();
+      this.loggingService.info('PerformanceManager initialized', {}, 'ExtensionManager');
+
+      // Step 7: Initialize ConfigurationManager
+      // ConfigurationManager handles dynamic configuration changes and updates
+      this.configurationManager = new ConfigurationManager(this.configService);
+      this.loggingService.info('ConfigurationManager initialized', {}, 'ExtensionManager');
+
+      // Step 8: Initialize XmlFormatterService
+      // XmlFormatterService provides XML formatting capabilities for search results
+      this.xmlFormatterService = new XmlFormatterService();
+      this.loggingService.info('XmlFormatterService initialized', {}, 'ExtensionManager');
+
+      // Step 9: Initialize SearchManager
+      // SearchManager coordinates search operations across the codebase
+      // Depends on ContextService, ConfigService, LoggingService, and NotificationService
+      this.searchManager = new SearchManager(
+        this.contextService,
+        this.configService,
+        this.loggingService,
+        this.notificationService
+      );
+      this.loggingService.info('SearchManager initialized', {}, 'ExtensionManager');
+
+      // Step 10: Initialize WebviewManager
+      // WebviewManager handles the UI webview and user interactions
+      // Pass the extension context, ExtensionManager, and required services
+      this.webviewManager = new WebviewManager(
+        this.context,
+        this,
+        this.loggingService,
+        this.notificationService
+      );
+      this.loggingService.info('WebviewManager initialized', {}, 'ExtensionManager');
+
+      // Step 10.1: Register WebviewViewProvider for sidebar
+      // Register the WebviewManager as the provider for the sidebar view
+      const webviewViewProviderDisposable = vscode.window.registerWebviewViewProvider(
+        'code-context-engine-view',
+        this.webviewManager
+      );
+      this.disposables.push(webviewViewProviderDisposable);
+      this.loggingService.info(
+        'WebviewViewProvider registered for sidebar',
+        {},
+        'ExtensionManager'
+      );
+
+      // Step 11: Initialize CommandManager and register commands
+      // CommandManager handles all extension commands and their execution
+      // Depends on IndexingService, WebviewManager, NotificationService, and LoggingService for command functionality
+      this.commandManager = new CommandManager(
+        this.indexingService,
+        this.webviewManager,
+        this.notificationService,
+        this.loggingService
+      );
+      const commandDisposables = this.commandManager.registerCommands();
+      this.disposables.push(...commandDisposables);
+      this.loggingService.info(
+        'CommandManager initialized and commands registered',
+        {},
+        'ExtensionManager'
+      );
+
+      // Step 12: Initialize StatusBarManager
+      // StatusBarManager manages the status bar items and their visibility
+      // Requires logging and notification services, with optional context and StateManager
+      this.statusBarManager = new StatusBarManager(
+        this.loggingService,
+        this.notificationService,
+        this.context,
+        this.stateManager
+      );
+      this.disposables.push(this.statusBarManager);
+      this.loggingService.info('StatusBarManager initialized', {}, 'ExtensionManager');
+
+      // Create and show primary status bar item
+      const statusItemId = this.statusBarManager.createItem({
+        id: 'code-context-engine.status',
+        text: '$(zap) Code Context: Ready',
+        tooltip: 'Code Context Engine - Click to open',
+        command: 'code-context-engine.openMainPanel',
+        alignment: 'left',
+        priority: 100,
+      });
+      this.statusBarManager.showItem(statusItemId);
+
+      // React to indexing state changes to update the status bar
+      try {
+        const unsubscribe = this.stateManager.subscribeAll(({ key, newValue }) => {
+          if (key === 'isIndexing') {
+            if (newValue === true) {
+              this.statusBarManager.setText(statusItemId, '$(sync~spin) Indexing...');
+              this.statusBarManager.setTooltip(
+                statusItemId,
+                'Code Context Engine is indexing your workspace'
+              );
+            } else {
+              this.statusBarManager.setText(statusItemId, '$(zap) Code Context: Ready');
+              this.statusBarManager.setTooltip(statusItemId, 'Code Context Engine - Click to open');
             }
+          } else if (key === 'lastError' && newValue) {
+            this.statusBarManager.setText(statusItemId, '$(error) Code Context: Error');
+            this.statusBarManager.setTooltip(statusItemId, String(newValue));
+          }
+        });
+        this.disposables.push({ dispose: unsubscribe });
+      } catch (e) {
+        this.loggingService.warn(
+          'Unable to subscribe to state changes for status bar updates',
+          {
+            error: e instanceof Error ? e.message : String(e),
+          },
+          'ExtensionManager'
+        );
+      }
+
+      // Step 13: Initialize HistoryManager
+      // HistoryManager tracks user search history and interactions
+      // Requires the extension context for persistent storage
+      this.historyManager = new HistoryManager(this.context);
+      this.disposables.push(this.historyManager);
+      this.loggingService.info('HistoryManager initialized', {}, 'ExtensionManager');
+
+      this.loggingService.info('All services initialized successfully', {}, 'ExtensionManager');
+    } catch (error) {
+      // Use logging service if available, otherwise fall back to console
+      if (this.loggingService) {
+        this.loggingService.error(
+          'Failed to initialize services',
+          {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+          'ExtensionManager'
+        );
+      } else {
+        console.error('ExtensionManager: Failed to initialize services:', error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Disposes of all resources and cleans up services
+   * This method should be called when the extension is deactivated
+   *
+   * The disposal follows the reverse order of initialization to ensure
+   * that services are properly cleaned up and no dangling references remain.
+   * Each service is checked for existence before disposal to handle cases
+   * where initialization may have failed partially.
+   */
+  dispose(): void {
+    if (this.loggingService) {
+      this.loggingService.info('ExtensionManager disposal started', {}, 'ExtensionManager');
+    }
+
+    // Dispose of managers in reverse order of initialization
+    // This ensures that services with dependencies are disposed first
+
+    if (this.statusBarManager) {
+      this.statusBarManager.dispose();
+    }
+
+    if (this.webviewManager) {
+      this.webviewManager.dispose();
+    }
+
+    if (this.searchManager) {
+      this.searchManager.dispose();
+    }
+
+    if (this.configurationManager) {
+      this.configurationManager.dispose();
+    }
+
+    if (this.performanceManager) {
+      this.performanceManager.dispose();
+    }
+
+    // Cleanup IndexingService worker threads before disposing StateManager
+    if (this.indexingService) {
+      this.indexingService.cleanup().catch(error => {
+        if (this.loggingService) {
+          this.loggingService.error(
+            'Error cleaning up IndexingService',
+            {
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'ExtensionManager'
+          );
+        } else {
+          console.error('ExtensionManager: Error cleaning up IndexingService:', error);
+        }
+      });
+    }
+
+    if (this.stateManager) {
+      this.stateManager.dispose();
+    }
+
+    // Dispose of all registered disposables
+    // This includes command registrations, event listeners, and other VS Code resources
+    this.disposables.forEach(disposable => {
+      try {
+        disposable.dispose();
+      } catch (error) {
+        if (this.loggingService) {
+          this.loggingService.error(
+            'Error disposing resource',
+            {
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'ExtensionManager'
+          );
+        } else {
+          console.error('ExtensionManager: Error disposing resource:', error);
+        }
+      }
+    });
+
+    this.disposables = [];
+
+    if (this.loggingService) {
+      this.loggingService.info('ExtensionManager disposal completed', {}, 'ExtensionManager');
+    }
+  }
+
+  /**
+   * Gets the ConfigService instance
+   * @returns The ConfigService instance that manages extension configuration
+   */
+  getConfigService(): ConfigService {
+    return this.configService;
+  }
+
+  /**
+   * Gets the QdrantService instance
+   * @returns The QdrantService instance that handles vector database operations
+   */
+  getQdrantService(): QdrantService {
+    return this.qdrantService;
+  }
+
+  /**
+   * Gets the EmbeddingProvider instance
+   * @returns The EmbeddingProvider instance that generates text embeddings
+   */
+  getEmbeddingProvider(): IEmbeddingProvider {
+    return this.embeddingProvider;
+  }
+
+  /**
+   * Gets the ContextService instance
+   * @returns The ContextService instance that provides context-aware functionality
+   */
+  getContextService(): ContextService {
+    return this.contextService;
+  }
+
+  /**
+   * Gets the IndexingService instance
+   * @returns The IndexingService instance that handles file indexing and processing
+   */
+  getIndexingService(): IndexingService {
+    return this.indexingService;
+  }
+
+  /**
+   * Gets the CommandManager instance
+   * @returns The CommandManager instance that manages extension commands
+   */
+  getCommandManager(): CommandManager {
+    return this.commandManager;
+  }
+
+  /**
+   * Gets the WebviewManager instance
+   * @returns The WebviewManager instance that handles the UI webview
+   */
+  getWebviewManager(): WebviewManager {
+    return this.webviewManager;
+  }
+
+  /**
+   * Gets the SearchManager instance
+   * @returns The SearchManager instance that coordinates search operations
+   */
+  getSearchManager(): SearchManager {
+    return this.searchManager;
+  }
+
+  /**
+   * Gets the ConfigurationManager instance
+   * @returns The ConfigurationManager instance that handles dynamic configuration
+   */
+  getConfigurationManager(): ConfigurationManager {
+    return this.configurationManager;
+  }
+
+  /**
+   * Gets the PerformanceManager instance
+   * @returns The PerformanceManager instance that tracks performance metrics
+   */
+  getPerformanceManager(): PerformanceManager {
+    return this.performanceManager;
+  }
+
+  /**
+   * Gets the StateManager instance
+   * @returns The StateManager instance that manages extension state
+   */
+  getStateManager(): StateManager {
+    return this.stateManager;
+  }
+
+  /**
+   * Gets the XmlFormatterService instance
+   * @returns The XmlFormatterService instance that formats XML output
+   */
+  getXmlFormatterService(): XmlFormatterService {
+    return this.xmlFormatterService;
+  }
+
+  /**
+   * Gets the CentralizedLoggingService instance
+   * @returns The CentralizedLoggingService instance for logging
+   */
+  getLoggingService(): CentralizedLoggingService {
+    return this.loggingService;
+  }
+
+  /**
+   * Gets the HistoryManager instance
+   * @returns The HistoryManager instance that tracks user history
+   */
+  getHistoryManager(): HistoryManager {
+    return this.historyManager;
+  }
+
+  /**
+   * Gets the StartupService instance
+   * @returns The StartupService instance that manages application startup
+   */
+  getStartupService(): StartupService {
+    return this.startupService;
+  }
+
+  /**
+   * Gets the persistent ConfigurationService instance
+   * @returns The ConfigurationService instance that manages .context/config.json
+   */
+  getPersistentConfigService(): ConfigurationService {
+    return this.persistentConfigService;
+  }
+
+  /**
+   * Gets the VS Code extension context
+   * @returns The extension context providing access to VS Code APIs
+   */
+  getContext(): vscode.ExtensionContext {
+    return this.context;
+  }
+
+  /**
+   * Gets the WorkspaceManager instance
+   * @returns The WorkspaceManager instance that handles multi-workspace support
+   */
+  getWorkspaceManager(): WorkspaceManager {
+    return this.workspaceManager;
+  }
+
+  /**
+   * Focuses the webview and shows a specific search result
+   * Used for deep linking functionality
+   * @param resultId - The ID of the result to show
+   */
+  focusAndShowResult(resultId: string): void {
+    try {
+      // Focus the main webview panel
+      if (this.webviewManager) {
+        this.webviewManager.focusMainPanel();
+
+        // Send message to webview to highlight the specific result
+        this.webviewManager.postMessageToMainPanel({
+          command: 'showResult',
+          resultId: resultId,
         });
 
-        this.disposables = [];
-
-        if (this.loggingService) {
-            this.loggingService.info('ExtensionManager disposal completed', {}, 'ExtensionManager');
-        }
+        this.loggingService.info(
+          `Focused webview and requested to show result: ${resultId}`,
+          {},
+          'ExtensionManager'
+        );
+      } else {
+        this.loggingService.warn(
+          'WebviewManager not available for focusing result',
+          {},
+          'ExtensionManager'
+        );
+      }
+    } catch (error) {
+      this.loggingService.error(
+        'Failed to focus and show result',
+        { error: error instanceof Error ? error.message : String(error), resultId },
+        'ExtensionManager'
+      );
     }
-
-    /**
-     * Gets the ConfigService instance
-     * @returns The ConfigService instance that manages extension configuration
-     */
-    getConfigService(): ConfigService {
-        return this.configService;
-    }
-
-    /**
-     * Gets the QdrantService instance
-     * @returns The QdrantService instance that handles vector database operations
-     */
-    getQdrantService(): QdrantService {
-        return this.qdrantService;
-    }
-
-    /**
-     * Gets the EmbeddingProvider instance
-     * @returns The EmbeddingProvider instance that generates text embeddings
-     */
-    getEmbeddingProvider(): IEmbeddingProvider {
-        return this.embeddingProvider;
-    }
-
-    /**
-     * Gets the ContextService instance
-     * @returns The ContextService instance that provides context-aware functionality
-     */
-    getContextService(): ContextService {
-        return this.contextService;
-    }
-
-    /**
-     * Gets the IndexingService instance
-     * @returns The IndexingService instance that handles file indexing and processing
-     */
-    getIndexingService(): IndexingService {
-        return this.indexingService;
-    }
-
-    /**
-     * Gets the CommandManager instance
-     * @returns The CommandManager instance that manages extension commands
-     */
-    getCommandManager(): CommandManager {
-        return this.commandManager;
-    }
-
-    /**
-     * Gets the WebviewManager instance
-     * @returns The WebviewManager instance that handles the UI webview
-     */
-    getWebviewManager(): WebviewManager {
-        return this.webviewManager;
-    }
-
-    /**
-     * Gets the SearchManager instance
-     * @returns The SearchManager instance that coordinates search operations
-     */
-    getSearchManager(): SearchManager {
-        return this.searchManager;
-    }
-
-    /**
-     * Gets the ConfigurationManager instance
-     * @returns The ConfigurationManager instance that handles dynamic configuration
-     */
-    getConfigurationManager(): ConfigurationManager {
-        return this.configurationManager;
-    }
-
-    /**
-     * Gets the PerformanceManager instance
-     * @returns The PerformanceManager instance that tracks performance metrics
-     */
-    getPerformanceManager(): PerformanceManager {
-        return this.performanceManager;
-    }
-
-    /**
-     * Gets the StateManager instance
-     * @returns The StateManager instance that manages extension state
-     */
-    getStateManager(): StateManager {
-        return this.stateManager;
-    }
-
-    /**
-     * Gets the XmlFormatterService instance
-     * @returns The XmlFormatterService instance that formats XML output
-     */
-    getXmlFormatterService(): XmlFormatterService {
-        return this.xmlFormatterService;
-    }
-
-    /**
-     * Gets the CentralizedLoggingService instance
-     * @returns The CentralizedLoggingService instance for logging
-     */
-    getLoggingService(): CentralizedLoggingService {
-        return this.loggingService;
-    }
-
-    /**
-     * Gets the HistoryManager instance
-     * @returns The HistoryManager instance that tracks user history
-     */
-    getHistoryManager(): HistoryManager {
-        return this.historyManager;
-    }
-
-    /**
-     * Gets the StartupService instance
-     * @returns The StartupService instance that manages application startup
-     */
-    getStartupService(): StartupService {
-        return this.startupService;
-    }
-
-    /**
-     * Gets the persistent ConfigurationService instance
-     * @returns The ConfigurationService instance that manages .context/config.json
-     */
-    getPersistentConfigService(): ConfigurationService {
-        return this.persistentConfigService;
-    }
-
-
-
-    /**
-     * Gets the VS Code extension context
-     * @returns The extension context providing access to VS Code APIs
-     */
-    getContext(): vscode.ExtensionContext {
-        return this.context;
-    }
-
-    /**
-     * Gets the WorkspaceManager instance
-     * @returns The WorkspaceManager instance that handles multi-workspace support
-     */
-    getWorkspaceManager(): WorkspaceManager {
-        return this.workspaceManager;
-    }
-
-    /**
-     * Focuses the webview and shows a specific search result
-     * Used for deep linking functionality
-     * @param resultId - The ID of the result to show
-     */
-    focusAndShowResult(resultId: string): void {
-        try {
-            // Focus the main webview panel
-            if (this.webviewManager) {
-                this.webviewManager.focusMainPanel();
-
-                // Send message to webview to highlight the specific result
-                this.webviewManager.postMessageToMainPanel({
-                    command: 'showResult',
-                    resultId: resultId
-                });
-
-                this.loggingService.info(`Focused webview and requested to show result: ${resultId}`, {}, 'ExtensionManager');
-            } else {
-                this.loggingService.warn('WebviewManager not available for focusing result', {}, 'ExtensionManager');
-            }
-        } catch (error) {
-            this.loggingService.error(
-                'Failed to focus and show result',
-                { error: error instanceof Error ? error.message : String(error), resultId },
-                'ExtensionManager'
-            );
-        }
-    }
+  }
 }

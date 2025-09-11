@@ -1,5 +1,5 @@
-import axios, { AxiosInstance } from "axios";
-import { IEmbeddingProvider, EmbeddingConfig } from "./embeddingProvider";
+import axios, { AxiosInstance } from 'axios';
+import { IEmbeddingProvider, EmbeddingConfig } from './embeddingProvider';
 
 /**
  * Ollama embedding provider implementation
@@ -43,10 +43,10 @@ export class OllamaProvider implements IEmbeddingProvider {
    */
   constructor(config: EmbeddingConfig) {
     // Set model with fallback to a popular default
-    this.model = config.model || "nomic-embed-text";
+    this.model = config.model || 'nomic-embed-text';
 
     // Set base URL with fallback to local Ollama default
-    this.baseUrl = config.apiUrl || "http://localhost:11434";
+    this.baseUrl = config.apiUrl || 'http://localhost:11434';
 
     // Set batch size with conservative default to avoid overwhelming local service
     this.maxBatchSize = config.maxBatchSize || 10;
@@ -59,7 +59,7 @@ export class OllamaProvider implements IEmbeddingProvider {
       baseURL: this.baseUrl,
       timeout: this.timeout,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     });
   }
@@ -110,9 +110,7 @@ export class OllamaProvider implements IEmbeddingProvider {
 
     // Log warnings if there were any processing errors
     if (errors.length > 0) {
-      console.warn(
-        `Ollama embedding generation completed with ${errors.length} errors`,
-      );
+      console.warn(`Ollama embedding generation completed with ${errors.length} errors`);
     }
 
     return embeddings;
@@ -139,7 +137,7 @@ export class OllamaProvider implements IEmbeddingProvider {
     // Loop through each chunk and make individual API calls
     for (const chunk of chunks) {
       try {
-        const response = await this.client.post("/api/embeddings", {
+        const response = await this.client.post('/api/embeddings', {
           model: this.model,
           prompt: chunk,
         });
@@ -148,24 +146,21 @@ export class OllamaProvider implements IEmbeddingProvider {
         if (response.data && response.data.embedding) {
           embeddings.push(response.data.embedding);
         } else {
-          throw new Error("Invalid response format from Ollama API");
+          throw new Error('Invalid response format from Ollama API');
         }
       } catch (error) {
         // Handle specific error cases with helpful messages
         if (axios.isAxiosError(error)) {
           if (error.response?.status === 404) {
             throw new Error(
-              `Model '${this.model}' not found. Please pull the model first: ollama pull ${this.model}`,
+              `Model '${this.model}' not found. Please pull the model first: ollama pull ${this.model}`
             );
-          } else if (error.code === "ECONNREFUSED") {
+          } else if (error.code === 'ECONNREFUSED') {
             throw new Error(
-              "Cannot connect to Ollama. Please ensure Ollama is running on " +
-                this.baseUrl,
+              'Cannot connect to Ollama. Please ensure Ollama is running on ' + this.baseUrl
             );
           } else {
-            throw new Error(
-              `Ollama API error: ${error.response?.data?.error || error.message}`,
-            );
+            throw new Error(`Ollama API error: ${error.response?.data?.error || error.message}`);
           }
         } else {
           throw error;
@@ -188,10 +183,10 @@ export class OllamaProvider implements IEmbeddingProvider {
   getDimensions(): number {
     // Common dimensions for popular Ollama embedding models
     const modelDimensions: Record<string, number> = {
-      "nomic-embed-text": 768,
-      "all-minilm": 384,
-      "sentence-transformers/all-MiniLM-L6-v2": 384,
-      "mxbai-embed-large": 1024,
+      'nomic-embed-text': 768,
+      'all-minilm': 384,
+      'sentence-transformers/all-MiniLM-L6-v2': 384,
+      'mxbai-embed-large': 1024,
     };
 
     // Return known dimension or default to 768 for unknown models
@@ -223,20 +218,18 @@ export class OllamaProvider implements IEmbeddingProvider {
   async isAvailable(): Promise<boolean> {
     try {
       // First check: Verify Ollama service is running
-      const response = await this.client.get("/api/tags");
+      const response = await this.client.get('/api/tags');
 
       // Second check: Verify the specific model is available
       if (response.data && response.data.models) {
         const modelExists = response.data.models.some(
-          (model: any) =>
-            model.name === this.model ||
-            model.name.startsWith(this.model + ":"),
+          (model: any) => model.name === this.model || model.name.startsWith(this.model + ':')
         );
 
         if (!modelExists) {
           console.warn(
             `Model '${this.model}' not found in Ollama. Available models:`,
-            response.data.models.map((m: any) => m.name),
+            response.data.models.map((m: any) => m.name)
           );
           return false;
         }
@@ -245,10 +238,10 @@ export class OllamaProvider implements IEmbeddingProvider {
       return true;
     } catch (error) {
       // Provide specific error messages for common connection issues
-      if (axios.isAxiosError(error) && error.code === "ECONNREFUSED") {
-        console.error("Ollama is not running. Please start Ollama service.");
+      if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
+        console.error('Ollama is not running. Please start Ollama service.');
       } else {
-        console.error("Failed to check Ollama availability:", error);
+        console.error('Failed to check Ollama availability:', error);
       }
       return false;
     }
@@ -265,13 +258,13 @@ export class OllamaProvider implements IEmbeddingProvider {
    */
   async getAvailableModels(): Promise<string[]> {
     try {
-      const response = await this.client.get("/api/tags");
+      const response = await this.client.get('/api/tags');
       if (response.data && response.data.models) {
         return response.data.models.map((model: any) => model.name);
       }
       return [];
     } catch (error) {
-      console.error("Failed to get available models:", error);
+      console.error('Failed to get available models:', error);
       return [];
     }
   }
@@ -290,7 +283,7 @@ export class OllamaProvider implements IEmbeddingProvider {
   async pullModel(modelName: string): Promise<boolean> {
     try {
       console.log(`Pulling model '${modelName}' from Ollama...`);
-      await this.client.post("/api/pull", {
+      await this.client.post('/api/pull', {
         name: modelName,
       });
       console.log(`Model '${modelName}' pulled successfully`);

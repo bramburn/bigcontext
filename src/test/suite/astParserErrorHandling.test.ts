@@ -16,7 +16,7 @@ import * as os from 'os';
 class MockConfigurationService {
   private config: Configuration;
 
-  constructor(skipSyntaxErrors: boolean = true) {
+  constructor(skipSyntaxErrors = true) {
     this.config = {
       ...DEFAULT_CONFIGURATION,
       treeSitter: {
@@ -106,8 +106,6 @@ describe('AstParser Error Handling', () => {
       assert.ok(result.errors.length > 0);
       assert.strictEqual(result.errorsSkipped, false);
     });
-
-    
 
     it('should provide detailed error information', () => {
       const codeWithSyntaxError = `

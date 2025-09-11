@@ -9,8 +9,8 @@
  * each result matches the user's intent, then re-orders them accordingly.
  */
 
-import { ConfigService } from "../configService";
-import { CodeChunk } from "../parsing/chunker";
+import { ConfigService } from '../configService';
+import { CodeChunk } from '../parsing/chunker';
 
 /**
  * Interface for search result with relevance score
@@ -57,7 +57,7 @@ export interface LLMReRankingConfig {
   /** Weight for LLM score (0-1) */
   llmScoreWeight: number;
   /** LLM provider to use for re-ranking */
-  llmProvider: "openai" | "ollama";
+  llmProvider: 'openai' | 'ollama';
   /** Model to use for re-ranking */
   model: string;
   /** API key for LLM provider (if required) */
@@ -93,22 +93,18 @@ export class LLMReRankingService {
       maxResultsToReRank: baseConfig.llmReRanking?.maxResultsToReRank ?? 10,
       vectorScoreWeight: baseConfig.llmReRanking?.vectorScoreWeight ?? 0.3,
       llmScoreWeight: baseConfig.llmReRanking?.llmScoreWeight ?? 0.7,
-      llmProvider:
-        baseConfig.llmReRanking?.llmProvider ?? baseConfig.embeddingProvider,
+      llmProvider: baseConfig.llmReRanking?.llmProvider ?? baseConfig.embeddingProvider,
       model:
         baseConfig.llmReRanking?.model ??
-        (baseConfig.embeddingProvider === "openai"
-          ? "gpt-3.5-turbo"
-          : "llama2"),
+        (baseConfig.embeddingProvider === 'openai' ? 'gpt-3.5-turbo' : 'llama2'),
       apiKey: baseConfig.llmReRanking?.apiKey ?? baseConfig.openai?.apiKey,
       apiUrl:
         baseConfig.llmReRanking?.apiUrl ??
-        (baseConfig.embeddingProvider === "ollama"
+        (baseConfig.embeddingProvider === 'ollama'
           ? baseConfig.ollama?.apiUrl
-          : "https://api.openai.com/v1"),
+          : 'https://api.openai.com/v1'),
       timeout: baseConfig.llmReRanking?.timeout ?? 10000,
-      includeExplanations:
-        baseConfig.llmReRanking?.includeExplanations ?? false,
+      includeExplanations: baseConfig.llmReRanking?.includeExplanations ?? false,
     };
   }
 
@@ -117,7 +113,7 @@ export class LLMReRankingService {
    */
   public async reRankResults(
     query: string,
-    results: Array<{ chunk: CodeChunk; score: number }>,
+    results: Array<{ chunk: CodeChunk; score: number }>
   ): Promise<ReRankingResult> {
     const startTime = Date.now();
 
@@ -125,7 +121,7 @@ export class LLMReRankingService {
     if (!this.config.enabled) {
       return {
         query,
-        rankedResults: results.map((result) => ({
+        rankedResults: results.map(result => ({
           chunk: result.chunk,
           originalScore: result.score,
           llmScore: result.score,
@@ -145,40 +141,33 @@ export class LLMReRankingService {
       const llmScores = await this.getLLMScores(query, resultsToReRank);
 
       // Combine scores and create ranked results
-      const rankedResults: RankedResult[] = resultsToReRank.map(
-        (result, index) => {
-          const llmScore = llmScores[index]?.score ?? 0;
-          const explanation = llmScores[index]?.explanation;
+      const rankedResults: RankedResult[] = resultsToReRank.map((result, index) => {
+        const llmScore = llmScores[index]?.score ?? 0;
+        const explanation = llmScores[index]?.explanation;
 
-          // Calculate final score as weighted combination
-          const finalScore =
-            result.score * this.config.vectorScoreWeight +
-            llmScore * this.config.llmScoreWeight;
+        // Calculate final score as weighted combination
+        const finalScore =
+          result.score * this.config.vectorScoreWeight + llmScore * this.config.llmScoreWeight;
 
-          return {
-            chunk: result.chunk,
-            originalScore: result.score,
-            llmScore,
-            finalScore,
-            explanation: this.config.includeExplanations
-              ? explanation
-              : undefined,
-          };
-        },
-      );
+        return {
+          chunk: result.chunk,
+          originalScore: result.score,
+          llmScore,
+          finalScore,
+          explanation: this.config.includeExplanations ? explanation : undefined,
+        };
+      });
 
       // Sort by final score (descending)
       rankedResults.sort((a, b) => b.finalScore - a.finalScore);
 
       // Add any remaining results that weren't re-ranked
-      const remainingResults = results
-        .slice(this.config.maxResultsToReRank)
-        .map((result) => ({
-          chunk: result.chunk,
-          originalScore: result.score,
-          llmScore: result.score, // Use original score as LLM score
-          finalScore: result.score,
-        }));
+      const remainingResults = results.slice(this.config.maxResultsToReRank).map(result => ({
+        chunk: result.chunk,
+        originalScore: result.score,
+        llmScore: result.score, // Use original score as LLM score
+        finalScore: result.score,
+      }));
 
       return {
         query,
@@ -188,12 +177,12 @@ export class LLMReRankingService {
         success: true,
       };
     } catch (error) {
-      console.error("LLMReRankingService: Error re-ranking results:", error);
+      console.error('LLMReRankingService: Error re-ranking results:', error);
 
       // Return original results on error
       return {
         query,
-        rankedResults: results.map((result) => ({
+        rankedResults: results.map(result => ({
           chunk: result.chunk,
           originalScore: result.score,
           llmScore: result.score,
@@ -211,11 +200,11 @@ export class LLMReRankingService {
    */
   private async getLLMScores(
     query: string,
-    results: Array<{ chunk: CodeChunk; score: number }>,
+    results: Array<{ chunk: CodeChunk; score: number }>
   ): Promise<Array<{ score: number; explanation?: string }>> {
     const prompt = this.createReRankingPrompt(query, results);
 
-    if (this.config.llmProvider === "openai") {
+    if (this.config.llmProvider === 'openai') {
       return await this.reRankWithOpenAI(prompt, results.length);
     } else {
       return await this.reRankWithOllama(prompt, results.length);
@@ -227,16 +216,16 @@ export class LLMReRankingService {
    */
   private createReRankingPrompt(
     query: string,
-    results: Array<{ chunk: CodeChunk; score: number }>,
+    results: Array<{ chunk: CodeChunk; score: number }>
   ): string {
     const codeSnippets = results
       .map((result, index) => {
         const chunk = result.chunk;
         return `[${index + 1}] File: ${chunk.filePath}
 Type: ${chunk.type}
-Content: ${chunk.content.substring(0, 300)}${chunk.content.length > 300 ? "..." : ""}`;
+Content: ${chunk.content.substring(0, 300)}${chunk.content.length > 300 ? '...' : ''}`;
       })
-      .join("\n\n");
+      .join('\n\n');
 
     return `You are a code search relevance evaluator. Given a user's search query and code snippets, rate how relevant each snippet is to the query.
 
@@ -252,14 +241,14 @@ For each snippet, provide a relevance score from 0.0 to 1.0 where:
 - 0.4-0.5 = Somewhat relevant, tangentially related
 - 0.0-0.3 = Not relevant or unrelated
 
-${this.config.includeExplanations ? "Also provide a brief explanation for each score." : ""}
+${this.config.includeExplanations ? 'Also provide a brief explanation for each score.' : ''}
 
-Respond with only the scores${this.config.includeExplanations ? " and explanations" : ""}, one per line, in the format:
-${this.config.includeExplanations ? "[number]: [score] - [explanation]" : "[number]: [score]"}
+Respond with only the scores${this.config.includeExplanations ? ' and explanations' : ''}, one per line, in the format:
+${this.config.includeExplanations ? '[number]: [score] - [explanation]' : '[number]: [score]'}
 
 Example:
-1: 0.9${this.config.includeExplanations ? " - Directly implements the requested functionality" : ""}
-2: 0.6${this.config.includeExplanations ? " - Related utility function that supports the main feature" : ""}
+1: 0.9${this.config.includeExplanations ? ' - Directly implements the requested functionality' : ''}
+2: 0.6${this.config.includeExplanations ? ' - Related utility function that supports the main feature' : ''}
 
 Scores:`;
   }
@@ -269,19 +258,19 @@ Scores:`;
    */
   private async reRankWithOpenAI(
     prompt: string,
-    resultCount: number,
+    resultCount: number
   ): Promise<Array<{ score: number; explanation?: string }>> {
     const response = await fetch(`${this.config.apiUrl}/chat/completions`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${this.config.apiKey}`,
       },
       body: JSON.stringify({
         model: this.config.model,
         messages: [
           {
-            role: "user",
+            role: 'user',
             content: prompt,
           },
         ],
@@ -292,13 +281,11 @@ Scores:`;
     });
 
     if (!response.ok) {
-      throw new Error(
-        `OpenAI API error: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    const content = data.choices?.[0]?.message?.content || '';
 
     return this.parseReRankingScores(content, resultCount);
   }
@@ -308,12 +295,12 @@ Scores:`;
    */
   private async reRankWithOllama(
     prompt: string,
-    resultCount: number,
+    resultCount: number
   ): Promise<Array<{ score: number; explanation?: string }>> {
     const response = await fetch(`${this.config.apiUrl}/api/generate`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: this.config.model,
@@ -328,13 +315,11 @@ Scores:`;
     });
 
     if (!response.ok) {
-      throw new Error(
-        `Ollama API error: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
-    const content = data.response || "";
+    const content = data.response || '';
 
     return this.parseReRankingScores(content, resultCount);
   }
@@ -344,13 +329,13 @@ Scores:`;
    */
   private parseReRankingScores(
     content: string,
-    expectedCount: number,
+    expectedCount: number
   ): Array<{ score: number; explanation?: string }> {
-    const lines = content.split("\n").filter((line) => line.trim().length > 0);
+    const lines = content.split('\n').filter(line => line.trim().length > 0);
     const scores: Array<{ score: number; explanation?: string }> = [];
 
     for (let i = 0; i < expectedCount; i++) {
-      const line = lines.find((l) => l.trim().startsWith(`${i + 1}:`));
+      const line = lines.find(l => l.trim().startsWith(`${i + 1}:`));
 
       if (line) {
         const match = line.match(/(\d+):\s*([\d.]+)(?:\s*-\s*(.+))?/);

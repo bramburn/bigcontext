@@ -24,13 +24,13 @@ import {
   IndexingConfiguration,
   IndexingError,
   createInitialProgress,
-  DEFAULT_INDEXING_CONFIG
+  DEFAULT_INDEXING_CONFIG,
 } from '../models/indexingProgress';
 import {
   ProjectFileMetadata,
   FileChunk,
   FileProcessingStats,
-  createFileMetadata
+  createFileMetadata,
 } from '../models/projectFileMetadata';
 import { FileProcessor } from './FileProcessor';
 import { EmbeddingProvider } from './EmbeddingProvider';
@@ -40,55 +40,55 @@ import { QdrantService } from './QdrantService';
  * Interface contract that this service implements
  */
 export interface IIndexingService {
-    /**
-     * Starts a full indexing process for the workspace.
-     */
-    startIndexing(): Promise<void>;
+  /**
+   * Starts a full indexing process for the workspace.
+   */
+  startIndexing(): Promise<void>;
 
-    /**
-     * Pauses the currently running indexing process.
-     */
-    pauseIndexing(): Promise<void>;
+  /**
+   * Pauses the currently running indexing process.
+   */
+  pauseIndexing(): Promise<void>;
 
-    /**
-     * Resumes a paused indexing process.
-     */
-    resumeIndexing(): Promise<void>;
+  /**
+   * Resumes a paused indexing process.
+   */
+  resumeIndexing(): Promise<void>;
 
-    /**
-     * Gets the current state of the indexing process.
-     */
-    getIndexState(): Promise<IndexState>;
+  /**
+   * Gets the current state of the indexing process.
+   */
+  getIndexState(): Promise<IndexState>;
 
-    /**
-     * Updates a single file in the index.
-     */
-    updateFileInIndex(uri: vscode.Uri): Promise<void>;
+  /**
+   * Updates a single file in the index.
+   */
+  updateFileInIndex(uri: vscode.Uri): Promise<void>;
 
-    /**
-     * Removes a file from the index.
-     */
-    removeFileFromIndex(uri: vscode.Uri): Promise<void>;
+  /**
+   * Removes a file from the index.
+   */
+  removeFileFromIndex(uri: vscode.Uri): Promise<void>;
 
-    /**
-     * Adds a new file to the index.
-     */
-    addFileToIndex(uri: vscode.Uri): Promise<void>;
+  /**
+   * Adds a new file to the index.
+   */
+  addFileToIndex(uri: vscode.Uri): Promise<void>;
 
-    /**
-     * Checks if a file is currently indexed.
-     */
-    isFileIndexed(filePath: string): boolean;
+  /**
+   * Checks if a file is currently indexed.
+   */
+  isFileIndexed(filePath: string): boolean;
 
-    /**
-     * Triggers a full re-index of the workspace.
-     */
-    triggerFullReindex(): Promise<void>;
+  /**
+   * Triggers a full re-index of the workspace.
+   */
+  triggerFullReindex(): Promise<void>;
 
-    /**
-     * Adds a state change listener.
-     */
-    onStateChange(listener: (state: IndexState) => void): vscode.Disposable;
+  /**
+   * Adds a state change listener.
+   */
+  onStateChange(listener: (state: IndexState) => void): vscode.Disposable;
 }
 
 /**
@@ -97,22 +97,22 @@ export interface IIndexingService {
 export interface IndexingSession {
   /** Unique session identifier */
   id: string;
-  
+
   /** Session start time */
   startTime: Date;
-  
+
   /** Session end time (if completed) */
   endTime?: Date;
-  
+
   /** Current progress */
   progress: DetailedIndexingProgress;
-  
+
   /** Configuration used for this session */
   configuration: IndexingConfiguration;
-  
+
   /** Whether the session is active */
   isActive: boolean;
-  
+
   /** Whether the session is paused */
   isPaused: boolean;
 }
@@ -134,28 +134,28 @@ export interface IndexingSession {
 export class IndexingService implements IIndexingService {
   /** VS Code extension context */
   private context: vscode.ExtensionContext;
-  
+
   /** Current workspace root path */
   private workspaceRoot: string | undefined;
-  
+
   /** File processor service */
   private fileProcessor: FileProcessor;
-  
+
   /** Embedding provider service */
   private embeddingProvider: EmbeddingProvider;
-  
+
   /** Qdrant vector database service */
   private qdrantService: QdrantService;
-  
+
   /** Current indexing session */
   private currentSession: IndexingSession | undefined;
-  
+
   /** Progress callback function */
   private progressCallback: ((progress: IndexingProgress) => void) | undefined;
-  
+
   /** Indexing configuration */
   private configuration: IndexingConfiguration;
-  
+
   /** Cancellation token for stopping indexing */
   private cancellationToken: vscode.CancellationTokenSource | undefined;
 
@@ -164,10 +164,10 @@ export class IndexingService implements IIndexingService {
 
   /** State change listeners */
   private stateChangeListeners: ((state: IndexState) => void)[] = [];
-  
+
   /**
    * Creates a new IndexingService instance
-   * 
+   *
    * @param context VS Code extension context
    * @param fileProcessor File processor service
    * @param embeddingProvider Embedding provider service
@@ -184,25 +184,25 @@ export class IndexingService implements IIndexingService {
     this.embeddingProvider = embeddingProvider;
     this.qdrantService = qdrantService;
     this.configuration = DEFAULT_INDEXING_CONFIG;
-    
+
     // Get current workspace root
     this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   }
-  
+
   /**
    * Get current indexing status
-   * 
+   *
    * Returns the current indexing progress and status information.
-   * 
+   *
    * @returns Current indexing progress
    */
   public getCurrentStatus(): IndexingProgress {
     if (!this.currentSession) {
       return createInitialProgress();
     }
-    
+
     const progress = this.currentSession.progress;
-    
+
     return {
       status: progress.status,
       percentageComplete: progress.percentageComplete,
@@ -214,7 +214,7 @@ export class IndexingService implements IIndexingService {
       errorsEncountered: progress.errorsEncountered,
     };
   }
-  
+
   /**
    * Start indexing process (IIndexingService interface)
    *
@@ -251,7 +251,7 @@ export class IndexingService implements IIndexingService {
           },
         };
       }
-      
+
       // Validate workspace
       if (!this.workspaceRoot) {
         return {
@@ -263,7 +263,7 @@ export class IndexingService implements IIndexingService {
           },
         };
       }
-      
+
       // Create new indexing session
       this.currentSession = {
         id: this.generateSessionId(),
@@ -277,10 +277,10 @@ export class IndexingService implements IIndexingService {
         isActive: true,
         isPaused: false,
       };
-      
+
       this.progressCallback = progressCallback;
       this.cancellationToken = new vscode.CancellationTokenSource();
-      
+
       // Start indexing process
       this.performIndexing();
 
@@ -295,7 +295,6 @@ export class IndexingService implements IIndexingService {
           estimatedDuration: 0, // Will be calculated during processing
         },
       };
-      
     } catch (error) {
       console.error('IndexingService: Failed to start indexing:', error);
       return {
@@ -308,7 +307,7 @@ export class IndexingService implements IIndexingService {
       };
     }
   }
-  
+
   /**
    * Pauses the currently running indexing process (IIndexingService interface)
    */
@@ -343,7 +342,7 @@ export class IndexingService implements IIndexingService {
       message: 'Indexing paused successfully',
     };
   }
-  
+
   /**
    * Resumes a paused indexing process (IIndexingService interface)
    */
@@ -378,10 +377,10 @@ export class IndexingService implements IIndexingService {
       message: 'Indexing resumed successfully',
     };
   }
-  
+
   /**
    * Stop indexing process
-   * 
+   *
    * @returns Operation result
    */
   public async stopIndexing(): Promise<IndexingOperationResult> {
@@ -391,33 +390,33 @@ export class IndexingService implements IIndexingService {
         message: 'No active indexing session to stop',
       };
     }
-    
+
     // Cancel the indexing process
     this.cancellationToken?.cancel();
-    
+
     // Update session status
     this.currentSession.isActive = false;
     this.currentSession.endTime = new Date();
     this.currentSession.progress.status = 'Paused'; // Stopped but can be resumed
-    
+
     return {
       success: true,
       message: 'Indexing stopped successfully',
     };
   }
-  
+
   /**
    * Update indexing configuration
-   * 
+   *
    * @param config New configuration
    */
   public updateConfiguration(config: Partial<IndexingConfiguration>): void {
     this.configuration = { ...this.configuration, ...config };
   }
-  
+
   /**
    * Get indexing statistics
-   * 
+   *
    * @returns Processing statistics
    */
   public getStatistics(): FileProcessingStats {
@@ -432,7 +431,10 @@ export class IndexingService implements IIndexingService {
       averageChunksPerFile: 0,
       totalProcessingTime: 0,
       averageProcessingTimePerFile: 0,
-      fileTypeStats: {} as Record<string, { count: number; totalChunks: number; averageSize: number; processingTime: number; }>,
+      fileTypeStats: {} as Record<
+        string,
+        { count: number; totalChunks: number; averageSize: number; processingTime: number }
+      >,
       errorStats: {
         totalErrors: 0,
         errorsByType: {},
@@ -440,68 +442,67 @@ export class IndexingService implements IIndexingService {
       },
     };
   }
-  
+
   /**
    * Perform the actual indexing process
-   * 
+   *
    * This is the main indexing workflow that runs asynchronously.
    */
   private async performIndexing(): Promise<void> {
     if (!this.currentSession || !this.workspaceRoot) {
       return;
     }
-    
+
     try {
       const session = this.currentSession;
       const startTime = Date.now();
-      
+
       // Phase 1: Discover files
       this.updateProgress('discovering', 'Discovering files...');
       const files = await this.fileProcessor.discoverFiles(this.workspaceRoot, this.configuration);
-      
+
       session.progress.totalFiles = files.length;
       this.updateProgress('processing', `Found ${files.length} files to process`);
-      
+
       // Phase 2: Process files
       let processedCount = 0;
       const allChunks: FileChunk[] = [];
-      
+
       for (const file of files) {
         // Check for cancellation
         if (this.cancellationToken?.token.isCancellationRequested) {
           break;
         }
-        
+
         // Check for pause
         while (session.isPaused) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        
+
         try {
           this.updateProgress('processing', `Processing ${file.fileName}...`);
-          
+
           const result = await this.fileProcessor.processFile(file);
           allChunks.push(...result.chunks);
-          
+
           processedCount++;
           session.progress.filesProcessed = processedCount;
           session.progress.chunksIndexed = allChunks.length;
           session.progress.percentageComplete = Math.round((processedCount / files.length) * 100);
           session.progress.timeElapsed = Date.now() - startTime;
-          
+
           this.notifyProgress();
-          
         } catch (error) {
           this.addError(file.filePath, error);
         }
       }
-      
+
       // Phase 3: Generate embeddings and store
       if (allChunks.length > 0) {
         this.updateProgress('embedding', 'Generating embeddings...');
         await this.processChunksForStorage(allChunks);
       }
-      
+
       // Complete the session
       session.isActive = false;
       session.endTime = new Date();
@@ -512,7 +513,6 @@ export class IndexingService implements IIndexingService {
 
       // Notify state change
       await this.notifyStateChange();
-      
     } catch (error) {
       console.error('IndexingService: Indexing failed:', error);
       if (this.currentSession) {
@@ -524,17 +524,17 @@ export class IndexingService implements IIndexingService {
       }
     }
   }
-  
+
   /**
    * Process chunks for embedding generation and storage
-   * 
+   *
    * @param chunks Chunks to process
    */
   private async processChunksForStorage(chunks: FileChunk[]): Promise<void> {
     // Generate embeddings
     const contents = chunks.map(chunk => chunk.content);
     const embeddings = await this.embeddingProvider.generateEmbeddings(contents);
-    
+
     // Add embeddings to chunks
     chunks.forEach((chunk, index) => {
       if (embeddings[index]) {
@@ -547,14 +547,14 @@ export class IndexingService implements IIndexingService {
         };
       }
     });
-    
+
     // Store in Qdrant
     await this.qdrantService.storeChunks(chunks);
   }
-  
+
   /**
    * Update progress and notify callback
-   * 
+   *
    * @param operation Current operation
    * @param message Progress message
    */
@@ -563,10 +563,10 @@ export class IndexingService implements IIndexingService {
       this.currentSession.progress.currentOperation = operation;
       this.currentSession.progress.lastUpdate = new Date();
     }
-    
+
     this.notifyProgress();
   }
-  
+
   /**
    * Notify progress callback
    */
@@ -575,10 +575,10 @@ export class IndexingService implements IIndexingService {
       this.progressCallback(this.getCurrentStatus());
     }
   }
-  
+
   /**
    * Add error to current session
-   * 
+   *
    * @param context Error context
    * @param error Error object
    */
@@ -593,16 +593,16 @@ export class IndexingService implements IIndexingService {
         recoverable: true,
         filePath: context,
       };
-      
+
       if (!this.currentSession.progress.errors) {
         this.currentSession.progress.errors = [];
       }
-      
+
       this.currentSession.progress.errors.push(indexingError);
       this.currentSession.progress.errorsEncountered = this.currentSession.progress.errors.length;
     }
   }
-  
+
   /**
    * Generate unique session ID
    *
@@ -651,7 +651,10 @@ export class IndexingService implements IIndexingService {
 
       // Create file metadata
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
-      const fileMetadata = createFileMetadata(uri.fsPath, workspaceRoot, { size: 0, mtime: new Date() });
+      const fileMetadata = createFileMetadata(uri.fsPath, workspaceRoot, {
+        size: 0,
+        mtime: new Date(),
+      });
 
       // Process the file
       const result = await this.fileProcessor.processFile(fileMetadata);
@@ -761,7 +764,7 @@ export class IndexingService implements IIndexingService {
       const metadata: FileMetadata = {
         filePath,
         lastIndexed: Date.now(),
-        contentHash
+        contentHash,
       };
 
       this.fileMetadataMap.set(filePath, metadata);

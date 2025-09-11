@@ -6,11 +6,11 @@
  * leveraging ContextService rather than reaching into lower-level services directly.
  */
 
-import { ContextService } from "../context/contextService";
+import { ContextService } from '../context/contextService';
 
 export interface HealthCheckResult {
   service: string;
-  status: "healthy" | "unhealthy";
+  status: 'healthy' | 'unhealthy';
   details: string;
 }
 
@@ -22,16 +22,14 @@ export class HealthCheckService {
     try {
       const status = await this.contextService.getStatus();
       return {
-        service: "Qdrant DB",
-        status: status.qdrantConnected ? "healthy" : "unhealthy",
-        details: status.qdrantConnected
-          ? "Connection successful."
-          : "Qdrant connection failed",
+        service: 'Qdrant DB',
+        status: status.qdrantConnected ? 'healthy' : 'unhealthy',
+        details: status.qdrantConnected ? 'Connection successful.' : 'Qdrant connection failed',
       };
     } catch (error) {
       return {
-        service: "Qdrant DB",
-        status: "unhealthy",
+        service: 'Qdrant DB',
+        status: 'unhealthy',
         details: error instanceof Error ? error.message : String(error),
       };
     }
@@ -42,16 +40,16 @@ export class HealthCheckService {
     try {
       const status = await this.contextService.getStatus();
       return {
-        service: "Embedding Provider",
-        status: status.embeddingProvider ? "healthy" : "unhealthy",
+        service: 'Embedding Provider',
+        status: status.embeddingProvider ? 'healthy' : 'unhealthy',
         details: status.embeddingProvider
           ? `Provider: ${status.embeddingProvider}`
-          : "No provider available",
+          : 'No provider available',
       };
     } catch (error) {
       return {
-        service: "Embedding Provider",
-        status: "unhealthy",
+        service: 'Embedding Provider',
+        status: 'unhealthy',
         details: error instanceof Error ? error.message : String(error),
       };
     }
@@ -68,4 +66,3 @@ export class HealthCheckService {
     return [qdrant, provider];
   }
 }
-

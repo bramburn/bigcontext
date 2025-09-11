@@ -1,6 +1,6 @@
 /**
  * Configuration Types
- * 
+ *
  * Type definitions for the persistent configuration system that manages
  * .context/config.json file and application settings.
  */

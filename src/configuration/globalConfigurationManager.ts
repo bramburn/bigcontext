@@ -11,7 +11,7 @@ export interface GlobalConfiguration {
     isConfigured: boolean;
     lastValidated: number;
   };
-  
+
   // Embedding provider configuration
   embeddingProvider: {
     type: 'ollama' | 'openai';
@@ -28,7 +28,7 @@ export interface GlobalConfiguration {
       lastValidated: number;
     };
   };
-  
+
   // Indexing preferences
   indexing: {
     intensity: 'low' | 'medium' | 'high';
@@ -36,21 +36,21 @@ export interface GlobalConfiguration {
     parallelProcessing: boolean;
     autoIndex: boolean;
   };
-  
+
   // Search preferences
   search: {
     maxResults: number;
     minSimilarity: number;
     enableReranking: boolean;
   };
-  
+
   // UI preferences
   ui: {
     theme: 'auto' | 'light' | 'dark';
     compactMode: boolean;
     showAdvancedOptions: boolean;
   };
-  
+
   // Metadata
   version: string;
   lastUpdated: number;
@@ -73,7 +73,7 @@ export interface RepositoryConfiguration {
 
 /**
  * Global Configuration Manager
- * 
+ *
  * Manages configuration that persists across repositories and VS Code sessions.
  * This allows users to set up their database and embedding provider once
  * and use it across all repositories.
@@ -84,7 +84,7 @@ export class GlobalConfigurationManager {
   private globalConfig: GlobalConfiguration;
   private repositoryConfigs: Map<string, RepositoryConfiguration> = new Map();
   private changeListeners: Array<(config: GlobalConfiguration) => void> = [];
-  
+
   private static readonly GLOBAL_CONFIG_KEY = 'bigcontext.globalConfiguration';
   private static readonly REPO_CONFIGS_KEY = 'bigcontext.repositoryConfigurations';
   private static readonly CONFIG_VERSION = '1.0.0';
@@ -152,7 +152,7 @@ export class GlobalConfigurationManager {
       const savedGlobalConfig = this.context.globalState.get<GlobalConfiguration>(
         GlobalConfigurationManager.GLOBAL_CONFIG_KEY
       );
-      
+
       if (savedGlobalConfig) {
         // Merge with defaults to handle version upgrades
         this.globalConfig = this.mergeWithDefaults(savedGlobalConfig);
@@ -164,15 +164,15 @@ export class GlobalConfigurationManager {
       }
 
       // Load repository configurations
-      const savedRepoConfigs = this.context.globalState.get<Record<string, RepositoryConfiguration>>(
-        GlobalConfigurationManager.REPO_CONFIGS_KEY
-      );
-      
+      const savedRepoConfigs = this.context.globalState.get<
+        Record<string, RepositoryConfiguration>
+      >(GlobalConfigurationManager.REPO_CONFIGS_KEY);
+
       if (savedRepoConfigs) {
         Object.entries(savedRepoConfigs).forEach(([path, config]) => {
           this.repositoryConfigs.set(path, config);
         });
-        
+
         this.loggingService.info(
           'Loaded repository configurations',
           { count: this.repositoryConfigs.size },
@@ -193,7 +193,7 @@ export class GlobalConfigurationManager {
    */
   private mergeWithDefaults(saved: Partial<GlobalConfiguration>): GlobalConfiguration {
     const defaults = this.getDefaultGlobalConfiguration();
-    
+
     return {
       ...defaults,
       ...saved,
@@ -201,12 +201,12 @@ export class GlobalConfigurationManager {
       embeddingProvider: {
         ...defaults.embeddingProvider,
         ...saved.embeddingProvider,
-        ollama: saved.embeddingProvider?.ollama ?
-          { ...defaults.embeddingProvider.ollama, ...saved.embeddingProvider.ollama } :
-          defaults.embeddingProvider.ollama,
-        openai: saved.embeddingProvider?.openai ?
-          { ...defaults.embeddingProvider.openai, ...saved.embeddingProvider.openai } :
-          defaults.embeddingProvider.openai,
+        ollama: saved.embeddingProvider?.ollama
+          ? { ...defaults.embeddingProvider.ollama, ...saved.embeddingProvider.ollama }
+          : defaults.embeddingProvider.ollama,
+        openai: saved.embeddingProvider?.openai
+          ? { ...defaults.embeddingProvider.openai, ...saved.embeddingProvider.openai }
+          : defaults.embeddingProvider.openai,
       },
       indexing: { ...defaults.indexing, ...saved.indexing },
       search: { ...defaults.search, ...saved.search },
@@ -222,7 +222,7 @@ export class GlobalConfigurationManager {
   private async saveConfiguration(): Promise<void> {
     try {
       this.globalConfig.lastUpdated = Date.now();
-      
+
       await this.context.globalState.update(
         GlobalConfigurationManager.GLOBAL_CONFIG_KEY,
         this.globalConfig
@@ -260,17 +260,15 @@ export class GlobalConfigurationManager {
   /**
    * Update global configuration
    */
-  public async updateGlobalConfiguration(
-    updates: Partial<GlobalConfiguration>
-  ): Promise<void> {
+  public async updateGlobalConfiguration(updates: Partial<GlobalConfiguration>): Promise<void> {
     const oldConfig = { ...this.globalConfig };
     this.globalConfig = this.mergeWithDefaults({ ...this.globalConfig, ...updates });
-    
+
     await this.saveConfiguration();
-    
+
     // Notify listeners
     this.notifyConfigurationChange();
-    
+
     this.loggingService.info(
       'Global configuration updated',
       { changes: Object.keys(updates) },
@@ -324,7 +322,7 @@ export class GlobalConfigurationManager {
     let hash = 0;
     for (let i = 0; i < repositoryPath.length; i++) {
       const char = repositoryPath.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);
@@ -334,10 +332,12 @@ export class GlobalConfigurationManager {
    * Check if global setup is completed
    */
   public isSetupCompleted(): boolean {
-    return !!(this.globalConfig.setupCompleted &&
-           this.globalConfig.qdrant.isConfigured &&
-           (this.globalConfig.embeddingProvider.ollama?.isConfigured ||
-            this.globalConfig.embeddingProvider.openai?.isConfigured));
+    return !!(
+      this.globalConfig.setupCompleted &&
+      this.globalConfig.qdrant.isConfigured &&
+      (this.globalConfig.embeddingProvider.ollama?.isConfigured ||
+        this.globalConfig.embeddingProvider.openai?.isConfigured)
+    );
   }
 
   /**
@@ -384,10 +384,7 @@ export class GlobalConfigurationManager {
   /**
    * Validate and update Qdrant configuration
    */
-  public async validateAndUpdateQdrant(
-    connectionString: string,
-    isValid: boolean
-  ): Promise<void> {
+  public async validateAndUpdateQdrant(connectionString: string, isValid: boolean): Promise<void> {
     await this.updateGlobalConfiguration({
       qdrant: {
         connectionString,
@@ -400,11 +397,9 @@ export class GlobalConfigurationManager {
   /**
    * Add configuration change listener
    */
-  public onConfigurationChange(
-    listener: (config: GlobalConfiguration) => void
-  ): vscode.Disposable {
+  public onConfigurationChange(listener: (config: GlobalConfiguration) => void): vscode.Disposable {
     this.changeListeners.push(listener);
-    
+
     return {
       dispose: () => {
         const index = this.changeListeners.indexOf(listener);
@@ -441,11 +436,7 @@ export class GlobalConfigurationManager {
     await this.saveConfiguration();
     this.notifyConfigurationChange();
 
-    this.loggingService.info(
-      'Configuration reset to defaults',
-      {},
-      'GlobalConfigurationManager'
-    );
+    this.loggingService.info('Configuration reset to defaults', {}, 'GlobalConfigurationManager');
   }
 
   /**

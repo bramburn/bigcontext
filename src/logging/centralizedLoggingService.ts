@@ -14,13 +14,13 @@
  * - Configurable log formatting
  */
 
-import * as vscode from "vscode";
-import * as fs from "fs";
-import * as path from "path";
-import * as winston from "winston";
-const DailyRotateFile = require("winston-daily-rotate-file");
-import { v4 as uuidv4 } from "uuid";
-import { ConfigService } from "../configService";
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as winston from 'winston';
+const DailyRotateFile = require('winston-daily-rotate-file');
+import { v4 as uuidv4 } from 'uuid';
+import { ConfigService } from '../configService';
 
 /**
  * Log levels in order of severity
@@ -82,17 +82,15 @@ export class CentralizedLoggingService implements vscode.Disposable {
   constructor(configService: ConfigService) {
     this.configService = configService;
     this.config = this.loadConfig();
-    this.outputChannel = vscode.window.createOutputChannel(
-      "Code Context Engine",
-    );
+    this.outputChannel = vscode.window.createOutputChannel('Code Context Engine');
     this.logDirectory = this.config.logDirectory;
     this.currentLogFile = this.generateLogFileName();
 
     this.initializeLogging();
 
     // Listen for configuration changes to update log level dynamically
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("code-context-engine.logging.level")) {
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('code-context-engine.logging.level')) {
         this.updateLogLevel();
       }
     });
@@ -107,15 +105,12 @@ export class CentralizedLoggingService implements vscode.Disposable {
     return {
       level: this.parseLogLevel(baseConfig.logging?.level) ?? LogLevel.INFO,
       enableFileLogging: baseConfig.logging?.enableFileLogging ?? true,
-      logDirectory:
-        baseConfig.logging?.logDirectory ?? this.getDefaultLogDirectory(),
+      logDirectory: baseConfig.logging?.logDirectory ?? this.getDefaultLogDirectory(),
       maxFileSize: baseConfig.logging?.maxFileSize ?? 10 * 1024 * 1024, // 10MB
       maxFiles: baseConfig.logging?.maxFiles ?? 5,
       enableConsoleLogging: baseConfig.logging?.enableConsoleLogging ?? true,
       enableOutputChannel: baseConfig.logging?.enableOutputChannel ?? true,
-      logFormat:
-        baseConfig.logging?.logFormat ??
-        "[{timestamp}] [{level}] {source}: {message}",
+      logFormat: baseConfig.logging?.logFormat ?? '[{timestamp}] [{level}] {source}: {message}',
     };
   }
 
@@ -123,18 +118,20 @@ export class CentralizedLoggingService implements vscode.Disposable {
    * Parse log level from string
    */
   private parseLogLevel(level?: string): LogLevel | undefined {
-    if (!level) return undefined;
+    if (!level) {
+      return undefined;
+    }
 
     switch (level.toLowerCase()) {
-      case "error":
+      case 'error':
         return LogLevel.ERROR;
-      case "warn":
+      case 'warn':
         return LogLevel.WARN;
-      case "info":
+      case 'info':
         return LogLevel.INFO;
-      case "debug":
+      case 'debug':
         return LogLevel.DEBUG;
-      case "trace":
+      case 'trace':
         return LogLevel.TRACE;
       default:
         return undefined;
@@ -151,9 +148,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
     this.config.level = newConfig.level;
 
     if (oldLevel !== this.config.level) {
-      this.info(
-        `Log level changed from ${LogLevel[oldLevel]} to ${LogLevel[this.config.level]}`,
-      );
+      this.info(`Log level changed from ${LogLevel[oldLevel]} to ${LogLevel[this.config.level]}`);
     }
   }
 
@@ -177,38 +172,39 @@ export class CentralizedLoggingService implements vscode.Disposable {
 
       // Console transport
       if (this.config.enableConsoleLogging) {
-        transports.push(new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.timestamp(),
-            winston.format.colorize(),
-            winston.format.printf(({ timestamp, level, message, source, ...meta }) => {
-              const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
-              return `${timestamp} [${level}] ${source || 'Unknown'}: ${message}${metaStr}`;
-            })
-          )
-        }));
+        transports.push(
+          new winston.transports.Console({
+            format: winston.format.combine(
+              winston.format.timestamp(),
+              winston.format.colorize(),
+              winston.format.printf(({ timestamp, level, message, source, ...meta }) => {
+                const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+                return `${timestamp} [${level}] ${source || 'Unknown'}: ${message}${metaStr}`;
+              })
+            ),
+          })
+        );
       }
 
       // File transport with daily rotation
       if (this.config.enableFileLogging) {
-        transports.push(new DailyRotateFile({
-          filename: path.join(this.logDirectory, 'extension-%DATE%.log'),
-          datePattern: 'YYYY-MM-DD',
-          maxSize: this.config.maxFileSize,
-          maxFiles: this.config.maxFiles,
-          format: winston.format.combine(
-            winston.format.timestamp(),
-            winston.format.json()
-          )
-        }));
+        transports.push(
+          new DailyRotateFile({
+            filename: path.join(this.logDirectory, 'extension-%DATE%.log'),
+            datePattern: 'YYYY-MM-DD',
+            maxSize: this.config.maxFileSize,
+            maxFiles: this.config.maxFiles,
+            format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+          })
+        );
       }
 
       this.logger = winston.createLogger({
         level: LogLevel[this.config.level].toLowerCase(),
-        transports
+        transports,
       });
 
-      this.info("CentralizedLoggingService initialized", {
+      this.info('CentralizedLoggingService initialized', {
         config: {
           level: LogLevel[this.config.level],
           fileLogging: this.config.enableFileLogging,
@@ -217,7 +213,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
         },
       });
     } catch (error) {
-      console.error("Failed to initialize logging service:", error);
+      console.error('Failed to initialize logging service:', error);
     }
   }
 
@@ -235,10 +231,10 @@ export class CentralizedLoggingService implements vscode.Disposable {
    */
   private initializeLogFile(): void {
     const logFilePath = path.join(this.logDirectory, this.currentLogFile);
-    this.logFileStream = fs.createWriteStream(logFilePath, { flags: "a" });
+    this.logFileStream = fs.createWriteStream(logFilePath, { flags: 'a' });
 
-    this.logFileStream.on("error", (error) => {
-      console.error("Log file stream error:", error);
+    this.logFileStream.on('error', error => {
+      console.error('Log file stream error:', error);
     });
   }
 
@@ -247,7 +243,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
    */
   private generateLogFileName(): string {
     const now = new Date();
-    const timestamp = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const timestamp = now.toISOString().split('T')[0]; // YYYY-MM-DD
     return `code-context-engine-${timestamp}.log`;
   }
 
@@ -258,11 +254,8 @@ export class CentralizedLoggingService implements vscode.Disposable {
     try {
       const files = fs
         .readdirSync(this.logDirectory)
-        .filter(
-          (file) =>
-            file.startsWith("code-context-engine-") && file.endsWith(".log"),
-        )
-        .map((file) => ({
+        .filter(file => file.startsWith('code-context-engine-') && file.endsWith('.log'))
+        .map(file => ({
           name: file,
           path: path.join(this.logDirectory, file),
           stats: fs.statSync(path.join(this.logDirectory, file)),
@@ -275,7 +268,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
         fs.unlinkSync(file.path);
       }
     } catch (error) {
-      console.error("Error cleaning up log files:", error);
+      console.error('Error cleaning up log files:', error);
     }
   }
 
@@ -283,7 +276,9 @@ export class CentralizedLoggingService implements vscode.Disposable {
    * Check if log file needs rotation
    */
   private checkLogRotation(): void {
-    if (!this.config.enableFileLogging || !this.logFileStream) return;
+    if (!this.config.enableFileLogging || !this.logFileStream) {
+      return;
+    }
 
     try {
       const logFilePath = path.join(this.logDirectory, this.currentLogFile);
@@ -293,7 +288,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
         this.rotateLogFile();
       }
     } catch (error) {
-      console.error("Error checking log rotation:", error);
+      console.error('Error checking log rotation:', error);
     }
   }
 
@@ -310,7 +305,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
       this.initializeLogFile();
       this.cleanupOldLogFiles();
     } catch (error) {
-      console.error("Error rotating log file:", error);
+      console.error('Error rotating log file:', error);
     }
   }
 
@@ -321,7 +316,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
     level: LogLevel,
     message: string,
     metadata?: Record<string, any>,
-    source?: string,
+    source?: string
   ): void {
     // Check if this log level should be processed
     if (level > this.config.level) {
@@ -333,7 +328,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
       level,
       message,
       metadata,
-      source: source || "Unknown",
+      source: source || 'Unknown',
       correlationId: this.generateCorrelationId(),
     };
 
@@ -355,10 +350,10 @@ export class CentralizedLoggingService implements vscode.Disposable {
    */
   private formatLogEntry(entry: LogEntry): string {
     let formatted = this.config.logFormat
-      .replace("{timestamp}", entry.timestamp.toISOString())
-      .replace("{level}", LogLevel[entry.level])
-      .replace("{source}", entry.source || "Unknown")
-      .replace("{message}", entry.message);
+      .replace('{timestamp}', entry.timestamp.toISOString())
+      .replace('{level}', LogLevel[entry.level])
+      .replace('{source}', entry.source || 'Unknown')
+      .replace('{message}', entry.message);
 
     if (entry.metadata && Object.keys(entry.metadata).length > 0) {
       formatted += ` | ${JSON.stringify(entry.metadata)}`;
@@ -371,14 +366,12 @@ export class CentralizedLoggingService implements vscode.Disposable {
     return formatted;
   }
 
-  
-
   /**
    * Log to file
    */
   private logToFile(message: string): void {
     if (this.logFileStream) {
-      this.logFileStream.write(message + "\n");
+      this.logFileStream.write(message + '\n');
       this.checkLogRotation();
     }
   }
@@ -391,54 +384,30 @@ export class CentralizedLoggingService implements vscode.Disposable {
   }
 
   // Public logging methods
-  public error(
-    message: string,
-    metadata?: Record<string, any>,
-    source?: string,
-  ): void {
+  public error(message: string, metadata?: Record<string, any>, source?: string): void {
     this.log(LogLevel.ERROR, message, metadata, source);
   }
 
-  public warn(
-    message: string,
-    metadata?: Record<string, any>,
-    source?: string,
-  ): void {
+  public warn(message: string, metadata?: Record<string, any>, source?: string): void {
     this.log(LogLevel.WARN, message, metadata, source);
   }
 
-  public info(
-    message: string,
-    metadata?: Record<string, any>,
-    source?: string,
-  ): void {
+  public info(message: string, metadata?: Record<string, any>, source?: string): void {
     this.log(LogLevel.INFO, message, metadata, source);
   }
 
-  public debug(
-    message: string,
-    metadata?: Record<string, any>,
-    source?: string,
-  ): void {
+  public debug(message: string, metadata?: Record<string, any>, source?: string): void {
     this.log(LogLevel.DEBUG, message, metadata, source);
   }
 
-  public trace(
-    message: string,
-    metadata?: Record<string, any>,
-    source?: string,
-  ): void {
+  public trace(message: string, metadata?: Record<string, any>, source?: string): void {
     this.log(LogLevel.TRACE, message, metadata, source);
   }
 
   /**
    * Log performance metrics
    */
-  public logPerformance(
-    operation: string,
-    duration: number,
-    metadata?: Record<string, any>,
-  ): void {
+  public logPerformance(operation: string, duration: number, metadata?: Record<string, any>): void {
     this.info(
       `Performance: ${operation} completed in ${duration}ms`,
       {
@@ -446,7 +415,7 @@ export class CentralizedLoggingService implements vscode.Disposable {
         duration,
         ...metadata,
       },
-      "Performance",
+      'Performance'
     );
   }
 

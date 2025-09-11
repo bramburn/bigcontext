@@ -6,16 +6,16 @@ import * as os from 'os';
 
 // Mock the dependencies - using simple mocks for Node.js testing
 const mockFastGlob = {
-  default: async () => []
+  default: async () => [],
 };
 
 const mockIgnoreInstance = {
   add: () => {},
-  ignores: () => false
+  ignores: () => false,
 };
 
 const mockIgnore = {
-  default: () => mockIgnoreInstance
+  default: () => mockIgnoreInstance,
 };
 
 describe('FileScanner', () => {
@@ -138,7 +138,10 @@ describe('FileScanner', () => {
 
     it('should handle scan errors gracefully', async () => {
       // Create a scanner with an invalid path
-      const invalidScanner = new FileScanner('/invalid/path/that/does/not/exist', mockMessageSender);
+      const invalidScanner = new FileScanner(
+        '/invalid/path/that/does/not/exist',
+        mockMessageSender
+      );
 
       const stats = await invalidScanner.scanWithProgress();
 

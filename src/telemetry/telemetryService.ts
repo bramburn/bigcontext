@@ -1,6 +1,6 @@
 /**
  * Telemetry Service
- * 
+ *
  * Privacy-conscious telemetry system for collecting anonymous usage data.
  * This service ensures that no personally identifiable information or code content
  * is ever transmitted. All data collection respects user privacy preferences.
@@ -41,10 +41,10 @@ export const ALLOWED_EVENTS = [
   'extension_deactivated',
   'settings_opened',
   'setup_completed',
-  'error_occurred'
+  'error_occurred',
 ] as const;
 
-export type AllowedEventName = typeof ALLOWED_EVENTS[number];
+export type AllowedEventName = (typeof ALLOWED_EVENTS)[number];
 
 /**
  * Telemetry configuration
@@ -64,7 +64,7 @@ interface TelemetryConfig {
 
 /**
  * Privacy-conscious telemetry service
- * 
+ *
  * This service provides anonymous usage analytics while strictly protecting user privacy.
  * Key privacy features:
  * - Respects user opt-out preferences
@@ -81,14 +81,14 @@ export class TelemetryService {
   private version: string;
   private eventQueue: TelemetryEvent[] = [];
   private batchTimer?: NodeJS.Timeout;
-  private isEnabled: boolean = true;
+  private isEnabled = true;
 
   private readonly config: TelemetryConfig = {
     endpoint: 'https://analytics.example.com/events', // Replace with actual endpoint
     timeout: 5000,
     maxQueueSize: 1000,
     batchSize: 10,
-    batchInterval: 30000 // 30 seconds
+    batchInterval: 30000, // 30 seconds
   };
 
   constructor(
@@ -98,36 +98,43 @@ export class TelemetryService {
   ) {
     this.configService = configService;
     this.loggingService = loggingService;
-    
+
     // Generate session ID for this extension session
     this.sessionId = this.generateSessionId();
-    
+
     // Use VS Code's anonymous machine ID
     this.machineId = vscode.env.machineId;
-    
+
     // Get extension version from package.json
     this.version = context.extension.packageJSON.version || '1.0.0';
-    
+
     // Check initial telemetry preference
     this.updateTelemetryPreference();
-    
+
     // Start batch processing
     this.startBatchProcessing();
-    
-    this.loggingService?.info('TelemetryService initialized', {
-      sessionId: this.sessionId,
-      isEnabled: this.isEnabled,
-      version: this.version
-    }, 'TelemetryService');
+
+    this.loggingService?.info(
+      'TelemetryService initialized',
+      {
+        sessionId: this.sessionId,
+        isEnabled: this.isEnabled,
+        version: this.version,
+      },
+      'TelemetryService'
+    );
   }
 
   /**
    * Track a telemetry event
-   * 
+   *
    * @param eventName - Name of the event (must be in allowed list)
    * @param metadata - Anonymous metadata (no PII or code content)
    */
-  public trackEvent(eventName: AllowedEventName, metadata?: Record<string, string | number | boolean>): void {
+  public trackEvent(
+    eventName: AllowedEventName,
+    metadata?: Record<string, string | number | boolean>
+  ): void {
     // Check if telemetry is enabled
     if (!this.isEnabled) {
       return;
@@ -135,10 +142,14 @@ export class TelemetryService {
 
     // Validate event name is in allowed list
     if (!ALLOWED_EVENTS.includes(eventName)) {
-      this.loggingService?.warn('Attempted to track disallowed event', {
-        eventName,
-        allowedEvents: ALLOWED_EVENTS
-      }, 'TelemetryService');
+      this.loggingService?.warn(
+        'Attempted to track disallowed event',
+        {
+          eventName,
+          allowedEvents: ALLOWED_EVENTS,
+        },
+        'TelemetryService'
+      );
       return;
     }
 
@@ -151,17 +162,21 @@ export class TelemetryService {
       timestamp: Date.now(),
       sessionId: this.sessionId,
       machineId: this.machineId,
-      version: this.version
+      version: this.version,
     };
 
     // Add to queue
     this.queueEvent(event);
 
-    this.loggingService?.debug('Telemetry event tracked', {
-      eventName,
-      hasMetadata: !!metadata,
-      queueSize: this.eventQueue.length
-    }, 'TelemetryService');
+    this.loggingService?.debug(
+      'Telemetry event tracked',
+      {
+        eventName,
+        hasMetadata: !!metadata,
+        queueSize: this.eventQueue.length,
+      },
+      'TelemetryService'
+    );
   }
 
   /**
@@ -170,10 +185,14 @@ export class TelemetryService {
   public updateTelemetryPreference(): void {
     // Check configuration for telemetry setting
     this.isEnabled = this.configService.getTelemetryEnabled();
-    
-    this.loggingService?.info('Telemetry preference updated', {
-      isEnabled: this.isEnabled
-    }, 'TelemetryService');
+
+    this.loggingService?.info(
+      'Telemetry preference updated',
+      {
+        isEnabled: this.isEnabled,
+      },
+      'TelemetryService'
+    );
 
     // If disabled, clear the queue
     if (!this.isEnabled) {
@@ -188,15 +207,19 @@ export class TelemetryService {
     if (this.batchTimer) {
       clearInterval(this.batchTimer);
     }
-    
+
     // Send any remaining events if enabled
     if (this.isEnabled && this.eventQueue.length > 0) {
       this.sendBatch();
     }
-    
-    this.loggingService?.info('TelemetryService disposed', {
-      remainingEvents: this.eventQueue.length
-    }, 'TelemetryService');
+
+    this.loggingService?.info(
+      'TelemetryService disposed',
+      {
+        remainingEvents: this.eventQueue.length,
+      },
+      'TelemetryService'
+    );
   }
 
   /**
@@ -209,13 +232,15 @@ export class TelemetryService {
   /**
    * Sanitize metadata to remove any potential PII
    */
-  private sanitizeMetadata(metadata?: Record<string, string | number | boolean>): Record<string, string | number | boolean> | undefined {
+  private sanitizeMetadata(
+    metadata?: Record<string, string | number | boolean>
+  ): Record<string, string | number | boolean> | undefined {
     if (!metadata) {
       return undefined;
     }
 
     const sanitized: Record<string, string | number | boolean> = {};
-    
+
     for (const [key, value] of Object.entries(metadata)) {
       // Only allow specific types and sanitize strings
       if (typeof value === 'number' || typeof value === 'boolean') {
@@ -260,9 +285,13 @@ export class TelemetryService {
     if (this.eventQueue.length >= this.config.maxQueueSize) {
       // Remove oldest event
       this.eventQueue.shift();
-      this.loggingService?.warn('Telemetry queue full, dropping oldest event', {
-        queueSize: this.eventQueue.length
-      }, 'TelemetryService');
+      this.loggingService?.warn(
+        'Telemetry queue full, dropping oldest event',
+        {
+          queueSize: this.eventQueue.length,
+        },
+        'TelemetryService'
+      );
     }
 
     this.eventQueue.push(event);
@@ -292,15 +321,23 @@ export class TelemetryService {
 
     try {
       await this.sendEvents(batch);
-      this.loggingService?.debug('Telemetry batch sent successfully', {
-        eventCount: batch.length
-      }, 'TelemetryService');
+      this.loggingService?.debug(
+        'Telemetry batch sent successfully',
+        {
+          eventCount: batch.length,
+        },
+        'TelemetryService'
+      );
     } catch (error) {
-      this.loggingService?.error('Failed to send telemetry batch', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        eventCount: batch.length
-      }, 'TelemetryService');
-      
+      this.loggingService?.error(
+        'Failed to send telemetry batch',
+        {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          eventCount: batch.length,
+        },
+        'TelemetryService'
+      );
+
       // Re-queue events on failure (up to a limit)
       if (this.eventQueue.length < this.config.maxQueueSize - batch.length) {
         this.eventQueue.unshift(...batch);
@@ -320,13 +357,13 @@ export class TelemetryService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': `CodeContextEngine/${this.version}`
+          'User-Agent': `CodeContextEngine/${this.version}`,
         },
         body: JSON.stringify({
           events,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         }),
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       if (!response.ok) {

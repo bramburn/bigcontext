@@ -19,7 +19,7 @@ export interface HealthMonitorConfig {
 
 /**
  * Health monitoring service for QdrantService
- * 
+ *
  * This service continuously monitors the health of the Qdrant database
  * and provides alerts when issues are detected. It can also attempt
  * automatic recovery in some scenarios.
@@ -58,11 +58,7 @@ export class QdrantHealthMonitor {
    */
   public startMonitoring(): void {
     if (this.monitoringInterval) {
-      this.loggingService.warn(
-        'Health monitoring is already running',
-        {},
-        'QdrantHealthMonitor'
-      );
+      this.loggingService.warn('Health monitoring is already running', {}, 'QdrantHealthMonitor');
       return;
     }
 
@@ -88,12 +84,8 @@ export class QdrantHealthMonitor {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
       this.monitoringInterval = undefined;
-      
-      this.loggingService.info(
-        'Stopped Qdrant health monitoring',
-        {},
-        'QdrantHealthMonitor'
-      );
+
+      this.loggingService.info('Stopped Qdrant health monitoring', {}, 'QdrantHealthMonitor');
     }
   }
 
@@ -109,7 +101,7 @@ export class QdrantHealthMonitor {
    */
   public onHealthChange(listener: (status: HealthStatus) => void): () => void {
     this.healthChangeListeners.push(listener);
-    
+
     // Return unsubscribe function
     return () => {
       const index = this.healthChangeListeners.indexOf(listener);
@@ -124,13 +116,9 @@ export class QdrantHealthMonitor {
    */
   private async performHealthCheck(): Promise<void> {
     const startTime = Date.now();
-    
+
     try {
-      this.loggingService.debug(
-        'Performing Qdrant health check',
-        {},
-        'QdrantHealthMonitor'
-      );
+      this.loggingService.debug('Performing Qdrant health check', {}, 'QdrantHealthMonitor');
 
       // Perform health check with collection listing
       const isHealthy = await this.qdrantService.healthCheck(true);
@@ -150,7 +138,7 @@ export class QdrantHealthMonitor {
       }
 
       const previousStatus = { ...this.status };
-      
+
       this.status = {
         isHealthy,
         lastCheck: Date.now(),
@@ -164,7 +152,7 @@ export class QdrantHealthMonitor {
         if (isHealthy) {
           this.loggingService.info(
             'Qdrant service recovered',
-            { 
+            {
               responseTime,
               collectionsCount: collections.length,
               previousFailures: previousStatus.consecutiveFailures,
@@ -174,7 +162,7 @@ export class QdrantHealthMonitor {
         } else {
           this.loggingService.error(
             'Qdrant service became unhealthy',
-            { 
+            {
               consecutiveFailures: this.status.consecutiveFailures,
               responseTime,
             },
@@ -196,7 +184,7 @@ export class QdrantHealthMonitor {
       if (this.status.consecutiveFailures >= this.config.maxConsecutiveFailures) {
         this.loggingService.error(
           'Qdrant service has exceeded maximum consecutive failures',
-          { 
+          {
             consecutiveFailures: this.status.consecutiveFailures,
             maxFailures: this.config.maxConsecutiveFailures,
           },
@@ -209,15 +197,16 @@ export class QdrantHealthMonitor {
       }
 
       // Notify listeners of status change
-      if (previousStatus.isHealthy !== isHealthy || 
-          previousStatus.consecutiveFailures !== this.status.consecutiveFailures) {
+      if (
+        previousStatus.isHealthy !== isHealthy ||
+        previousStatus.consecutiveFailures !== this.status.consecutiveFailures
+      ) {
         this.notifyHealthChangeListeners();
       }
-
     } catch (error) {
       const responseTime = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       this.status = {
         isHealthy: false,
         lastCheck: Date.now(),
@@ -228,7 +217,7 @@ export class QdrantHealthMonitor {
 
       this.loggingService.error(
         'Health check failed with exception',
-        { 
+        {
           error: errorMessage,
           consecutiveFailures: this.status.consecutiveFailures,
           responseTime,
@@ -256,26 +245,18 @@ export class QdrantHealthMonitor {
       // - Reconnecting to the database
       // - Clearing connection pools
       // - Restarting services
-      
+
       await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-      
+
       const isHealthy = await this.qdrantService.healthCheck(true);
-      
+
       if (isHealthy) {
-        this.loggingService.info(
-          'Automatic recovery successful',
-          {},
-          'QdrantHealthMonitor'
-        );
-        
+        this.loggingService.info('Automatic recovery successful', {}, 'QdrantHealthMonitor');
+
         // Reset consecutive failures on successful recovery
         this.status.consecutiveFailures = 0;
       } else {
-        this.loggingService.warn(
-          'Automatic recovery failed',
-          {},
-          'QdrantHealthMonitor'
-        );
+        this.loggingService.warn('Automatic recovery failed', {}, 'QdrantHealthMonitor');
       }
     } catch (error) {
       this.loggingService.error(
@@ -291,7 +272,7 @@ export class QdrantHealthMonitor {
    */
   private notifyHealthChangeListeners(): void {
     const status = this.getHealthStatus();
-    
+
     this.healthChangeListeners.forEach(listener => {
       try {
         listener(status);
@@ -328,11 +309,7 @@ export class QdrantHealthMonitor {
   public dispose(): void {
     this.stopMonitoring();
     this.healthChangeListeners = [];
-    
-    this.loggingService.info(
-      'QdrantHealthMonitor disposed',
-      {},
-      'QdrantHealthMonitor'
-    );
+
+    this.loggingService.info('QdrantHealthMonitor disposed', {}, 'QdrantHealthMonitor');
   }
 }

@@ -1,6 +1,6 @@
 /**
  * Configuration Service Tests
- * 
+ *
  * Tests for the persistent configuration service that manages .context/config.json
  */
 
@@ -49,10 +49,7 @@ describe('ConfigurationService', () => {
 
       const configDir = path.join(tempDir, '.context');
       await fs.mkdir(configDir, { recursive: true });
-      await fs.writeFile(
-        path.join(configDir, 'config.json'),
-        JSON.stringify(testConfig, null, 2)
-      );
+      await fs.writeFile(path.join(configDir, 'config.json'), JSON.stringify(testConfig, null, 2));
 
       const loadedConfig = await configService.loadConfiguration();
       assert.strictEqual(loadedConfig.qdrant.host, 'test-host');
@@ -83,10 +80,7 @@ describe('ConfigurationService', () => {
     it('should handle malformed JSON gracefully', async () => {
       const configDir = path.join(tempDir, '.context');
       await fs.mkdir(configDir, { recursive: true });
-      await fs.writeFile(
-        path.join(configDir, 'config.json'),
-        '{ invalid json'
-      );
+      await fs.writeFile(path.join(configDir, 'config.json'), '{ invalid json');
 
       const loadedConfig = await configService.loadConfiguration();
       assert.deepStrictEqual(loadedConfig, DEFAULT_CONFIGURATION);
@@ -108,7 +102,10 @@ describe('ConfigurationService', () => {
 
       // Verify file was created
       const configPath = configService.getConfigurationFilePath();
-      const exists = await fs.access(configPath).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(configPath)
+        .then(() => true)
+        .catch(() => false);
       assert.strictEqual(exists, true);
 
       // Verify content
@@ -123,7 +120,10 @@ describe('ConfigurationService', () => {
       await configService.saveConfiguration(testConfig);
 
       const configDir = path.dirname(configService.getConfigurationFilePath());
-      const dirExists = await fs.access(configDir).then(() => true).catch(() => false);
+      const dirExists = await fs
+        .access(configDir)
+        .then(() => true)
+        .catch(() => false);
       assert.strictEqual(dirExists, true);
     });
 
@@ -196,14 +196,14 @@ describe('ConfigurationService', () => {
   describe('updateSetting', () => {
     it('should update nested settings using dot notation', async () => {
       await configService.updateSetting('qdrant.host', 'updated-host');
-      
+
       const config = configService.getConfiguration();
       assert.strictEqual(config.qdrant.host, 'updated-host');
     });
 
     it('should persist setting updates', async () => {
       await configService.updateSetting('qdrant.port', 7777);
-      
+
       // Create new service instance to test persistence
       const newService = new ConfigurationService(tempDir);
       const loadedConfig = await newService.loadConfiguration();
@@ -219,7 +219,7 @@ describe('ConfigurationService', () => {
 
       const hash1 = await configService.generateContentHash(tempDir);
       const hash2 = await configService.generateContentHash(tempDir);
-      
+
       assert.strictEqual(hash1, hash2);
       assert.ok(hash1.length > 0);
     });
@@ -249,12 +249,12 @@ describe('ConfigurationService', () => {
       };
 
       await configService.updateQdrantIndexInfo(indexInfo);
-      
+
       let config = configService.getConfiguration();
       assert.deepStrictEqual(config.qdrant.indexInfo, indexInfo);
 
       await configService.clearQdrantIndexInfo();
-      
+
       config = configService.getConfiguration();
       assert.strictEqual(config.qdrant.indexInfo, undefined);
     });
@@ -266,7 +266,7 @@ describe('ConfigurationService', () => {
       assert.strictEqual(exists, false);
 
       await configService.saveConfiguration(DEFAULT_CONFIGURATION);
-      
+
       exists = await configService.configurationFileExists();
       assert.strictEqual(exists, true);
     });

@@ -1,6 +1,6 @@
 /**
  * Startup Service
- * 
+ *
  * Manages the application startup flow with persistent configuration,
  * Qdrant index validation, and automatic reindexing when needed.
  */
@@ -118,7 +118,9 @@ export class StartupService {
       const config = this.configurationService.getConfiguration();
       if (config.qdrant.indexInfo?.collectionName && this.qdrantService) {
         try {
-          result.indexValid = await this.qdrantService.collectionExists(config.qdrant.indexInfo.collectionName);
+          result.indexValid = await this.qdrantService.collectionExists(
+            config.qdrant.indexInfo.collectionName
+          );
         } catch (error) {
           result.indexValid = false;
         }
@@ -127,7 +129,8 @@ export class StartupService {
       // Step 5: Check if reindexing is needed
       if (result.indexValid) {
         try {
-          result.reindexingNeeded = await this.configurationService.isReindexingNeeded(workspacePath);
+          result.reindexingNeeded =
+            await this.configurationService.isReindexingNeeded(workspacePath);
         } catch (error) {
           result.reindexingNeeded = false;
         }
@@ -149,7 +152,6 @@ export class StartupService {
       }
 
       console.log('StartupService: Startup flow completed successfully');
-
     } catch (error) {
       const errorMessage = `Startup flow failed: ${error instanceof Error ? error.message : String(error)}`;
       console.error('StartupService:', errorMessage, error);

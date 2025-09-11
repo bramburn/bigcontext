@@ -1,6 +1,6 @@
 /**
  * File Scan Service
- * 
+ *
  * This service orchestrates file scanning operations and integrates with the
  * communication system to provide real-time progress updates to the webview.
  * It manages the FileScanner and FileScanMessageSender to provide a complete
@@ -22,7 +22,7 @@ export class FileScanService {
   private loggingService?: CentralizedLoggingService;
   private workspaceManager: WorkspaceManager;
   private messageSender: FileScanMessageSender;
-  private isScanning: boolean = false;
+  private isScanning = false;
 
   constructor(
     communicationService: TypeSafeCommunicationService,
@@ -40,11 +40,7 @@ export class FileScanService {
    */
   public async startFileScan(): Promise<ScanStatistics | null> {
     if (this.isScanning) {
-      this.loggingService?.warn(
-        'File scan already in progress',
-        {},
-        'FileScanService'
-      );
+      this.loggingService?.warn('File scan already in progress', {}, 'FileScanService');
       return null;
     }
 
@@ -59,24 +55,16 @@ export class FileScanService {
           {},
           'FileScanService'
         );
-        
+
         // Send error message
-        this.messageSender.sendScanComplete(
-          0,
-          0,
-          'Error: No workspace open'
-        );
-        
+        this.messageSender.sendScanComplete(0, 0, 'Error: No workspace open');
+
         return null;
       }
 
       const workspaceRoot = currentWorkspace.path;
 
-      this.loggingService?.info(
-        'Starting file scan',
-        { workspaceRoot },
-        'FileScanService'
-      );
+      this.loggingService?.info('Starting file scan', { workspaceRoot }, 'FileScanService');
 
       // Create file scanner with message sender
       const fileScanner = new FileScanner(workspaceRoot, this.messageSender);
@@ -86,16 +74,15 @@ export class FileScanService {
 
       this.loggingService?.info(
         'File scan completed',
-        { 
+        {
           totalFiles: statistics.totalFiles,
           ignoredFiles: statistics.ignoredFiles,
-          isEmpty: statistics.isEmpty
+          isEmpty: statistics.isEmpty,
         },
         'FileScanService'
       );
 
       return statistics;
-
     } catch (error) {
       this.loggingService?.error(
         'Error during file scan',
@@ -139,7 +126,6 @@ export class FileScanService {
       // Create file scanner without message sender for statistics only
       const fileScanner = new FileScanner(workspaceRoot);
       return await fileScanner.scanWithProgress();
-
     } catch (error) {
       this.loggingService?.error(
         'Error getting workspace statistics',

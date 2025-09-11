@@ -6,8 +6,8 @@
  * properly handling special characters using CDATA sections.
  */
 
-import { create } from "xmlbuilder2";
-import { SearchResult } from "../db/qdrantService";
+import { create } from 'xmlbuilder2';
+import { SearchResult } from '../db/qdrantService';
 
 /**
  * Configuration options for XML formatting
@@ -34,7 +34,7 @@ export class XmlFormatterService {
   private readonly defaultOptions: Required<XmlFormattingOptions> = {
     prettyPrint: true,
     includeDeclaration: true,
-    rootElementName: "files",
+    rootElementName: 'files',
     includeMetadata: true,
   };
 
@@ -49,16 +49,13 @@ export class XmlFormatterService {
    * @param options - Optional formatting configuration
    * @returns Formatted XML string
    */
-  public formatResults(
-    results: SearchResult[],
-    options: XmlFormattingOptions = {},
-  ): string {
+  public formatResults(results: SearchResult[], options: XmlFormattingOptions = {}): string {
     const opts = { ...this.defaultOptions, ...options };
 
     try {
       // Create the root XML document
       const root = opts.includeDeclaration
-        ? create({ version: "1.0", encoding: "UTF-8" })
+        ? create({ version: '1.0', encoding: 'UTF-8' })
         : create();
 
       // Create the root element
@@ -66,32 +63,32 @@ export class XmlFormatterService {
 
       // Add metadata if requested
       if (opts.includeMetadata) {
-        filesElement.att("count", results.length.toString());
-        filesElement.att("generated", new Date().toISOString());
+        filesElement.att('count', results.length.toString());
+        filesElement.att('generated', new Date().toISOString());
       }
 
       // Process each search result
       for (const result of results) {
-        const fileElement = filesElement.ele("file");
+        const fileElement = filesElement.ele('file');
 
         // Add file path as attribute
-        fileElement.att("path", result.payload.filePath);
+        fileElement.att('path', result.payload.filePath);
 
         // Add optional metadata attributes
         if (opts.includeMetadata) {
-          fileElement.att("score", result.score.toFixed(4));
-          fileElement.att("language", result.payload.language || "unknown");
+          fileElement.att('score', result.score.toFixed(4));
+          fileElement.att('language', result.payload.language || 'unknown');
 
           if (result.payload.startLine !== undefined) {
-            fileElement.att("startLine", result.payload.startLine.toString());
+            fileElement.att('startLine', result.payload.startLine.toString());
           }
 
           if (result.payload.endLine !== undefined) {
-            fileElement.att("endLine", result.payload.endLine.toString());
+            fileElement.att('endLine', result.payload.endLine.toString());
           }
 
           if (result.payload.type) {
-            fileElement.att("type", result.payload.type);
+            fileElement.att('type', result.payload.type);
           }
         }
 
@@ -101,7 +98,7 @@ export class XmlFormatterService {
           fileElement.dat(result.payload.content);
         } else {
           // If no content, add an empty element
-          fileElement.txt("");
+          fileElement.txt('');
         }
       }
 
@@ -119,9 +116,9 @@ export class XmlFormatterService {
 
       return xmlString;
     } catch (error) {
-      console.error("XmlFormatterService: Error formatting results:", error);
+      console.error('XmlFormatterService: Error formatting results:', error);
       throw new Error(
-        `Failed to format XML: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to format XML: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -135,10 +132,7 @@ export class XmlFormatterService {
    * @param options - Optional formatting configuration
    * @returns Formatted XML string
    */
-  public formatSingleResult(
-    result: SearchResult,
-    options: XmlFormattingOptions = {},
-  ): string {
+  public formatSingleResult(result: SearchResult, options: XmlFormattingOptions = {}): string {
     return this.formatResults([result], options);
   }
 
@@ -198,7 +192,7 @@ export class XmlFormatterService {
       // For other XML, do basic validation
       return openTags.length === closeTags.length;
     } catch (error) {
-      console.warn("XmlFormatterService: Invalid XML generated:", error);
+      console.warn('XmlFormatterService: Invalid XML generated:', error);
       return false;
     }
   }
@@ -214,11 +208,11 @@ export class XmlFormatterService {
    */
   private escapeXmlText(text: string): string {
     return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&apos;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   /**
@@ -233,7 +227,7 @@ export class XmlFormatterService {
    */
   public getFormattingStats(
     results: SearchResult[],
-    xmlString: string,
+    xmlString: string
   ): {
     resultCount: number;
     xmlSize: number;
@@ -242,18 +236,17 @@ export class XmlFormatterService {
     emptyContent: number;
   } {
     const hasContent = results.filter(
-      (r) => r.payload.content && r.payload.content.trim().length > 0,
+      r => r.payload.content && r.payload.content.trim().length > 0
     ).length;
     const totalContentLength = results.reduce(
       (sum, r) => sum + (r.payload.content?.length || 0),
-      0,
+      0
     );
 
     return {
       resultCount: results.length,
       xmlSize: xmlString.length,
-      averageContentLength:
-        results.length > 0 ? totalContentLength / results.length : 0,
+      averageContentLength: results.length > 0 ? totalContentLength / results.length : 0,
       hasContent: hasContent,
       emptyContent: results.length - hasContent,
     };
